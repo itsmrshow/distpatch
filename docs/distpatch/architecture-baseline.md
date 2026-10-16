@@ -30,6 +30,67 @@ client / harness
 
 The key rule is unchanged from the project design: **Distpatch chooses the concrete model; the existing router chooses the eligible provider/account for that model.**
 
+## Provider and Account are separate concepts
+
+This is a permanent Distpatch invariant inherited from upstream's explicit design that **many Accounts per Provider is the normal case**.
+
+- A **Provider** is a kind of upstream integration: protocol, authentication mechanism, endpoints, model namespace, and provider-specific behavior.
+- An **Account** is one independently authenticated credential/subscription attached to that provider.
+- One provider may have **N accounts**, each with independent authorization, quota, health, cost, permissions, concurrency, usage, and failure state.
+- Distpatch model selection must never collapse those accounts into one provider-level resource bucket.
+
+Concrete example:
+
+```text
+Provider: openai-oauth
+  Account: chatgpt-personal
+  Account: chatgpt-business
+```
+
+Those labels are operator-facing examples only. They do not contain or imply stored credentials or real external account identifiers.
+
+For the two accounts above, Distpatch must treat the following as independently observable and independently actionable:
+
+- health / circuit-breaker state
+- quota windows and reset times
+- usage and exhaustion
+- concurrency / in-flight work
+- provider failures and reauthentication state
+- model permissions / availability
+- account-specific cost or subscription policy
+- eligibility for a particular request or role
+
+**Quotas from multiple subscriptions must never be merged into one synthetic quota bucket.** Two ChatGPT subscriptions are two independently constrained resources, not one enlarged ChatGPT allowance.
+
+Business/workspace-linked accounts retain their own authorization and policy boundaries. A business account must not implicitly inherit the permissions, quota, model access, routing policy, or eligibility of a personal account under the same provider.
+
+Session/cache affinity may intentionally bind work to a specific account when continuity, provider cache reuse, or upstream session ownership makes switching costly or invalid. Existing account/session affinity therefore remains part of account selection, not semantic model selection.
+
+The ordering rule is:
+
+```text
+Distpatch selects a concrete model / provider-compatible target
+  -> account eligibility is evaluated
+  -> one specific Account is selected
+  -> provider execution occurs with that Account only
+```
+
+Routing must never assume accounts under one provider have identical quota, permissions, cost, or policy.
+
+Distpatch should eventually expose account metadata/policies such as:
+
+- `personal` / `business` / other operator-defined class
+- priority
+- weight
+- reserve / protected capacity
+- role/task eligibility
+- model allow/deny constraints
+- cost preference
+- concurrency limits
+- local/free/premium preference where applicable
+
+These are **account-level policy inputs**. They do not change the Provider definition and they do not justify merging account telemetry.
+
 ## Verified current request path
 
 The current request path at the pinned SHA is:
@@ -104,6 +165,10 @@ Retain PostgreSQL initially. The current design intentionally keeps database wor
 ## Decisions captured
 
 - Distpatch separates model selection from provider/account selection.
+- Provider and Account remain separate concepts; N independently authenticated accounts per provider are expected.
+- Health, quota, usage, exhaustion, concurrency, permissions, failures and policy remain account-scoped.
+- Multiple subscription quotas are never merged into one synthetic provider quota.
+- Session/cache affinity may bind work to a specific account where valuable.
 - Existing multi-ai-router provider/account/quota machinery is preserved initially.
 - Current PostgreSQL implementation is retained for initial development.
 - Context management remains a separate future layer.
