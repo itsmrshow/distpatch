@@ -12,7 +12,7 @@ support claim. M1A test date: **2026-10-16**; tested implementation: **`b7eed089
 | Codex / ChatGPT subscription | **fully supported, sensitive** | `openai-oauth` dedicated HTTP/OAuth driver | Router performs OAuth/PKCE/device flow and refresh; tokens encrypted at rest | ChatGPT Codex Responses backend | Dedicated model family/listing + quota parsing | Provider-specific private/product backend compatibility surface |
 | Gemini API | **fully supported for Google OpenAI compatibility** | `gemini` dedicated HTTP driver | API key encrypted by router | OpenAI Chat compatibility API | Standard model listing; Google error/RetryInfo parsing | Not native Google GenAI protocol |
 | Vertex AI | **missing native auth/path** | Base URL override exists, but no ADC/service-account lifecycle | N/A | N/A | N/A | A URL override is not a complete Vertex integration |
-| Google Antigravity | **missing** | No upstream Antigravity code | Future: prefer official `agy` credential boundary | Future official CLI/subprocess adapter | `agy models`; `/usage`; stream-json usage metadata | Multi-account isolation and machine-readable quota need verification |
+| Google Antigravity | **missing — M1C gate BLOCKED** | None. M1C proved no supported isolation selector exists in the tested version and deliberately shipped no adapter | Would be official `agy` CLI/keyring, **not** router storage | Not implemented | `agy models` tested live on agy 1.2.14→1.4.0 (13 IDs, tab-separated, no JSON output); `/usage` unverified | No supported isolation selector found in the tested version; container/OS-user alternatives unproven and security-review-gated |
 | OpenRouter | **fully supported** | `openrouter` dedicated HTTP driver | API key encrypted by router | OpenAI Chat | Model listing + provider signals | Preserve |
 | NVIDIA hosted NIM/API Catalog | **partially tested** | `openai-compatible`, `https://integrate.api.nvidia.com/v1` | bearer API key; no valid key available in this run | OpenAI Chat | Public listing tested live; inference tested stub | Authenticated inference remains blocked |
 | OpenCode Zen | **tested stub; live blocked** | `openai-compatible`, separate Chat/Responses accounts | bearer API key; no valid key available in this run | Chat default; Responses explicitly pinned | Standard listing parser tested stub; live edge 403/1010 | Generic Responses gap closed; actual Zen compatibility still unproven |
@@ -38,6 +38,14 @@ The pinned source declares:
 ### New integration required
 
 - **Antigravity:** dedicated official-CLI execution adapter or generalized CLI transport.
+  **M1C investigated this and the gate returned BLOCKED** — see
+  [M1C evidence](../../evidence/m1c-antigravity-isolation.md). M1C was **tested live on `agy`
+  1.2.14 → 1.4.0** (the CLI self-updated mid-session; 1.4.0's surface was then re-verified in an
+  isolated `HOME`), and found **no supported isolation selector** in the tested version, against a
+  single-slot credential and a single operator account. Container and OS-user alternatives are
+  **unproven** and security-review-gated, not disproven. **No adapter was implemented.** Do not
+  start implementation until a second operator-authorized identity and an explicitly reviewed
+  isolation design both exist.
 - **Vertex:** official ADC/service-account-aware integration if Vertex is required as a Distpatch target.
 
 ## M1A execution evidence
@@ -82,3 +90,25 @@ plane, account service and PostgreSQL repository. The two evidence levels are co
 
 M1A leaves #6 open: #1 Antigravity and #5 Vertex remain outstanding, as do authenticated live
 NVIDIA/Zen checks. No implementation dependency on #1 or #5 was found.
+
+## M1C Antigravity isolation evidence
+
+Full procedure and verbatim findings: [M1C evidence](../../evidence/m1c-antigravity-isolation.md).
+Test date **2026-10-16**; Distpatch baseline `3e69744443baebb0b25a76557d9e911eb55968c9`.
+**Tested live on `agy` 1.2.14 → 1.4.0** — the CLI self-updated in the background mid-session, and
+1.4.0's help/subcommand/flag surface was then re-verified directly in an isolated `HOME`.
+
+| Question | Result |
+|---|---|
+| Supported isolation selector in the tested version | **None found** — no flag, subcommand, or honored env var; `AGY_ACCOUNT` selects *plugin* accounts, not the model-serving identity; `ANTIGRAVITY_CONFIG_REL_DIR` is not honored as an override |
+| Credential model | **Single slot** — one 0600 file, one token object; sign-in replaces, never adds |
+| Operator identities available | **One** |
+| Deterministic isolation selector | None observed in the tested version |
+| Container / OS-user alternatives | **Unproven**, security-review-gated — not disproven |
+| Adapter | **None implemented** |
+| Verdict | **BLOCKED** — no adapter code written, credential boundary unchanged |
+
+Verified-working capabilities, for a future re-attempt: `agy models` returns 13 model IDs as
+tab-separated `id<TAB>label` (no JSON flag); `--output-format stream-json` emits an `init` event
+carrying `conversation_id`; `--print` requires the prompt **attached to the flag**. Changelog 1.3.3
+establishes that headless runs failing after partial output exit **3** with an `AGY_ERROR` line.

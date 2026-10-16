@@ -29,6 +29,16 @@ Antigravity is absent from upstream. Preferred future boundary is the official `
 
 CLIProxyAPI is useful as a protocol/test reference but should not define the default credential architecture because it owns OAuth/token material and calls internal Google endpoints.
 
+**M1C result (2026-10-16): BLOCKED — tested live on `agy` 1.2.14 → 1.4.0.** See [M1C evidence](../../evidence/m1c-antigravity-isolation.md). The CLI self-updated in the background mid-session; 1.4.0's help/subcommand/flag surface was re-verified directly in an isolated `HOME`, with no authentication and no logout. The intended boundary holds in one direction — the CLI does own login and refresh, and nothing was copied into Distpatch — but it fails in the other:
+
+- **No supported isolation selector found in the tested version.** No flag, subcommand, or honored environment variable selects a credential root. `AGY_ACCOUNT` selects *plugin* accounts (documented in-binary for sandboxed plugin CLIs such as `gh`), not the model-serving identity. `ANTIGRAVITY_CONFIG_REL_DIR` is not honored as an override.
+- **The credential is single-slot.** `~/.gemini/antigravity-cli/antigravity-oauth-token` holds exactly one token object (`access_token`, `refresh_token`, `expiry`) at mode `0600`; sign-in replaces prior credentials rather than adding an account. Two sequential logins are not isolation.
+- **Keyring is compiled in but absent at runtime on the reference host.** Go's `go_keyring` path exists, yet with no secret service the CLI falls back to a plaintext-at-rest 0600 token file. Any future deployment must treat that file as a secret at rest.
+- **Container and OS-user isolation are unproven, not disproven.** Neither was tested. Either could preserve CLI-owned credentials without token copying, but each needs a second real account and explicit security review first. Selecting an identity by OS user would make the router's privilege boundary the actual security boundary — a materially different and more dangerous posture than the Claude `CLAUDE_CONFIG_DIR` model.
+- **No adapter was implemented.** No `antigravity` ProviderId, subprocess driver, schema change, OAuth work, or model-routing code was added, and the boundary was not weakened to make progress.
+
+Two conditions must both become true before M1C can resume: a **second operator-authorized Antigravity identity**, and an isolation design that is either supported by the CLI or explicitly security-reviewed (per-OS-user or per-container).
+
 ## DockerLM
 
 DockerLM's current LAN `/v1` path does not require a Distpatch credential; nginx injects DockerLM's own downstream key. Do not confuse that internal provider credential with a Distpatch account credential.
