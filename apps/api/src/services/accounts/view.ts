@@ -29,6 +29,8 @@ import type { AccountAvailability } from "./availability"
 export interface AccountView {
   readonly id: string
   readonly label: string
+  /** Operator annotations, not provider facts or routing inputs. */
+  readonly tags: readonly string[] | null
   readonly provider: ProviderId
   readonly status: AccountStatus
   /** Whether a credential is stored. Never the credential, in any form. */
@@ -114,6 +116,7 @@ export function toAccountView(row: AccountRow): AccountView {
   return {
     id: row.id,
     label: row.label,
+    tags: row.tags ?? null,
     provider: row.provider,
     status: row.status,
     hasCredential: row.authMaterial !== null,

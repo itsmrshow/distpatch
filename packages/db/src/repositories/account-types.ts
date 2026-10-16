@@ -141,6 +141,7 @@ export interface CreateAccountInput {
   readonly id?: string
   /** Human-chosen, required: the disambiguator between same-provider accounts. */
   readonly label: string
+  readonly tags?: string[] | null
   readonly provider: ProviderId
   /** AES-256-GCM envelope. Null for Claude subscription accounts. */
   readonly authMaterial?: string | null
@@ -178,6 +179,7 @@ export interface CreateAccountInput {
  */
 export interface UpdateAccountInput {
   readonly label?: string
+  readonly tags?: string[] | null
   /** AES-256-GCM envelope. Never plaintext. */
   readonly authMaterial?: string | null
   readonly configDir?: string | null

@@ -109,6 +109,7 @@ export function createAccountsService(deps: AccountsServiceDeps): AccountsServic
         .create({
           id,
           label: body.label,
+          tags: body.tags ?? null,
           provider: body.provider,
           authMaterial: body.credential === undefined ? null : deps.cipher.encrypt(body.credential),
           // A row that exists only so an authorization can bind to it is not routable yet, and
@@ -174,6 +175,7 @@ export function createAccountsService(deps: AccountsServiceDeps): AccountsServic
         id,
         patch: {
           ...(body.label === undefined ? {} : { label: body.label }),
+          ...(body.tags === undefined ? {} : { tags: body.tags }),
           ...(body.credential === undefined
             ? {}
             : { authMaterial: deps.cipher.encrypt(body.credential) }),

@@ -24,6 +24,11 @@ import { z } from "zod"
  */
 
 const LABEL = z.string().trim().min(1).max(120)
+/** Non-secret operator annotations. No inferred capabilities, prices or routing semantics. */
+const TAGS = z
+  .array(z.string().trim().min(1).max(64))
+  .max(32)
+  .transform((tags) => [...new Set(tags)])
 /** Bounded so an oversized body cannot become an oversized ciphertext. */
 const CREDENTIAL = z.string().min(1).max(8192)
 const BASE_URL = z.url().max(2048)
@@ -57,6 +62,7 @@ const PRIORITY = z.number().int().min(0).max(10_000)
 export const createAccountBody = z
   .object({
     label: LABEL,
+    tags: TAGS.optional(),
     provider: ProviderId,
     credential: CREDENTIAL.optional(),
     baseUrl: BASE_URL.optional(),
@@ -84,6 +90,7 @@ export type CreateAccountBody = z.infer<typeof createAccountBody>
 export const updateAccountBody = z
   .object({
     label: LABEL.optional(),
+    tags: TAGS.nullable().optional(),
     /**
      * Rotates the stored credential. Not clearable: for every provider but the local endpoint an
      * account with none is broken, and dropping the one a local endpoint was given is a delete and
