@@ -16,6 +16,7 @@ import { createLogger, type Logger } from "./logging/logger"
 import { initSentry } from "./observability"
 import { ConfigDirError } from "./providers/claude-sdk/config-dir"
 import { adminAuthBootProblem } from "./services/admin-auth"
+import { CapabilityCatalogError, loadCapabilityCatalog } from "./services/capabilities"
 import { createAccountProbe } from "./services/health/accountProbe"
 import { createClaudeCliProbe } from "./services/health/claudeCliProbe"
 import { createDatabaseProbe } from "./services/health/databaseProbe"
@@ -38,6 +39,11 @@ async function main(): Promise<void> {
   initSentry(env, logger)
 
   warnOnInsecureSessionCookie(env, logger)
+
+  // Malformed shipped data or operator overrides exit here, before migrations or the listener.
+  // No request path consumes the catalog yet (model selection, #8, will); validating it now means
+  // a bad override file is found at deploy time, not at the first semantic request.
+  checkCapabilityCatalog(env, logger)
 
   // Migrations run before the listener opens. A failure exits non-zero rather than serving
   // traffic on a half-migrated schema — docs/idea/09-deployment.md#migrations.
@@ -227,6 +233,23 @@ function readEnv(): Env {
     return parseEnv(process.env)
   } catch (error) {
     if (error instanceof EnvValidationError) {
+      process.stderr.write(`${error.message}\n`)
+      process.exit(1)
+    }
+    throw error
+  }
+}
+
+function checkCapabilityCatalog(env: Env, logger: Logger): void {
+  try {
+    const catalog = loadCapabilityCatalog(env.modelCapabilityOverridesPath)
+    logger.info("model capability catalog loaded", {
+      component: "capabilities",
+      profiles: catalog.list().length,
+      ...catalog.revision(),
+    })
+  } catch (error) {
+    if (error instanceof CapabilityCatalogError) {
       process.stderr.write(`${error.message}\n`)
       process.exit(1)
     }

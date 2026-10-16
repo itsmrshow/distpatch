@@ -100,6 +100,11 @@ export interface Env {
   /** Parent of the per-Account `CLAUDE_CONFIG_DIR`s — `providers/claude-sdk/config-dir.ts`. */
   readonly claudeConfigRoot: string
   /**
+   * JSON file of operator model-capability overrides, read once at boot; malformed fails boot —
+   * `services/capabilities/load.ts`. Unset: the shipped catalog alone.
+   */
+  readonly modelCapabilityOverridesPath: string | null
+  /**
    * Pins the `claude` binary the Agent SDK spawns, bypassing the resolution ladder. Set means
    * *exactly this*: an unusable path fails rather than falling through to some other binary the
    * operator did not name — `providers/claude-sdk/resolve-cli.ts`.
