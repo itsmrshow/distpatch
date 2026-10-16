@@ -13,6 +13,12 @@ so a subscription Account reuses this page's translators rather than adding a ro
 
 ## The core rule
 
+The generic `openai-compatible` driver also exposes Responses, explicitly selected per account.
+It reuses this translation matrix and the ordinary Responses egress rules; Chat remains the default.
+A surface declaration is not a claim that every upstream implements every translated feature.
+For mixed-protocol catalogs such as Zen, declare each account's models for its chosen dialect:
+`/models` discovery alone cannot identify Responses-only models.
+
 > **Successful same-dialect traffic is byte passthrough.** Protocol headers are allowlisted,
 > the request body is untouched except an explicit model alias, and successful streams are forwarded verbatim.
 > Failure bodies are bounded and scrubbed before they can reach a client or log.

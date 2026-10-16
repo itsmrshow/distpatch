@@ -56,11 +56,27 @@ admin UI, in usage breakdowns, and in logs; the credential itself never appears 
 | `together` | API key, `Authorization: Bearer` | OpenAI Chat Completions | `https://api.together.ai/v1` | Namespaced model ids, so an alias map is usually required. **`403` means the prompt exceeded the context length, not a rejected credential**, and `503` is the platform's capacity rather than this account's budget. |
 | `cerebras` | API key, `Authorization: Bearer` | OpenAI Chat Completions | `https://api.cerebras.ai/v1` | Shares Mistral's unwrapped error envelope. A spent free-tier **day** is a `429`, not a billing state — it refills on a clock. |
 | `ollama` | **none** — a credential is optional, and sent as `Authorization: Bearer` when there is one | OpenAI Chat Completions | operator-supplied | A local or self-hosted Ollama. The only provider whose Account may hold **no credential at all**. No pinned endpoint on purpose: Ollama's own default is `http://localhost:11434`, and in a container that address is the *router*. |
-| `openai-compatible` | API key | OpenAI Chat Completions | operator-supplied | Escape hatch. Any vLLM / LiteLLM / vendor endpoint that speaks OpenAI and takes a key. |
+| `openai-compatible` | API key | OpenAI Chat Completions / Responses | operator-supplied | Escape hatch. Chat is the default; set the Account's `dialect: "openai-responses"` for a Responses endpoint. The operator's base URL remains authoritative for either surface. No OpenAI-specific billing rules or Codex egress restrictions are inherited. |
 | `anthropic-compatible` | API key | Anthropic Messages | operator-supplied | Escape hatch for Anthropic-shaped endpoints. |
 
 Base URLs are defaults. Every Account may override its base URL — that is what makes a
 self-hosted or regional endpoint work without a new driver.
+
+### Neutral account annotations
+
+Account create/update bodies accept `tags`: at most 32 trimmed, nonempty strings of at most
+64 characters, deduplicated at validation. Absent on update leaves the value; `null` clears it;
+`[]` records no annotations. Tags persist in the account row and appear in admin reads.
+They are non-secret operator assertions, never model capabilities, billing facts, quota signals,
+or routing inputs. DockerLM accounts can record `["local", "free", "dockerlm"]` under `ollama`;
+NVIDIA or Zen accounts can record endpoint-specific assertions under `openai-compatible`.
+An account tag does not assert that every model the endpoint lists is free. No semantic consumer
+or model capability catalog is introduced.
+
+DockerLM uses the credential-optional `ollama` surface with its `/v1` base URL. NVIDIA and Zen
+Chat use `openai-compatible`; Responses-only Zen models need a separate account pinned to
+`openai-responses` and an explicit `supportedModels` list for that surface. Discovery does not
+infer a model's protocol. See [Distpatch provider evidence](../distpatch/provider-matrix.md).
 
 ## Provider driver contract
 

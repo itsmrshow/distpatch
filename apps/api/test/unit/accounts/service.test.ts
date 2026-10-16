@@ -25,7 +25,6 @@ import { createMemoryStore, type MemoryStore } from "../../support/memory-store"
 
 const SECRET = "sk-live-super-secret-upstream-key"
 const NOW = new Date("2026-07-24T12:00:00.000Z")
-
 interface Harness {
   service: AccountsService
   store: MemoryStore
@@ -46,7 +45,6 @@ function harness(): Harness {
   })
   return { service, store, configDirs }
 }
-
 async function subscription(service: AccountsService) {
   const result = await service.create({ label: "claude-max-seb", provider: "anthropic-oauth" })
   if (!result.ok) throw new Error(`create failed: ${result.failure.message}`)
@@ -64,6 +62,33 @@ async function created(service: AccountsService) {
 }
 
 describe("create", () => {
+  test("operator tags survive create/edit/read independently of provider and lifecycle", async () => {
+    const { service, store } = harness()
+    for (const provider of ["ollama", "openai-compatible"] as const) {
+      const tags = provider === "ollama" ? ["local", "free", "dockerlm"] : ["nvidia", "free"]
+      const result = await service.create(
+        createAccountBody.parse({
+          label: provider,
+          provider,
+          baseUrl: "http://stub.test/v1",
+          tags,
+          ...(provider === "ollama" ? {} : { credential: SECRET, dialect: "openai-responses" }),
+        }),
+      )
+      if (!result.ok) throw new Error(result.failure.message)
+      expect(result.value.tags).toEqual(tags)
+      const id = result.value.id
+      await service.update(id, updateAccountBody.parse({ label: "renamed" }))
+      expect(await service.get(id)).toMatchObject({ ok: true, value: { tags } })
+      expect(store.rows.accounts.find((row) => row.id === id)).toMatchObject({
+        tags,
+        lifecycleVersion: 0,
+      })
+      await service.update(id, updateAccountBody.parse({ tags: null }))
+      expect(await service.get(id)).toMatchObject({ ok: true, value: { tags: null } })
+    }
+  })
+
   test("encrypts the credential and returns only the fact that one exists", async () => {
     const { service, store } = harness()
     const view = await created(service)

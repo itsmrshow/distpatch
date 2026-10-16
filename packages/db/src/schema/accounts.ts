@@ -39,6 +39,8 @@ export const accounts = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     label: text("label").notNull(),
+    /** Operator annotations only; never consulted by model or account selection. */
+    tags: jsonb("tags").$type<string[]>(),
     provider: providerId("provider").notNull(),
     status: accountStatus("status").notNull().default("active"),
     lifecycleVersion: integer("lifecycle_version").notNull().default(0),

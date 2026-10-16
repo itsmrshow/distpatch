@@ -67,6 +67,7 @@ export function createAccountRepository(
         .values({
           ...(input.id === undefined ? {} : { id: input.id }),
           label: input.label,
+          tags: input.tags ?? null,
           provider: input.provider,
           ...(input.status === undefined ? {} : { status: input.status }),
           authMaterial: input.authMaterial ?? null,
@@ -122,6 +123,7 @@ export function createAccountRepository(
         .update(accounts)
         .set({
           ...(patch.label === undefined ? {} : { label: patch.label }),
+          ...(patch.tags === undefined ? {} : { tags: patch.tags }),
           ...(patch.authMaterial === undefined ? {} : { authMaterial: patch.authMaterial }),
           ...(patch.configDir === undefined ? {} : { configDir: patch.configDir }),
           ...(patch.tokenExpiresAt === undefined ? {} : { tokenExpiresAt: patch.tokenExpiresAt }),

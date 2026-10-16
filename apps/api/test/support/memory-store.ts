@@ -68,6 +68,7 @@ export function createMemoryStore(): MemoryStore {
         const row: AccountRow = {
           id: input.id ?? crypto.randomUUID(),
           label: input.label,
+          tags: input.tags ?? null,
           provider: input.provider,
           status: input.status ?? "active",
           lifecycleVersion: 0,

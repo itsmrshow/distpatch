@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.40.0] — 2026-10-16
+
+### Added
+- Generic OpenAI-compatible accounts can explicitly select the Responses surface while Chat remains the default.
+- Provider-neutral account tags record operator annotations without affecting routing or billing.
+- Opt-in `bin/provider-smoke` verifies provider execution without exposing credentials or joining CI.
+
+### Documentation
+- Distpatch M1A provider evidence distinguishes live DockerLM execution, deterministic generic coverage, and blocked NVIDIA/Zen authenticated verification.
+
 ## [2.39.3] — 2026-10-16
 
 ### Fixed
@@ -1509,3 +1519,4 @@ your tooling config.
 [2.39.1]: https://github.com/developerz-ai/multi-ai-router/releases/tag/v2.39.1
 [2.39.2]: https://github.com/developerz-ai/multi-ai-router/releases/tag/v2.39.2
 [2.39.3]: https://github.com/developerz-ai/multi-ai-router/releases/tag/v2.39.3
+[2.40.0]: https://github.com/developerz-ai/multi-ai-router/releases/tag/v2.40.0
