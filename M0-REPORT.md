@@ -28,13 +28,15 @@ M0 is complete as an architecture/provider/security audit and GitHub-hosted base
 
 ## Architecture conclusion
 
-Distpatch does not need to replace multi-ai-router. Semantic model resolution belongs directly before `selectAccounts()`. Existing provider/account selection, session bindings, quota, health, failover, translation and execution should remain authoritative downstream.
+Distpatch does not need to replace multi-ai-router. Semantic model resolution belongs directly before `selectAccounts()`. Existing provider/account selection, session bindings, quota, health, failover, translation and execution remain authoritative downstream.
+
+Provider and Account are explicitly separate concepts. A Provider may have N independently authenticated Accounts/subscriptions, and health, quota windows, usage, exhaustion, concurrency, authorization, failures and policy remain account-scoped. Multiple subscription quotas are never merged into one synthetic provider quota. Session/cache affinity may intentionally bind work to one specific Account. The architecture documentation uses `openai-oauth` with `chatgpt-personal` and `chatgpt-business` as a non-secret example.
 
 M1 must preserve three model identities: requested virtual/fixed model, Distpatch-selected concrete model, and actual upstream wire model.
 
 ## Remaining findings
 
-1. GitHub milestone creation is not exposed by the available connector. Milestones are therefore represented by `[M1]`…`[M8]` issue titles/body metadata with explicit dependency references.
+1. GitHub milestone creation is not exposed by the available connector. Milestones are represented by `[M1]`…`[M8]` issue titles/body metadata with explicit dependency references.
 2. Antigravity multi-account credential isolation remains unproven and is a gating security question for that provider workstream.
 3. NVIDIA, Zen and DockerLM still require live/stub verification before they can be marked tested.
 4. Vertex native auth/lifecycle is not implemented and must be implemented or explicitly deferred.
@@ -42,4 +44,4 @@ M1 must preserve three model identities: requested virtual/fixed model, Distpatc
 
 ## M1 readiness
 
-**READY.** The technical seam, provider-closure backlog, preservation boundaries and security constraints are documented. M1 implementation has not begun.
+**READY.** The technical seam, provider-closure backlog, multi-account invariants, preservation boundaries and security constraints are documented. M1 implementation has not begun.
