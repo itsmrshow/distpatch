@@ -10,8 +10,8 @@ support claim. M1A test date: **2026-10-16**; tested implementation: **`b7eed089
 | Claude subscription | **fully supported, sensitive** | `anthropic-oauth` Agent SDK transport | Claude CLI / per-account `CLAUDE_CONFIG_DIR`; CLI/SDK owns login + refresh | Agent SDK by default | SDK handshake models; SDK rate-limit events + continuous SDK `/usage` gauge | Opt-in direct HTTP fast mode now exists; default remains off |
 | OpenAI API | **fully supported** | `openai-api` dedicated HTTP driver | API key encrypted by router | OpenAI Chat + Responses | HTTP model listing; rate-limit/error signals | Preserve |
 | Codex / ChatGPT subscription | **fully supported, sensitive** | `openai-oauth` dedicated HTTP/OAuth driver | Router performs OAuth/PKCE/device flow and refresh; tokens encrypted at rest | ChatGPT Codex Responses backend | Dedicated model family/listing + quota parsing | Provider-specific private/product backend compatibility surface |
-| Gemini API | **fully supported for Google OpenAI compatibility** | `gemini` dedicated HTTP driver | API key encrypted by router | OpenAI Chat compatibility API | Standard model listing; Google error/RetryInfo parsing | Not native Google GenAI protocol |
-| Vertex AI | **missing native auth/path** | Base URL override exists, but no ADC/service-account lifecycle | N/A | N/A | N/A | A URL override is not a complete Vertex integration |
+| Gemini API | **fully supported for Google OpenAI compatibility** | `gemini` dedicated HTTP driver | API key encrypted by router | OpenAI Chat compatibility API | Standard model listing; Google error/RetryInfo parsing | Active Google path for Distpatch; current requirement is satisfied by Gemini API and its available free allocation |
+| Vertex AI | **explicitly deferred for M1** | No native Vertex path is planned in M1; base-URL override is not treated as full support | N/A — no ADC/service-account lifecycle is being added | Not implemented; Gemini API satisfies the current Google requirement | N/A while deferred | Revisit only for a concrete Vertex-specific need such as ADC/service accounts, org/project/region controls, or Vertex-only features |
 | Google Antigravity | **missing — M1C gate BLOCKED** | None. M1C proved no supported isolation selector exists in the tested version and deliberately shipped no adapter | Would be official `agy` CLI/keyring, **not** router storage | Not implemented | `agy models` tested live on agy 1.2.14→1.4.0 (13 IDs, tab-separated, no JSON output); `/usage` unverified | No supported isolation selector found in the tested version; container/OS-user alternatives unproven and security-review-gated |
 | OpenRouter | **fully supported** | `openrouter` dedicated HTTP driver | API key encrypted by router | OpenAI Chat | Model listing + provider signals | Preserve |
 | NVIDIA hosted NIM/API Catalog | **partially tested** | `openai-compatible`, `https://integrate.api.nvidia.com/v1` | bearer API key; no valid key available in this run | OpenAI Chat | Public listing tested live; inference tested stub | Authenticated inference remains blocked |
@@ -35,7 +35,7 @@ The pinned source declares:
 - **OpenCode Zen:** generic Responses capability is implemented and tested stub in M1A. Finish authenticated live checks for both surfaces before declaring Zen verified.
 - **DockerLM:** use `ollama` as the initial transport because it permits credential-less OpenAI Chat endpoints and preserves a distinct local provider identity.
 
-### New integration required
+### New integration decisions
 
 - **Antigravity:** dedicated official-CLI execution adapter or generalized CLI transport.
   **M1C investigated this and the gate returned BLOCKED** — see
@@ -46,7 +46,11 @@ The pinned source declares:
   **unproven** and security-review-gated, not disproven. **No adapter was implemented.** Do not
   start implementation until a second operator-authorized identity and an explicitly reviewed
   isolation design both exist.
-- **Vertex:** official ADC/service-account-aware integration if Vertex is required as a Distpatch target.
+- **Vertex:** **explicitly deferred for M1.** The current Google requirement is satisfied by the
+  existing Gemini API path and its available free allocation. Distpatch has no current Vertex-specific
+  workload, ADC/service-account requirement, org/project/region requirement, or Vertex-only feature
+  gap. Native Vertex support should be reconsidered only when a concrete use case appears; its absence
+  does **not** block M1 closure or progression to M2.
 
 ## M1A execution evidence
 
@@ -88,8 +92,22 @@ plane, account service and PostgreSQL repository. The two evidence levels are co
 | Zen, both surfaces | Public listing and synthetic-key Chat probe → edge 403, body `error code: 1010` | Not evidence of Zen application authentication, quota, free-model availability or Responses behavior. Generic failure taxonomy **tested stub**; valid-key live remains **blocked**. |
 | Shared | No provider-specific quota interpretation added | Failure bodies scrub selected credentials; missing required credential makes no upstream call. `Retry-After` is parsed by existing logic; unknown quota stays unknown. Successful unreadable JSON retains upstream's 200/raw bytes and existing zero token counters with unknown cost; see evidence limitations. |
 
-M1A leaves #6 open: #1 Antigravity and #5 Vertex remain outstanding, as do authenticated live
-NVIDIA/Zen checks. No implementation dependency on #1 or #5 was found.
+## M1 provider disposition
+
+M1 provider closure is based on **implemented, tested, blocked, or explicitly deferred** status with
+recorded evidence; it does not require forcing every conceivable provider integration into production.
+
+| Target | M1 disposition | M1 blocker? |
+|---|---|---|
+| DockerLM | **Complete** — live + deterministic verification through existing `ollama` transport | No |
+| NVIDIA | Generic path implemented/tested; authenticated live verification remains blocked on operator credentials | **Decision pending:** either run live smoke when credentials are available or explicitly defer that verification tail |
+| OpenCode Zen | Generic Chat/Responses path implemented/tested; authenticated live verification remains blocked on credentials/network edge | **Decision pending:** either run live smoke when access is available or explicitly defer that verification tail |
+| Antigravity | **Blocked by M1C security gate**; no adapter implemented; future work requires a second identity + reviewed isolation design | No — tracked as blocked future work |
+| Vertex AI | **Explicitly deferred**; Gemini API satisfies the current Google requirement | No |
+
+Accordingly, Antigravity and Vertex do **not** block progression to M2. The minimum remaining M1
+provider decision is the disposition of the NVIDIA and Zen authenticated-live verification tails,
+followed by updating/closing umbrella issue #6.
 
 ## M1C Antigravity isolation evidence
 
