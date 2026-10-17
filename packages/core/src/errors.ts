@@ -24,6 +24,7 @@ export const ROUTER_ERROR_CODES = [
   "credential_decrypt_failed",
   "translation_failed",
   "model_not_found",
+  "no_eligible_model",
   "request_too_large",
   "invalid_request",
   "unsupported_content_encoding",
@@ -246,10 +247,26 @@ export class TranslationError extends RouterError {
  * the `403`/`503`/`429`/`402` a routing *attempt* against that id might have produced: this is a
  * catalog lookup, not a failed request, so it always renders as "not found" regardless of which
  * underlying reason kept every account from claiming it. The message still names that reason.
+ *
+ * Also the answer to a request naming a Distpatch-reserved virtual model (`auto`, `auto-*`) that is
+ * not an active one: the router owns that namespace, so the name is known not to exist rather than
+ * handed to account selection as though some upstream might answer to it.
  */
 export class ModelNotFoundError extends RouterError {
   readonly code = "model_not_found"
   readonly status = 404
+}
+
+/**
+ * A request named an active Distpatch virtual model (`auto-research`), and no concrete model in
+ * the key's scope satisfies that virtual model's policy and hard requirements against the
+ * capability catalog. `422`: the model exists and the request is well formed, but nothing can be
+ * selected for it — distinct from `404` (no such virtual model) and from every account-layer status
+ * (`429`/`402`/`503`), which only arise after a concrete model was selected.
+ */
+export class NoEligibleModelError extends RouterError {
+  readonly code = "no_eligible_model"
+  readonly status = 422
 }
 
 /**

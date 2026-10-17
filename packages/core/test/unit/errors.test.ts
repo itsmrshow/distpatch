@@ -10,6 +10,7 @@ import {
   KeyRevokedError,
   KeyVerificationUnavailableError,
   ModelNotFoundError,
+  NoEligibleModelError,
   NoHealthyAccountError,
   QuotaExhaustedError,
   RequestTooLargeError,
@@ -81,6 +82,12 @@ const cases: readonly ErrorCase[] = [
   },
   { name: "TranslationError", ctor: TranslationError, code: "translation_failed", status: 400 },
   { name: "ModelNotFoundError", ctor: ModelNotFoundError, code: "model_not_found", status: 404 },
+  {
+    name: "NoEligibleModelError",
+    ctor: NoEligibleModelError,
+    code: "no_eligible_model",
+    status: 422,
+  },
   {
     name: "RequestTooLargeError",
     ctor: RequestTooLargeError,
