@@ -82,50 +82,62 @@ export function parseLocalEvaluationArtifact(
   const matchedSet = new Set<string>()
   const unresolvedSet = new Set<string>()
   const scoresByModel = artifact.scores ?? {}
+  const rawByModel = artifact.raw ?? {}
+  const saturatedDims = new Set(artifact.saturated ?? [])
 
-  for (const [modelId, dimMap] of Object.entries(scoresByModel)) {
+  // One model entry per canonical/unresolved identity; scores and raw carry different halves.
+  const models = new Map<string, string | null>()
+  for (const modelId of new Set([...Object.keys(scoresByModel), ...Object.keys(rawByModel)])) {
     const canonicalModelId = resolver.resolve(LOCAL_EVAL_SOURCE_ID, modelId)
+    models.set(modelId, canonicalModelId)
     if (canonicalModelId !== null) matchedSet.add(canonicalModelId)
     else unresolvedSet.add(modelId)
+  }
+
+  for (const [modelId, canonicalModelId] of models) {
+    const dimMap = scoresByModel[modelId] ?? {}
+    const rawDimMap = rawByModel[modelId] ?? {}
 
     for (const dimension of CAPABILITY_DIMENSIONS) {
       const val = dimMap?.[dimension]
-      if (typeof val !== "number" || !Number.isFinite(val)) continue
-      if (val < 0 || val > 1) {
-        throw new Error(
-          `Local evaluation score for ${modelId}.${dimension} (${val}) is outside [0, 1]`,
+      const rawVal = rawDimMap?.[dimension]
+
+      if (typeof val === "number" && Number.isFinite(val)) {
+        if (val < 0 || val > 1) {
+          throw new Error(
+            `Local evaluation score for ${modelId}.${dimension} (${val}) is outside [0, 1]`,
+          )
+        }
+        observations.push(
+          emitLocalMetric(modelId, canonicalModelId, `local_eval_${dimension}`, val, {
+            suite,
+            normalization,
+            observedAt,
+            ingestedAt,
+          }),
+        )
+        continue
+      }
+
+      // Saturated dimension: the published score is `null` but the raw suite mean is a measured
+      // value. Retain it as audit evidence under a `saturated_` metric that the compiler never
+      // converts into a preference score.
+      if (
+        saturatedDims.has(dimension) &&
+        typeof rawVal === "number" &&
+        Number.isFinite(rawVal) &&
+        rawVal >= 0 &&
+        rawVal <= 1
+      ) {
+        observations.push(
+          emitLocalMetric(modelId, canonicalModelId, `saturated_${dimension}`, rawVal, {
+            suite,
+            normalization,
+            observedAt,
+            ingestedAt,
+          }),
         )
       }
-      const metric = `local_eval_${dimension}`
-      const fingerprint = observationFingerprint({
-        source: LOCAL_EVAL_SOURCE_ID,
-        sourceModelId: modelId,
-        metric,
-        benchmark: suite,
-        benchmarkVersion: normalization,
-        rawValue: val,
-        unit: "score_0_1",
-      })
-      observations.push({
-        source: LOCAL_EVAL_SOURCE_ID,
-        sourceModelId: modelId,
-        canonicalModelId,
-        metric,
-        rawValue: val,
-        unit: "score_0_1",
-        benchmark: suite,
-        benchmarkVersion: normalization,
-        fingerprint,
-        observedAt,
-        ingestedAt,
-        sourceRef: LOCAL_EVAL_SOURCE_REF,
-        provenance: {
-          suite,
-          normalization,
-          dimension,
-          withheldBySaturationGate: false,
-        },
-      })
     }
   }
 
@@ -133,6 +145,49 @@ export function parseLocalEvaluationArtifact(
     observations,
     matchedCanonicalIds: [...matchedSet].sort(),
     unresolvedSourceModelIds: [...unresolvedSet].sort(),
+  }
+}
+
+function emitLocalMetric(
+  modelId: string,
+  canonicalModelId: string | null,
+  metric: string,
+  rawValue: number,
+  meta: {
+    readonly suite: string
+    readonly normalization: string
+    readonly observedAt: Date
+    readonly ingestedAt: Date
+  },
+): SourceObservation {
+  const fingerprint = observationFingerprint({
+    source: LOCAL_EVAL_SOURCE_ID,
+    sourceModelId: modelId,
+    metric,
+    benchmark: meta.suite,
+    benchmarkVersion: meta.normalization,
+    rawValue,
+    unit: "score_0_1",
+  })
+  return {
+    source: LOCAL_EVAL_SOURCE_ID,
+    sourceModelId: modelId,
+    canonicalModelId,
+    metric,
+    rawValue,
+    unit: "score_0_1",
+    benchmark: meta.suite,
+    benchmarkVersion: meta.normalization,
+    fingerprint,
+    observedAt: meta.observedAt,
+    ingestedAt: meta.ingestedAt,
+    sourceRef: LOCAL_EVAL_SOURCE_REF,
+    provenance: {
+      suite: meta.suite,
+      normalization: meta.normalization,
+      dimension: metric.replace(/^local_eval_|^saturated_/, ""),
+      withheldBySaturationGate: metric.startsWith("saturated_"),
+    },
   }
 }
 
