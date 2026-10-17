@@ -182,6 +182,7 @@ function buildSingleObservationEvidence(
     benchmark: obs.benchmark,
     benchmarkVersion: obs.benchmarkVersion,
     fingerprint: obs.fingerprint,
+    stale,
   }
   const digest = createHash("sha256").update(JSON.stringify(payload)).digest("hex")
   return {
@@ -238,9 +239,15 @@ function compileDimension(
     if (speedScore === null || primaryObs === null) {
       return emptyDimensionEvidence(dimension)
     }
-    const observedAt = primaryObs.observedAt.toISOString()
+    const oldestObservedAt =
+      tpsObs !== null && ttftObs !== null
+        ? new Date(Math.min(tpsObs.observedAt.getTime(), ttftObs.observedAt.getTime()))
+        : primaryObs.observedAt
+    const observedAt = oldestObservedAt.toISOString()
     const ingestedAt = primaryObs.ingestedAt.toISOString()
-    const stale = isObservationStale(primaryObs.observedAt, now, staleDays)
+    const stale =
+      (tpsObs !== null && isObservationStale(tpsObs.observedAt, now, staleDays)) ||
+      (ttftObs !== null && isObservationStale(ttftObs.observedAt, now, staleDays))
     const digest = createHash("sha256")
       .update(
         JSON.stringify({
@@ -248,6 +255,7 @@ function compileDimension(
           score: speedScore,
           tpsFingerprint: tpsObs?.fingerprint ?? null,
           ttftFingerprint: ttftObs?.fingerprint ?? null,
+          stale,
         }),
       )
       .digest("hex")

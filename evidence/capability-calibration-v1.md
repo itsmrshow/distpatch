@@ -14,7 +14,7 @@ evidence for local/DockerLM models and custom builds.
 | Local Suite | `distpatch-calibration-v1` (`apps/api/bench/calibration/cases.ts`, 54 cases, `bwrap` sandbox `distpatch-grader-v1-bwrap`) |
 | Local Raw & Scores | `evidence/capability-calibration-v1/results/*.json`, `evidence/capability-calibration-v1/scores.json` |
 | Bootstrap Catalog | `2026-10-17.2` (hard facts only; static bootstrap preference scores all `null`) |
-| Published Snapshot | `sha256:663c12992aeb90006e7a33da432801dc8b1674bf64e95e1c10c04bf2fc747d04` (effective catalog `sha256:90aa4da5246fb9b7ae05f1d9f455dcb222eccaf954e18b212257906aa4a7cc08`) |
+| Published Snapshot | `sha256:f09cce926e0203b67d9db36ca83ccc4a2ced2e04ddbb56071ecae6927ccd53e7` (effective catalog `sha256:90aa4da5246fb9b7ae05f1d9f455dcb222eccaf954e18b212257906aa4a7cc08`) |
 | Reproduce | `bin/capabilities sync` · `bin/capabilities status` · `bin/capabilities show` · `bin/calibrate matrix` |
 ## 1. Model inventory
 
@@ -180,7 +180,7 @@ score(m, d)  = raw(m, d) if discriminating(d) else null
 Live manual sync via `bin/capabilities sync` ingested **5,126** observations across **704** models
 (4 pages of 200) from Artificial Analysis (`tier: free`, `intelligence_index_version: 4.3`) plus
 **9** non-saturated observations from `distpatch-local-eval`, producing published snapshot
-`sha256:663c12992aeb90006e7a33da432801dc8b1674bf64e95e1c10c04bf2fc747d04` (evidence digest
+`sha256:f09cce926e0203b67d9db36ca83ccc4a2ced2e04ddbb56071ecae6927ccd53e7` (evidence digest
 `sha256:74421c84338db05a84f8fa9fa5c848cdbdf16a22eb0650d8ef4120b60ce43752`, effective catalog
 `sha256:90aa4da5246fb9b7ae05f1d9f455dcb222eccaf954e18b212257906aa4a7cc08`):
 

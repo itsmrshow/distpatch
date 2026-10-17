@@ -620,15 +620,34 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
       },
       { ingestedAt: NOW, observedAt: staleDate },
     )
+    const freshCompiled = compileCapabilitySnapshot(aaParsed.observations, {
+      generatedAt: new Date("2025-02-01T00:00:00.000Z"),
+      staleDays: 90,
+    })
     const compiled = compileCapabilitySnapshot(aaParsed.observations, {
       generatedAt: NOW,
       staleDays: 90,
     })
+    expect(freshCompiled.summary.staleDimensions).toEqual([])
     expect(compiled.summary.staleDimensions).toContain("anthropic/claude-sonnet-4-6.general")
+    // Crossing the staleness boundary produces a new snapshot revision so saveSnapshot persists it.
+    expect(compiled.snapshot.revision).not.toBe(freshCompiled.snapshot.revision)
     expect(compiled.snapshot.models["anthropic/claude-sonnet-4-6"]?.dimensions.general.stale).toBe(
       true,
     )
     expect(compiled.catalog.get("anthropic/claude-sonnet-4-6")?.scores.general).toBe(0.642)
+
+    // Combined speed evidence is marked stale when throughput is fresh but TTFT is stale.
+    const mixedSpeedObs = aaParsed.observations.map((o) =>
+      o.metric === "median_output_tokens_per_second" ? { ...o, observedAt: NOW } : o,
+    )
+    const mixedSpeedCompiled = compileCapabilitySnapshot(mixedSpeedObs, {
+      generatedAt: NOW,
+      staleDays: 90,
+    })
+    expect(
+      mixedSpeedCompiled.snapshot.models["anthropic/claude-sonnet-4-6"]?.dimensions.speed.stale,
+    ).toBe(true)
   })
 
   test("repeated sync is idempotent and failed sync / failed publish retains last-known-good snapshot", async () => {
