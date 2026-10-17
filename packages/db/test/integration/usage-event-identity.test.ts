@@ -4,7 +4,7 @@ import type { DatabaseHandle } from "../../src/client"
 import { createUsageRecentRepository } from "../../src/repositories/usage-recent-repository"
 import {
   createUsageRecordRepository,
-  USAGE_RECORD_MAX_BATCH_ROWS,
+  USAGE_RECORD_MAX_STATEMENT_ROWS,
   type UsageRecordInsert,
 } from "../../src/repositories/usage-repository"
 import { apiKeys } from "../../src/schema/api-keys"
@@ -69,8 +69,11 @@ describe.skipIf(!url)("stable usage event identity", () => {
       ),
     ).toBe(true)
   })
-  test("a fully populated maximum batch fits PostgreSQL's actual bind protocol", async () => {
-    const rows = Array.from({ length: USAGE_RECORD_MAX_BATCH_ROWS }, () => ({
+  test("a fully populated 2340-row flush persists through PostgreSQL's real bind protocol", async () => {
+    // 2340 is the largest accepted USAGE_BATCH_SIZE; it needs a full 2259-row statement and a
+    // second one, both inside one transaction.
+    expect(2340).toBeGreaterThan(USAGE_RECORD_MAX_STATEMENT_ROWS)
+    const rows = Array.from({ length: 2340 }, () => ({
       ...event(),
       clientRequestId: null,
       attempt: 1,
@@ -79,6 +82,7 @@ describe.skipIf(!url)("stable usage event identity", () => {
       poolId: null,
       provider: null,
       sessionKey: null,
+      selectedModel: null,
       ingressDialect: null,
       egressMode: null,
       tokensIn: 0,
@@ -93,9 +97,20 @@ describe.skipIf(!url)("stable usage event identity", () => {
       streamed: false,
       errorClass: null,
     }))
-    expect(await createUsageRecordRepository(handle.db).insertMany(rows)).toBe(
-      USAGE_RECORD_MAX_BATCH_ROWS,
-    )
+    const repo = createUsageRecordRepository(handle.db)
+    expect(await repo.insertMany(rows)).toBe(2340)
+    const persisted = await handle.db
+      .select({ id: usageRecords.id })
+      .from(usageRecords)
+      .where(
+        inArray(
+          usageRecords.id,
+          rows.map((row) => row.id),
+        ),
+      )
+    expect(persisted).toHaveLength(2340)
+    // Replaying the whole flush (acknowledgment lost) admits nothing twice.
+    expect(await repo.insertMany(rows)).toBe(0)
   })
   test("duplicate identity never replaces the original facts", async () => {
     const repo = createUsageRecordRepository(handle.db)

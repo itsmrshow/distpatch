@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - The capability catalog is now loaded once at boot and injected into virtual-model resolution, instead of loaded only for validation and discarded.
-- **`USAGE_BATCH_SIZE` is now bounded at `1..2259` (was `1..2340`), because a usage row now binds 29 parameters (`selected_model`).** A value from 2260 to 2340 fails boot; the default `200` is unaffected.
+- A usage row now binds 29 parameters (`selected_model`), so a raw `usage_records` INSERT statement holds at most 2259 rows. `USAGE_BATCH_SIZE` keeps its `1..2340` range: it is the flush size, and a larger flush is written as several bind-safe statements in one transaction.
 
 ## [2.40.0] — 2026-10-16
 

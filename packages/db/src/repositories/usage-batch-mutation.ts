@@ -15,7 +15,11 @@ import {
   usagePayloadHash,
 } from "./usage-contribution-values"
 import { lockUsageHistory } from "./usage-history-lock"
-import { PG_MAX_BIND_PARAMETERS, type UsageRecordInsert } from "./usage-repository"
+import {
+  PG_MAX_BIND_PARAMETERS,
+  USAGE_RECORD_MAX_STATEMENT_ROWS,
+  type UsageRecordInsert,
+} from "./usage-repository"
 
 export interface UsageBatchInsert {
   readonly attempts: readonly UsageRecordInsert[]
@@ -27,7 +31,9 @@ export interface UsageBatchResult {
 }
 /** Conservative per-table counts include SQL/default fields, so future columns cannot overflow Bind. */
 function* chunks<T>(rows: readonly T[], columns = 1): Generator<T[]> {
-  const maximum = Math.floor((PG_MAX_BIND_PARAMETERS - 1) / columns)
+  yield* slices(rows, Math.floor((PG_MAX_BIND_PARAMETERS - 1) / columns))
+}
+function* slices<T>(rows: readonly T[], maximum: number): Generator<T[]> {
   for (let start = 0; start < rows.length; start += maximum)
     yield rows.slice(start, start + maximum)
 }
@@ -97,7 +103,8 @@ export function createUsageBatchMutation(db: Database) {
                 )),
             )
           const written = []
-          for (const batch of chunks(rows, Object.keys(getTableColumns(usageRecords)).length))
+          // Every writable cell bound except `ingestedAt`, which is SQL (`usage-batch-limit.test.ts`).
+          for (const batch of slices(rows, USAGE_RECORD_MAX_STATEMENT_ROWS))
             written.push(
               ...(await tx
                 .insert(usageRecords)

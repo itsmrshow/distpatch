@@ -4,15 +4,16 @@ import { fileURLToPath } from "node:url"
 import {
   PG_MAX_BIND_PARAMETERS,
   USAGE_RECORD_BIND_PARAMETERS_PER_ROW,
-  USAGE_RECORD_MAX_BATCH_ROWS,
+  USAGE_RECORD_MAX_STATEMENT_ROWS,
 } from "@multi-ai-router/db"
 import { EnvValidationError, parseEnv } from "../../src/config/env"
+import { USAGE_BATCH_SIZE_MAX } from "../../src/config/fields"
 
 /**
- * `USAGE_BATCH_SIZE`'s ceiling is derived in one place and *restated* in three an operator
- * actually reads before choosing a number. A column added to `usage_records` moves the real
- * ceiling down; nothing moves the prose, and prose that recommends a value the router now
- * refuses at boot is worse than no prose at all.
+ * `USAGE_BATCH_SIZE`'s ceiling and the statement size the writer splits a flush into are each
+ * derived in one place and *restated* in three documents an operator actually reads before
+ * choosing a number. Nothing moves the prose when either moves, and prose that recommends a value
+ * the router refuses at boot — or misstates what a flush costs Postgres — is worse than none.
  *
  * So the documented numbers are asserted against the derived ones rather than proof-read.
  * The file read is the assertion: the artifacts under test *are* the checked-in `.env.example`
@@ -48,10 +49,11 @@ function usageBatchPassage(text: string): string {
 
 describe("documented USAGE_BATCH_SIZE ceiling", () => {
   for (const source of SOURCES) {
-    test(`${source.name} states the ceiling the router actually enforces`, () => {
+    test(`${source.name} states the ceiling boot enforces and the statement size behind it`, () => {
       const passage = usageBatchPassage(source.text)
 
-      expect(mentionsNumber(passage, USAGE_RECORD_MAX_BATCH_ROWS)).toBe(true)
+      expect(mentionsNumber(passage, USAGE_BATCH_SIZE_MAX)).toBe(true)
+      expect(mentionsNumber(passage, USAGE_RECORD_MAX_STATEMENT_ROWS)).toBe(true)
       expect(mentionsNumber(passage, PG_MAX_BIND_PARAMETERS)).toBe(true)
       expect(mentionsNumber(passage, USAGE_RECORD_BIND_PARAMETERS_PER_ROW)).toBe(true)
     })

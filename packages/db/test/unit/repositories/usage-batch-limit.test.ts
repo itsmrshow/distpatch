@@ -5,23 +5,22 @@ import {
   createUsageRecordRepository,
   PG_MAX_BIND_PARAMETERS,
   USAGE_RECORD_BIND_PARAMETERS_PER_ROW,
-  USAGE_RECORD_MAX_BATCH_ROWS,
+  USAGE_RECORD_MAX_STATEMENT_ROWS,
 } from "../../../src/repositories/usage-repository"
 import { usageRecords } from "../../../src/schema/usage-records"
 import { usageRequestTerminals } from "../../../src/schema/usage-request-terminals"
 import { transactionHarness } from "./fixtures"
 
 /**
- * `USAGE_RECORD_MAX_BATCH_ROWS` is what `config/env.ts` refuses a `USAGE_BATCH_SIZE`
- * against, and the cost of it being wrong is the whole usage table: one row past
- * Postgres' bind ceiling and every flush is rejected identically, forever, with
- * traffic unaffected and nothing in the table to show for it.
+ * `USAGE_RECORD_MAX_STATEMENT_ROWS` is the most rows one raw INSERT may carry, and the cost of it
+ * being wrong is the whole usage table: one row past Postgres' bind ceiling and every flush is
+ * rejected identically, forever, with traffic unaffected and nothing in the table to show for it.
  *
  * So the per-row parameter count is not taken on trust here. The statement the
  * repository would actually put on the wire is built, and its parameters counted —
  * a column added to `usage_records` and filled in by the writer turns this red on
  * the same commit, which is the only thing standing between that column and a
- * ceiling that is quietly one batch too high.
+ * statement size that is quietly one row too large.
  */
 
 const row: UsageRecordInsert = {
@@ -101,23 +100,43 @@ describe("usage insert bind budget", () => {
     expect(statement.params[0]).toBe(rows[0]?.id)
   })
 
-  test("fits a full batch inside Postgres' bind ceiling", () => {
-    expect(USAGE_RECORD_MAX_BATCH_ROWS * USAGE_RECORD_BIND_PARAMETERS_PER_ROW).toBeLessThanOrEqual(
-      PG_MAX_BIND_PARAMETERS,
-    )
+  test("fits a full statement inside Postgres' bind ceiling", () => {
+    expect(
+      USAGE_RECORD_MAX_STATEMENT_ROWS * USAGE_RECORD_BIND_PARAMETERS_PER_ROW,
+    ).toBeLessThanOrEqual(PG_MAX_BIND_PARAMETERS)
   })
 
-  test("is the largest batch that fits — one more row overruns", () => {
+  test("is the largest statement that fits — one more row overruns", () => {
     expect(
-      (USAGE_RECORD_MAX_BATCH_ROWS + 1) * USAGE_RECORD_BIND_PARAMETERS_PER_ROW,
+      (USAGE_RECORD_MAX_STATEMENT_ROWS + 1) * USAGE_RECORD_BIND_PARAMETERS_PER_ROW,
     ).toBeGreaterThan(PG_MAX_BIND_PARAMETERS)
   })
+})
 
-  test("leaves room for the default batch size many times over", () => {
-    // Guards the arithmetic itself: a ceiling below the shipped default would fail
-    // boot on a stock configuration.
-    expect(USAGE_RECORD_MAX_BATCH_ROWS).toBeGreaterThan(200)
+test("a 2340-row flush — the largest USAGE_BATCH_SIZE — is two bind-safe statements in one transaction", async () => {
+  const rows = Array.from({ length: 2340 }, () => ({ ...row, id: crypto.randomUUID() }))
+  const columns = Object.keys(getTableColumns(usageRecords))
+  const h = transactionHarness(({ sql, params }) => {
+    if (!sql.startsWith('insert into "usage_records"')) return []
+    const identities = new Set(params)
+    return rows
+      .filter((entry) => identities.has(entry.id))
+      .map((entry) => {
+        const values: Record<string, unknown> = { ...entry, ingestedAt: new Date() }
+        return columns.map((column) =>
+          values[column] instanceof Date ? values[column].toISOString() : values[column],
+        )
+      })
   })
+
+  expect(await createUsageRecordRepository(h.db).insertMany(rows)).toBe(2340)
+  expect(h.transactions()).toBe(1)
+  const raw = h.statements.filter((entry) => entry.sql.startsWith('insert into "usage_records"'))
+  expect(raw.map((entry) => entry.params.length / USAGE_RECORD_BIND_PARAMETERS_PER_ROW)).toEqual([
+    USAGE_RECORD_MAX_STATEMENT_ROWS,
+    2340 - USAGE_RECORD_MAX_STATEMENT_ROWS,
+  ])
+  expect(h.statements.every((entry) => entry.params.length <= PG_MAX_BIND_PARAMETERS)).toBe(true)
 })
 
 test("oversized direct terminal batches and combined receipts use bounded statements in one transaction", async () => {

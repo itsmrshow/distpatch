@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { generateRouterKey, ROUTER_KEY_PREFIX } from "@multi-ai-router/core"
-import {
-  DATABASE_POOL_DEFAULTS,
-  PG_MAX_BIND_PARAMETERS,
-  USAGE_RECORD_BIND_PARAMETERS_PER_ROW,
-  USAGE_RECORD_MAX_BATCH_ROWS,
-} from "@multi-ai-router/db"
+import { DATABASE_POOL_DEFAULTS } from "@multi-ai-router/db"
 import type { z } from "zod"
 import {
   DEFAULT_SERVER_IDLE_TIMEOUT_SECONDS,
@@ -14,7 +9,7 @@ import {
   parseEnv,
   ZERO_IS_LEGAL,
 } from "../../src/config/env"
-import { SERVER_IDLE_TIMEOUT_MAX_SECONDS } from "../../src/config/fields"
+import { SERVER_IDLE_TIMEOUT_MAX_SECONDS, USAGE_BATCH_SIZE_MAX } from "../../src/config/fields"
 import { ADMIN_API_TOKEN_MIN_LENGTH } from "../../src/services/admin-auth"
 import { DEFAULT_MAX_BODY_BYTES } from "../../src/services/dataplane"
 
@@ -700,29 +695,15 @@ describe("parseEnv", () => {
       expect(parseEnv({ ...base, USAGE_BATCH_SIZE: "500" }).dataPlane.usageBatchSize).toBe(500)
     })
 
-    test("accepts the largest batch Postgres can bind", () => {
-      const env = parseEnv({ ...base, USAGE_BATCH_SIZE: String(USAGE_RECORD_MAX_BATCH_ROWS) })
-      expect(env.dataPlane.usageBatchSize).toBe(USAGE_RECORD_MAX_BATCH_ROWS)
+    test("accepts the 2340 range it always has, though one statement now holds fewer rows", () => {
+      const env = parseEnv({ ...base, USAGE_BATCH_SIZE: "2340" })
+      expect(env.dataPlane.usageBatchSize).toBe(2340)
     })
 
-    test("refuses one row past it, rather than losing every usage record forever", () => {
-      const over = String(USAGE_RECORD_MAX_BATCH_ROWS + 1)
-      expect(expectEnvError({ ...base, USAGE_BATCH_SIZE: over }).variables).toEqual([
-        "USAGE_BATCH_SIZE",
-      ])
-    })
-
-    test("shows the arithmetic, so the ceiling is a fact and not a magic number", () => {
-      const error = expectEnvError({
-        ...base,
-        USAGE_BATCH_SIZE: String(USAGE_RECORD_MAX_BATCH_ROWS + 1),
-      })
-
-      expect(error.message).toContain(String(PG_MAX_BIND_PARAMETERS))
-      expect(error.message).toContain(String(USAGE_RECORD_BIND_PARAMETERS_PER_ROW))
-      expect(error.message).toContain(
-        `${PG_MAX_BIND_PARAMETERS} / ${USAGE_RECORD_BIND_PARAMETERS_PER_ROW} = ${USAGE_RECORD_MAX_BATCH_ROWS}`,
-      )
+    test("refuses one row past it, naming the ceiling", () => {
+      const error = expectEnvError({ ...base, USAGE_BATCH_SIZE: String(USAGE_BATCH_SIZE_MAX + 1) })
+      expect(error.variables).toEqual(["USAGE_BATCH_SIZE"])
+      expect(error.message).toContain(String(USAGE_BATCH_SIZE_MAX))
     })
 
     test("refuses a batch of zero: the drain takes nothing and the queue only sheds", () => {
