@@ -1,4 +1,4 @@
-import type { CapabilityDimension } from "./schema"
+import type { CanonicalModelId, CapabilityDimension } from "./schema"
 
 /**
  * The effective, read-only shapes a selector consumes. Hard facts and preference scores are two
@@ -7,8 +7,6 @@ import type { CapabilityDimension } from "./schema"
  *
  * `null` everywhere means **unknown**. A known-unsupported hard feature is `false`.
  */
-
-export type CanonicalModelId = string
 
 export interface HardFacts {
   readonly contextTokens: number | null

@@ -54,6 +54,7 @@ export const CanonicalModelId = z
     /^[a-z0-9][a-z0-9._-]{0,63}\/[a-z0-9][a-z0-9._:-]{0,127}$/,
     "must be lowercase `vendor/model` (letters, digits, `.`, `_`, `-`, `:`)",
   )
+export type CanonicalModelId = z.infer<typeof CanonicalModelId>
 
 /** A name clients or providers use for the model. Lowercase; lookup lowercases its input. */
 export const CatalogAlias = z
