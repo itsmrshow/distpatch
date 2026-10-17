@@ -96,10 +96,14 @@ unknown (`unknownHardFacts: reject`).
 
 ### Unknown capability data
 
-Scores are not invented. The shipped profiles carry no preference scores, so until an operator
-supplies measured scores (override file) every eligible candidate scores `0` with coverage `0`
-and the M2B total order decides: policy preference (none) → canonical id → candidate name. That is
-deterministic and documented, not a quality judgement. Synthetic scores appear only in tests.
+Scores are not invented. Shipped scores come only from the calibration gate
+([`evidence/capability-calibration-v1.md`](../../evidence/capability-calibration-v1.md)), which
+publishes `general`, `coding` and `agentic` for three of the four shipped profiles and leaves
+everything else unknown. Unknown earns no credit, so coverage is partial (0.20–0.55 for hosted
+policies) and an unmeasured model (`openai/gpt-5.5`) scores `0`. Where scores still tie, the M2B
+total order decides: policy preference (none) → canonical id → candidate name. The evidence
+lists each policy's winner, margin and sensitivity; `auto-fast`, `auto-research` and
+`auto-review` are near-ties. Synthetic scores appear only in tests.
 
 ### Request-derived requirements
 

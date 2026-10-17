@@ -51,9 +51,33 @@ describe("shipped catalog", () => {
     expect(profile?.tags).toEqual(["dockerlm", "free", "local"])
   })
 
-  test("ships no invented preference score", () => {
+  /**
+   * The catalog must not drift from its evidence: a hand-edited score, a rounding change or a
+   * score for a dimension the calibration withheld would make the router act on a number nobody
+   * measured. Values are compared against the committed normalizer output, not restated here.
+   */
+  test("every shipped score is exactly a published calibration value; every other one is unknown", async () => {
+    const published = (await Bun.file(
+      new URL("../../../../../evidence/capability-calibration-v1/scores.json", import.meta.url),
+    ).json()) as { scores: Record<string, Record<string, number | null>> }
     for (const profile of buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG).list()) {
-      for (const dimension of CAPABILITY_DIMENSIONS) expect(profile.scores[dimension]).toBeNull()
+      for (const dimension of CAPABILITY_DIMENSIONS) {
+        expect([profile.id, dimension, profile.scores[dimension]]).toEqual([
+          profile.id,
+          dimension,
+          published.scores[profile.id]?.[dimension] ?? null,
+        ])
+      }
+    }
+  })
+
+  test("every scored profile cites the calibration evidence", () => {
+    for (const profile of buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG).list()) {
+      const scored = CAPABILITY_DIMENSIONS.some((d) => profile.scores[d] !== null)
+      expect([
+        profile.id,
+        profile.sources.includes("repo:evidence/capability-calibration-v1.md"),
+      ]).toEqual([profile.id, scored])
     }
   })
 })

@@ -224,18 +224,6 @@ describe("resolution", () => {
     }
   })
 
-  test("shipped data carries no scores, so unknown stays unknown and ties fall to canonical id", () => {
-    const shipped = buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG, null)
-    const decision = selectVirtualModel(shipped, descriptor("auto-max"), [
-      "gpt-5.5",
-      "claude-sonnet-4-6",
-    ])
-    expect(decision.ranked.map((r) => [r.model, r.score, r.coverage])).toEqual([
-      ["claude-sonnet-4-6", 0, 0],
-      ["gpt-5.5", 0, 0],
-    ])
-  })
-
   test("reads only the injected catalog, synchronously — resolve and revision, nothing else", () => {
     const calls: string[] = []
     const spy: ModelCapabilityCatalog = {
@@ -257,5 +245,85 @@ describe("resolution", () => {
     const decision = selectVirtualModel(spy, descriptor("auto"), ["thinker", "local/box"])
     expect(decision).not.toBeInstanceOf(Promise)
     expect(calls).toEqual(["resolve:local/box", "resolve:thinker", "revision"])
+  })
+})
+
+describe("the calibrated shipped catalog", () => {
+  const shipped = buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG, null)
+  const MODELS = ["claude-sonnet-4-6", "gpt-5.5", "gpt-oss-120b", "mimo-v2.6-distill-9b"]
+  const pick = (cat: ModelCapabilityCatalog, id: string, candidates = MODELS) =>
+    selectVirtualModel(cat, descriptor(id), candidates)
+
+  test("each active policy's winner over every shipped model (evidence/capability-calibration-v1.md)", () => {
+    expect(Object.fromEntries(ACTIVE.map((id) => [id, pick(shipped, id).selected?.model]))).toEqual(
+      {
+        auto: "claude-sonnet-4-6",
+        "auto-fast": "claude-sonnet-4-6",
+        "auto-local": "mimo-v2.6-distill-9b",
+        "auto-max": "claude-sonnet-4-6",
+        "auto-plan": "claude-sonnet-4-6",
+        "auto-research": "claude-sonnet-4-6",
+        "auto-review": "gpt-oss-120b",
+        "auto-task": "claude-sonnet-4-6",
+      },
+    )
+  })
+
+  test("winners come from scores, not tie-breaks: no top-two pair is tied", () => {
+    for (const id of ACTIVE) {
+      const [first, second] = pick(shipped, id).ranked
+      if (second !== undefined) expect([id, (first?.score ?? 0) > second.score]).toEqual([id, true])
+    }
+  })
+
+  test("profile load order and candidate order change neither the revision nor any digest", () => {
+    const reordered = buildCapabilityCatalog(
+      {
+        ...SHIPPED_CAPABILITY_CATALOG,
+        profiles: [...SHIPPED_CAPABILITY_CATALOG.profiles].reverse(),
+      },
+      null,
+    )
+    expect(reordered.revision()).toEqual(shipped.revision())
+    for (const id of ACTIVE) {
+      const forward = pick(shipped, id)
+      const shuffled = pick(reordered, id, [...MODELS, ...MODELS].reverse())
+      expect(shuffled).toEqual(forward)
+      expect(shuffled.digest).toBe(forward.digest)
+    }
+  })
+
+  test("an uncalibrated model earns no credit: unknown is never imputed", () => {
+    const gpt55 = pick(shipped, "auto-max").ranked.find((r) => r.model === "gpt-5.5")
+    expect(gpt55).toMatchObject({ score: 0, coverage: 0 })
+    expect(gpt55?.unknownDimensions).toEqual([
+      "general",
+      "coding",
+      "reasoning",
+      "agentic",
+      "review",
+      "long_context",
+    ])
+  })
+
+  const overridden = (overrides: readonly unknown[]) =>
+    buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG, { schemaVersion: 1, overrides })
+
+  test("an operator null makes a calibrated score unknown again, and the decision follows", () => {
+    const edited = overridden([{ id: "openai/gpt-oss-120b", scores: { coding: null } }])
+    const review = pick(edited, "auto-review")
+    expect(review.selected?.model).toBe("claude-sonnet-4-6")
+    expect(review.ranked.find((r) => r.model === "gpt-oss-120b")?.unknownDimensions).toContain(
+      "coding",
+    )
+    expect(edited.revision().effective).not.toBe(shipped.revision().effective)
+    expect(edited.revision().shipped).toBe(shipped.revision().shipped)
+  })
+
+  test("an operator score or disable beats calibrated data", () => {
+    const lowered = overridden([{ id: "anthropic/claude-sonnet-4-6", scores: { general: 0.5 } }])
+    expect(pick(lowered, "auto").selected?.model).toBe("gpt-oss-120b")
+    const disabled = overridden([{ id: "anthropic/claude-sonnet-4-6", enabled: false }])
+    expect(pick(disabled, "auto-task").selected?.model).toBe("mimo-v2.6-distill-9b")
   })
 })

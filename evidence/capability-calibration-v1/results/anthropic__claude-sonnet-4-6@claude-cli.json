@@ -1,0 +1,2144 @@
+{
+  "suite": "distpatch-calibration-v1",
+  "profileId": "anthropic/claude-sonnet-4-6",
+  "route": "claude-cli",
+  "wireModel": "claude-sonnet-4-6",
+  "recordedAt": "2026-10-17T13:49:18.839Z",
+  "cases": [
+    {
+      "id": "general.bullets",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "exactly 3 lines",
+          "pass": true
+        },
+        {
+          "name": "all start with '- '",
+          "pass": true
+        },
+        {
+          "name": "each <= 12 words",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5079,
+      "answer": "- Unit tests catch bugs early before they reach production code.\n- They document expected behavior for future developers on the team.\n- Tests enable safe refactoring by verifying existing functionality still works."
+    },
+    {
+      "id": "general.synthesis",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "owner Priya",
+          "pass": true
+        },
+        {
+          "name": "date 2026-03-14",
+          "pass": true
+        },
+        {
+          "name": "cutover June",
+          "pass": true
+        },
+        {
+          "name": "omits Bob",
+          "pass": true
+        },
+        {
+          "name": "one sentence",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4535,
+      "answer": "Priya is the sole owner of the billing migration, which was approved by the steering group on 2026-03-14, with cutover planned for June."
+    },
+    {
+      "id": "general.facts",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "format",
+          "pass": true
+        },
+        {
+          "name": "tungsten W",
+          "pass": true
+        },
+        {
+          "name": "Canberra",
+          "pass": true
+        },
+        {
+          "name": "1989",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5449,
+      "answer": "W; Canberra; 1989"
+    },
+    {
+      "id": "general.sort",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "exact",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5376,
+      "answer": "apple, banana, cherry, date, fig, pear"
+    },
+    {
+      "id": "general.timezone",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "tokyo 23:30",
+          "pass": true
+        },
+        {
+          "name": "new york 10:30",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4573,
+      "answer": "Tokyo 23:30, New York 10:30"
+    },
+    {
+      "id": "general.word-ladder",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "5 lines",
+          "pass": true
+        },
+        {
+          "name": "sentence 1 has 5 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 2 has 6 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 3 has 7 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 4 has 8 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 5 has 9 words",
+          "pass": true
+        },
+        {
+          "name": "all end with period",
+          "pass": true
+        },
+        {
+          "name": "no letter e",
+          "pass": true
+        }
+      ],
+      "latencyMs": 67605,
+      "answer": "Swift rapids roar and rush.\nCold, dark floods fill low basins.\nFish and frogs inhabit cool, shallow pools.\nSilt and clay build up on muddy bottoms.\nMany wild animals drink from cold pools at dawn."
+    },
+    {
+      "id": "general.acrostic",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "6 lines",
+          "pass": true
+        },
+        {
+          "name": "spells ROUTER",
+          "pass": true
+        },
+        {
+          "name": "each 7 letters",
+          "pass": true
+        }
+      ],
+      "latencyMs": 9814,
+      "answer": "RETURNS\nOUTSIDE\nUNIFORM\nTYPICAL\nEVENING\nREACHED"
+    },
+    {
+      "id": "coding.parse-duration",
+      "dimension": "coding",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        },
+        {
+          "name": "test 5",
+          "pass": true
+        },
+        {
+          "name": "test 6",
+          "pass": true
+        },
+        {
+          "name": "test 7",
+          "pass": true
+        },
+        {
+          "name": "test 8",
+          "pass": true
+        },
+        {
+          "name": "test 9",
+          "pass": true
+        },
+        {
+          "name": "test 10",
+          "pass": true
+        },
+        {
+          "name": "test 11",
+          "pass": true
+        }
+      ],
+      "latencyMs": 6132,
+      "answer": "```ts\nfunction parseDuration(input: string): number {\n  if (input.length === 0) {\n    throw new Error(\"Empty input\");\n  }\n\n  const regex = /^(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+)s)?$/;\n  const match = input.match(regex);\n\n  if (!match || match[0] !== input) {\n    throw new Error(`Invalid duration: ${input}`);\n  }\n\n  const [, h, m, s] = match;\n\n  if (h === undefined && m === undefined && s === undefined) {\n    throw new Error(`Invalid duration: ${input}`);\n  }\n\n  const hours = h !== undefined ? parseInt(h, 10) : 0;\n  const minutes = m !== undefined ? parseInt(m, 10) : 0;\n  const seconds = s !== undefined ? parseInt(s, 10) : 0;\n\n  return hours * 3600 + minutes * 60 + seconds;\n}\n```"
+    },
+    {
+      "id": "coding.fix-chunk",
+      "dimension": "coding",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        },
+        {
+          "name": "test 5",
+          "pass": true
+        },
+        {
+          "name": "test 6",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4957,
+      "answer": "```ts\nfunction chunk<T>(items: T[], size: number): T[][] {\n  if (!Number.isInteger(size) || size <= 0) {\n    throw new RangeError(\"size must be a positive integer\")\n  }\n  const out: T[][] = []\n  for (let i = 0; i < items.length; i += size) {\n    out.push(items.slice(i, i + size))\n  }\n  return out\n}\n```"
+    },
+    {
+      "id": "coding.lru",
+      "dimension": "coding",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        },
+        {
+          "name": "test 5",
+          "pass": true
+        }
+      ],
+      "latencyMs": 6392,
+      "answer": "```ts\nclass LruCache<K, V> {\n  private readonly _capacity: number;\n  private readonly _map: Map<K, V>;\n\n  constructor(capacity: number) {\n    this._capacity = capacity;\n    this._map = new Map<K, V>();\n  }\n\n  get(key: K): V | undefined {\n    if (!this._map.has(key)) return undefined;\n    const value = this._map.get(key)!;\n    this._map.delete(key);\n    this._map.set(key, value);\n    return value;\n  }\n\n  set(key: K, value: V): void {\n    if (this._map.has(key)) {\n      this._map.delete(key);\n    } else if (this._map.size >= this._capacity) {\n      const lruKey = this._map.keys().next().value as K;\n      this._map.delete(lruKey);\n    }\n    this._map.set(key, value);\n  }\n\n  get size(): number {\n    return this._map.size;\n  }\n}\n```"
+    },
+    {
+      "id": "coding.with-timeout",
+      "dimension": "coding",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5524,
+      "answer": "```ts\nfunction withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {\n  return new Promise<T>((resolve, reject) => {\n    const timer = setTimeout(() => {\n      reject(new Error(\"timeout\"));\n    }, ms);\n\n    work.then(\n      (value) => {\n        clearTimeout(timer);\n        resolve(value);\n      },\n      (reason) => {\n        clearTimeout(timer);\n        reject(reason);\n      }\n    );\n  });\n}\n```"
+    },
+    {
+      "id": "coding.comprehension",
+      "dimension": "coding",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "prints `14 7`",
+          "pass": true
+        }
+      ],
+      "latencyMs": 9213,
+      "answer": "14 7"
+    },
+    {
+      "id": "coding.semver",
+      "dimension": "coding",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        },
+        {
+          "name": "test 5",
+          "pass": true
+        },
+        {
+          "name": "test 6",
+          "pass": true
+        },
+        {
+          "name": "test 7",
+          "pass": true
+        },
+        {
+          "name": "test 8",
+          "pass": true
+        },
+        {
+          "name": "test 9",
+          "pass": true
+        },
+        {
+          "name": "test 10",
+          "pass": true
+        },
+        {
+          "name": "test 11",
+          "pass": true
+        },
+        {
+          "name": "test 12",
+          "pass": true
+        },
+        {
+          "name": "test 13",
+          "pass": true
+        },
+        {
+          "name": "test 14",
+          "pass": true
+        }
+      ],
+      "latencyMs": 15913,
+      "answer": "```ts\nfunction compareSemver(a: string, b: string): -1 | 0 | 1 {\n  function parse(version: string): { major: number; minor: number; patch: number; pre: string[] | null } {\n    // Strip build metadata\n    const buildIdx = version.indexOf('+');\n    if (buildIdx !== -1) {\n      version = version.slice(0, buildIdx);\n    }\n\n    const preIdx = version.indexOf('-');\n    let coreStr: string;\n    let preStr: string | null = null;\n\n    if (preIdx !== -1) {\n      coreStr = version.slice(0, preIdx);\n      preStr = version.slice(preIdx + 1);\n    } else {\n      coreStr = version;\n    }\n\n    const coreParts = coreStr.split('.');\n    if (coreParts.length !== 3) {\n      throw new Error(`Invalid semver: \"${version}\"`);\n    }\n\n    const [majorStr, minorStr, patchStr] = coreParts;\n\n    function parseNumeric(s: string, field: string): number {\n      if (!/^\\d+$/.test(s)) {\n        throw new Error(`Invalid semver ${field}: \"${s}\"`);\n      }\n      if (s.length > 1 && s[0] === '0') {\n        throw new Error(`Invalid semver ${field} has leading zero: \"${s}\"`);\n      }\n      return Number(s);\n    }\n\n    const major = parseNumeric(majorStr, 'major');\n    const minor = parseNumeric(minorStr, 'minor');\n    const patch = parseNumeric(patchStr, 'patch');\n\n    let pre: string[] | null = null;\n    if (preStr !== null) {\n      if (preStr.length === 0) {\n        throw new Error(`Invalid semver pre-release: empty`);\n      }\n      pre = preStr.split('.');\n      for (const id of pre) {\n        if (id.length === 0) {\n          throw new Error(`Invalid semver pre-release identifier: empty`);\n        }\n        if (/^\\d+$/.test(id)) {\n          // Numeric: no leading zeros\n          if (id.length > 1 && id[0] === '0') {\n            throw new Error(`Invalid semver pre-release numeric identifier has leading zero: \"${id}\"`);\n          }\n        } else {\n          // Alphanumeric: must only contain [0-9A-Za-z-]\n          if (!/^[0-9A-Za-z-]+$/.test(id)) {\n            throw new Error(`Invalid semver pre-release identifier: \"${id}\"`);\n          }\n        }\n      }\n    }\n\n    return { major, minor, patch, pre };\n  }\n\n  const pa = parse(a);\n  const pb = parse(b);\n\n  function cmp(x: number, y: number): -1 | 0 | 1 {\n    return x < y ? -1 : x > y ? 1 : 0;\n  }\n\n  const majorCmp = cmp(pa.major, pb.major);\n  if (majorCmp !== 0) return majorCmp;\n\n  const minorCmp = cmp(pa.minor, pb.minor);\n  if (minorCmp !== 0) return minorCmp;\n\n  const patchCmp = cmp(pa.patch, pb.patch);\n  if (patchCmp !== 0) return patchCmp;\n\n  // Pre-release precedence:\n  // - Release (no pre) > pre-release\n  if (pa.pre === null && pb.pre === null) return 0;\n  if (pa.pre === null && pb.pre !== null) return 1;\n  if (pa.pre !== null && pb.pre === null) return -1;\n\n  const preA = pa.pre!;\n  const preB = pb.pre!;\n  const len = Math.min(preA.length, preB.length);\n\n  for (let i = 0; i < len; i++) {\n    const idA = preA[i];\n    const idB = preB[i];\n\n    const aIsNum = /^\\d+$/.test(idA);\n    const bIsNum = /^\\d+$/.test(idB);\n\n    if (aIsNum && bIsNum) {\n      const r = cmp(Number(idA), Number(idB));\n      if (r !== 0) return r;\n    } else if (aIsNum && !bIsNum) {\n      return -1;\n    } else if (!aIsNum && bIsNum) {\n      return 1;\n    } else {\n      // Both alphanumeric: compare lexically in ASCII order\n      if (idA < idB) return -1;\n      if (idA > idB) return 1;\n    }\n  }\n\n  // All preceding identifiers equal: larger set wins\n  return cmp(preA.length, preB.length);\n}\n```"
+    },
+    {
+      "id": "coding.toposort",
+      "dimension": "coding",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        },
+        {
+          "name": "test 5",
+          "pass": true
+        },
+        {
+          "name": "test 6",
+          "pass": true
+        }
+      ],
+      "latencyMs": 10346,
+      "answer": "```ts\nfunction buildOrder(deps: Record<string, string[]>): string[] {\n  // Collect all packages\n  const allPackages = new Set<string>();\n  for (const [pkg, pkgDeps] of Object.entries(deps)) {\n    allPackages.add(pkg);\n    for (const d of pkgDeps) {\n      allPackages.add(d);\n    }\n  }\n\n  // Build adjacency list and in-degree map\n  const inDegree = new Map<string, number>();\n  const graph = new Map<string, string[]>();\n\n  for (const pkg of allPackages) {\n    inDegree.set(pkg, 0);\n    graph.set(pkg, []);\n  }\n\n  for (const [pkg, pkgDeps] of Object.entries(deps)) {\n    for (const d of pkgDeps) {\n      graph.get(d)!.push(pkg);\n      inDegree.set(pkg, inDegree.get(pkg)! + 1);\n    }\n  }\n\n  // Topological sort using a min-heap (simulate with sorted array)\n  // Use a priority queue (min-heap) for lexicographically smallest order\n  const available: string[] = [];\n  for (const [pkg, deg] of inDegree) {\n    if (deg === 0) {\n      available.push(pkg);\n    }\n  }\n  available.sort();\n\n  const result: string[] = [];\n\n  while (available.length > 0) {\n    // Pick lexicographically smallest\n    const pkg = available.shift()!;\n    result.push(pkg);\n\n    const neighbors = graph.get(pkg) ?? [];\n    const newAvailable: string[] = [];\n    for (const neighbor of neighbors) {\n      const newDeg = inDegree.get(neighbor)! - 1;\n      inDegree.set(neighbor, newDeg);\n      if (newDeg === 0) {\n        newAvailable.push(neighbor);\n      }\n    }\n\n    // Insert new available packages in sorted order\n    if (newAvailable.length > 0) {\n      newAvailable.sort();\n      // Merge into available (which is already sorted)\n      let i = 0, j = 0;\n      const merged: string[] = [];\n      while (i < available.length && j < newAvailable.length) {\n        if (available[i] < newAvailable[j]) {\n          merged.push(available[i++]);\n        } else {\n          merged.push(newAvailable[j++]);\n        }\n      }\n      while (i < available.length) merged.push(available[i++]);\n      while (j < newAvailable.length) merged.push(newAvailable[j++]);\n      available.splice(0, available.length, ...merged);\n    }\n  }\n\n  if (result.length !== allPackages.size) {\n    throw new Error(\"cycle detected in dependency graph\");\n  }\n\n  return result;\n}\n```"
+    },
+    {
+      "id": "coding.csv",
+      "dimension": "coding",
+      "run": 0,
+      "grade": 0.25,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": false
+        },
+        {
+          "name": "test 4",
+          "pass": false
+        },
+        {
+          "name": "test 5",
+          "pass": false
+        },
+        {
+          "name": "test 6",
+          "pass": false
+        },
+        {
+          "name": "test 7",
+          "pass": false
+        },
+        {
+          "name": "test 8",
+          "pass": false
+        }
+      ],
+      "latencyMs": 10423,
+      "answer": "```ts\nfunction parseCsvLine(line: string): string[] {\n  const fields: string[] = [];\n  let i = 0;\n\n  while (i <= line.length) {\n    if (i === line.length) {\n      fields.push(\"\");\n      break;\n    }\n\n    if (line[i] === '\"') {\n      // Quoted field\n      i++; // skip opening quote\n      let field = \"\";\n      while (true) {\n        if (i >= line.length) {\n          throw new Error(\"Unterminated quoted field\");\n        }\n        if (line[i] === '\"') {\n          if (i + 1 < line.length && line[i + 1] === '\"') {\n            // Escaped quote\n            field += '\"';\n            i += 2;\n          } else {\n            // Closing quote\n            i++; // skip closing quote\n            if (i < line.length && line[i] !== ',') {\n              throw new Error(\n                `Unexpected character '${line[i]}' after closing quote at position ${i}`\n              );\n            }\n            break;\n          }\n        } else {\n          field += line[i];\n          i++;\n        }\n      }\n      fields.push(field);\n      if (i < line.length && line[i] === ',') {\n        i++; // skip comma\n        if (i === line.length) {\n          fields.push(\"\");\n        }\n      }\n    } else {\n      // Unquoted field\n      const start = i;\n      while (i < line.length && line[i] !== ',') {\n        i++;\n      }\n      fields.push(line.slice(start, i));\n      if (i < line.length && line[i] === ',') {\n        i++; // skip comma\n        if (i === line.length) {\n          fields.push(\"\");\n        }\n      }\n    }\n  }\n\n  return fields;\n}\n```"
+    },
+    {
+      "id": "reasoning.line-up",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "Dee, Ben, Ann, Cal",
+          "pass": true
+        }
+      ],
+      "latencyMs": 13482,
+      "answer": "**Working through the constraints:**\n\n1. **Cal is immediately right of Ann** → (Ann, Cal) must be a consecutive pair: (1,2), (2,3), or (3,4).\n2. **Ann is not in position 1** → eliminates (1,2), leaving (Ann=2, Cal=3) or (Ann=3, Cal=4).\n3. **Ben is not at either end** → Ben ∉ {1, 4}.\n\n**Test Ann=2, Cal=3:**\nRemaining positions 1 and 4 go to Ben and Dee. But Ben can't be at an end, and both 1 and 4 are ends → **contradiction**.\n\n**Test Ann=3, Cal=4:**\nRemaining positions 1 and 2 go to Ben and Dee.\n- Ben can't be at an end → Ben ≠ 1 → **Ben=2**.\n- Dee must be at an end (constraint 3) → **Dee=1** ✓\n\n**Verification:**\n| Pos | Person |\n|-----|--------|\n| 1 | Dee |\n| 2 | Ben |\n| 3 | Ann |\n| 4 | Cal |\n\n- Ben not at end ✓ (pos 2)\n- Cal immediately right of Ann ✓ (3→4)\n- Dee at an end ✓ (pos 1)\n- Ann not in position 1 ✓ (pos 3)\n\nANSWER: Dee, Ben, Ann, Cal"
+    },
+    {
+      "id": "reasoning.tank",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "740",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5768,
+      "answer": "740\n\nANSWER: 740"
+    },
+    {
+      "id": "reasoning.timeouts",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "YES",
+          "pass": true
+        },
+        {
+          "name": "2.4 s",
+          "pass": true
+        }
+      ],
+      "latencyMs": 9569,
+      "answer": "**Working through the timing:**\n\n- B makes **3 sequential calls** to C, each capped at **0.8 s**, with **no backoff**.\n- C never responds, so every attempt runs to its full timeout.\n\n| Attempt | Elapsed after B receives request |\n|---------|----------------------------------|\n| 1 completes (timeout) | 0.8 s |\n| 2 completes (timeout) | 1.6 s |\n| 3 completes (timeout) | 2.4 s |\n\n**B gives up at 2.4 seconds.**\n\nA's client timeout is **2.0 seconds**. Since 2.0 s < 2.4 s, A fires its timeout *before* B ever sends a response.\n\nANSWER: YES, 2.4"
+    },
+    {
+      "id": "reasoning.dice",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "5/11",
+          "pass": true
+        }
+      ],
+      "latencyMs": 12312,
+      "answer": "## Setting Up the Conditional Probability\n\nUsing the formula: **P(sum ≥ 10 | at least one 6) = P(sum ≥ 10 AND at least one 6) / P(at least one 6)**\n\n## Finding the Sample Space\n\n**Total outcomes:** 36\n\n**Outcomes with at least one 6** (11 total):\n(6,1), (6,2), (6,3), (6,4), (6,5), (6,6), (1,6), (2,6), (3,6), (4,6), (5,6)\n\n## Identifying Favorable Outcomes\n\nFrom those 11 outcomes, which have a sum ≥ 10?\n\n| Outcome | Sum | Qualifies? |\n|---------|-----|------------|\n| (6,1)   | 7   | ✗ |\n| (6,2)   | 8   | ✗ |\n| (6,3)   | 9   | ✗ |\n| **(6,4)**   | **10**  | **✓** |\n| **(6,5)**   | **11**  | **✓** |\n| **(6,6)**   | **12**  | **✓** |\n| (1,6)   | 7   | ✗ |\n| (2,6)   | 8   | ✗ |\n| (3,6)   | 9   | ✗ |\n| **(4,6)**   | **10**  | **✓** |\n| **(5,6)**   | **11**  | **✓** |\n\n**5 favorable outcomes** out of the 11 restricted sample space.\n\n## Result\n\n$$P(\\text{sum} \\geq 10 \\mid \\text{at least one 6}) = \\frac{5}{11}$$\n\nSince gcd(5, 11) = 1, this is already in lowest terms.\n\nANSWER: 5/11"
+    },
+    {
+      "id": "reasoning.critical-path",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "10",
+          "pass": true
+        }
+      ],
+      "latencyMs": 8633,
+      "answer": "**Earliest finish times (unlimited workers):**\n\n- **A**: 0 → 3\n- **B**: 3 → 5 (after A)\n- **C**: 3 → 7 (after A)\n- **E**: 0 → 5 (no deps, runs in parallel)\n- **D**: max(5,7)=7 → 8 (after B and C)\n- **F**: max(8,5)=8 → 10 (after D and E)\n\nCritical path: A → C → D → F = 3+4+1+2 = **10**\n\nANSWER: 10"
+    },
+    {
+      "id": "reasoning.knaves",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "knave",
+          "pass": true
+        }
+      ],
+      "latencyMs": 11200,
+      "answer": "**Working through the cases:**\n\n**Case 1 — A is a knight:**\nA tells the truth → B is a knave.\nB lies → \"A and C are the same kind\" is false → C ≠ A's kind → C is a knave.\n*(A=knight, B=knave, C=knave — consistent ✓)*\n\n**Case 2 — A is a knave:**\nA lies → B is a knight.\nB tells the truth → \"A and C are the same kind\" is true → C = A's kind → C is a knave.\n*(A=knave, B=knight, C=knave — consistent ✓)*\n\nBoth consistent cases yield C as a knave.\n\nANSWER: Knave"
+    },
+    {
+      "id": "reasoning.inclusion-exclusion",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "200",
+          "pass": true
+        }
+      ],
+      "latencyMs": 13785,
+      "answer": "**Setting up with inclusion-exclusion:**\n\nLet:\n- A = {divisible by 6}\n- B = {divisible by 10}\n- C = {divisible by 15}\n\n**Step 1: Find |A ∪ B|**\n\n- |A| = ⌊1000/6⌋ = 166\n- |B| = ⌊1000/10⌋ = 100\n- |A ∩ B| = ⌊1000/lcm(6,10)⌋ = ⌊1000/30⌋ = 33\n\n|A ∪ B| = 166 + 100 − 33 = **233**\n\n**Step 2: Remove those also divisible by 15**\n\nI need |(A ∪ B) ∩ C| = |A ∩ C| + |B ∩ C| − |A ∩ B ∩ C|\n\n- lcm(6, 15) = 30 → |A ∩ C| = ⌊1000/30⌋ = 33\n- lcm(10, 15) = 30 → |B ∩ C| = ⌊1000/30⌋ = 33\n- lcm(6, 10, 15) = 30 → |A ∩ B ∩ C| = ⌊1000/30⌋ = 33\n\n|(A ∪ B) ∩ C| = 33 + 33 − 33 = **33**\n\n**Final answer:**\n\n233 − 33 = **200**\n\nANSWER: 200"
+    },
+    {
+      "id": "reasoning.calendar",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "Monday",
+          "pass": true
+        }
+      ],
+      "latencyMs": 6860,
+      "answer": "From 2026-10-17 (Saturday) to 2027-03-01:\n\n- Oct 17 → Oct 31: 14 days\n- November: 30 days\n- December: 31 days\n- January: 31 days\n- February: 28 days (2027 is not a leap year)\n- Mar 1: 1 day\n\n**Total: 135 days**\n\n135 = 19 × 7 + 2, so 2 days past Saturday = **Monday**\n\nANSWER: Monday"
+    },
+    {
+      "id": "review.injection-await",
+      "dimension": "review",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "SQL injection",
+          "pass": true
+        },
+        {
+          "name": "missing await",
+          "pass": true
+        }
+      ],
+      "latencyMs": 19739,
+      "answer": "DEFECT: SQL injection — `id` is concatenated directly into the query string; any attacker-controlled value (e.g. `' OR '1'='1`) can alter or destroy arbitrary data. The query must use a parameterized/prepared statement.\n\nDEFECT: Missing input validation — when the `id` parameter is absent, `?? \"\"` silently substitutes an empty string, causing the query to execute as `WHERE id = ''` with no error returned to the caller; a missing or blank `id` should return a 4xx response before touching the database.\n\nDEFECT: No error handling — if `db.query(...)` throws (connection failure, constraint error, etc.) the exception propagates as an unhandled promise rejection instead of being caught and returned as a structured error response (e.g. 500)."
+    },
+    {
+      "id": "review.pagination",
+      "dimension": "review",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "1-based offset",
+          "pass": true
+        },
+        {
+          "name": "hasMore boundary",
+          "pass": true
+        }
+      ],
+      "latencyMs": 14236,
+      "answer": "DEFECT: `start` is computed as `page * perPage` but the API is 1-based, so it should be `(page - 1) * perPage`. As written, page 1 skips the first `perPage` items and returns page 2's data, every page is off by one, and the true last page is unreachable.\n\nDEFECT: `hasMore` uses `<=` instead of `<`. When the current page ends exactly on the last item (`start + perPage === items.length`), the condition is `true` and falsely reports that another page exists; it should be `start + perPage < items.length`."
+    },
+    {
+      "id": "review.design-payments",
+      "dimension": "review",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "duplicate charge / idempotency",
+          "pass": true
+        },
+        {
+          "name": "stale revocation",
+          "pass": true
+        },
+        {
+          "name": "card numbers logged",
+          "pass": true
+        }
+      ],
+      "latencyMs": 16638,
+      "answer": "DEFECT: POST /payments is retried up to 3 times without an idempotency key, creating a real risk of duplicate charges. The stated mitigation — processor-side deduplication of identical amounts within the same second — is unreliable: a retry delayed by even one second (e.g., due to backoff) falls outside the deduplication window, and two legitimate same-amount payments from the same user within the same second would be incorrectly collapsed.\n\nDEFECT: Caching permission sets for 24 hours means a revoked permission (compromised account, terminated employee, fraud flag) remains effective for up to 24 hours. In a payments context this is a critical security window; permission revocation must propagate in near-real-time or the cache must be actively invalidated on revocation events.\n\nDEFECT: Logging full card numbers (PANs) at INFO level is a PCI-DSS violation and exposes sensitive cardholder data to anyone with log access, including log aggregation pipelines, SIEM systems, and backup storage. Card numbers must never appear in logs in any form; at most a masked or truncated representation (e.g., last four digits) is permissible."
+    },
+    {
+      "id": "review.race",
+      "dimension": "review",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "race / lost update",
+          "pass": true
+        }
+      ],
+      "latencyMs": 18670,
+      "answer": "DEFECT: No transaction wrapping the SELECT/UPDATE pair — a concurrent withdrawal can read the same balance between these two statements, pass the `balance < amount` check, and both writes will commit, overdrawing the account (classic TOCTOU / lost-update race).\n\nDEFECT: Even inside a transaction at the default READ COMMITTED isolation level the race persists; the SELECT must use `SELECT ... FOR UPDATE` (or the UPDATE must use a server-side expression `balance = balance - $1` with a `WHERE balance >= $1` guard and the affected-row count checked) to make the check-then-act atomic.\n\nDEFECT: `amount` is never validated to be positive; a caller passing a negative value passes the `balance < amount` check unconditionally and effectively credits the account."
+    },
+    {
+      "id": "review.clean",
+      "dimension": "review",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "no false positives",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4350,
+      "answer": "NO DEFECTS"
+    },
+    {
+      "id": "review.median",
+      "dimension": "review",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "lexicographic sort",
+          "pass": true
+        },
+        {
+          "name": "mutates input",
+          "pass": true
+        }
+      ],
+      "latencyMs": 27045,
+      "answer": "DEFECT: `xs.sort()` sorts the array in-place, mutating the caller's original array; a copy should be made first (e.g., `[...xs].sort(...)`).\n\nDEFECT: `Array.prototype.sort()` with no comparator converts elements to strings and sorts lexicographically, producing wrong results for numbers (e.g., `[1, 10, 2]` sorts as `[1, 10, 2]` instead of `[1, 2, 10]`); a numeric comparator `(a, b) => a - b` is required.\n\nDEFECT: For even-length arrays, `s[m - 1] + s[m]` can overflow to `Infinity` when both values are near `Number.MAX_VALUE`, returning a non-finite result for finite inputs; the overflow-safe form `s[m - 1] + (s[m] - s[m - 1]) / 2` should be used instead."
+    },
+    {
+      "id": "review.cache-key",
+      "dimension": "review",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "key collision",
+          "pass": true
+        },
+        {
+          "name": "seconds vs milliseconds",
+          "pass": true
+        }
+      ],
+      "latencyMs": 18081,
+      "answer": "DEFECT: `setTimeout` receives `ttlSeconds` directly but expects milliseconds — entries expire `ttlSeconds` ms (not seconds) after insertion; fix is `ttlSeconds * 1000`.\n\nDEFECT: Key construction `String(userId) + String(page)` produces collisions — e.g. `userId=1, page=23` and `userId=12, page=3` both yield `\"123\"`; fix is a separator such as `\\`${userId}:${page}\\``.\n\nDEFECT: No in-flight deduplication — concurrent calls for the same key all miss before the first `loadPage` resolves, each independently calling `loadPage` and each scheduling its own independent TTL timer, so the entry is deleted after only the first timer fires rather than after the true TTL of the last set."
+    },
+    {
+      "id": "review.clean-tricky",
+      "dimension": "review",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "no false positives",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4163,
+      "answer": "NO DEFECTS"
+    },
+    {
+      "id": "structured.extract",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "parses as object",
+          "pass": true
+        },
+        {
+          "name": "top-level keys",
+          "pass": true
+        },
+        {
+          "name": "date",
+          "pass": true
+        },
+        {
+          "name": "people",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5332,
+      "answer": "{\"date\": \"2026-03-03\", \"people\": [{\"name\": \"Lena Ortiz\", \"role\": \"author\"}, {\"name\": \"Sam Wu\", \"role\": \"reviewer\"}, {\"name\": \"Ada Park\", \"role\": \"approver\"}]}"
+    },
+    {
+      "id": "structured.array",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "array of 4",
+          "pass": true
+        },
+        {
+          "name": "keys exact",
+          "pass": true
+        },
+        {
+          "name": "ids 1..4",
+          "pass": true
+        },
+        {
+          "name": "titles <= 40",
+          "pass": true
+        },
+        {
+          "name": "priority enum + one high",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5123,
+      "answer": "[{\"id\":1,\"title\":\"Run full test suite\",\"priority\":\"high\"},{\"id\":2,\"title\":\"Update changelog and version bump\",\"priority\":\"high\"},{\"id\":3,\"title\":\"Build and tag release artifact\",\"priority\":\"medium\"},{\"id\":4,\"title\":\"Notify stakeholders\",\"priority\":\"low\"}]"
+    },
+    {
+      "id": "structured.nullable",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "parses",
+          "pass": true
+        },
+        {
+          "name": "keys",
+          "pass": true
+        },
+        {
+          "name": "city",
+          "pass": true
+        },
+        {
+          "name": "population null",
+          "pass": true
+        },
+        {
+          "name": "founded 1914",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4042,
+      "answer": "{\"city\": \"Porto Velho\", \"population\": null, \"founded\": 1914}"
+    },
+    {
+      "id": "structured.escaping",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "parses",
+          "pass": true
+        },
+        {
+          "name": "exact string",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5830,
+      "answer": "{\"message\": \"She said \\\"use C:\\\\temp\\\"\\nthen left.\"}"
+    },
+    {
+      "id": "structured.conditional",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "array of 3",
+          "pass": true
+        },
+        {
+          "name": "types",
+          "pass": true
+        },
+        {
+          "name": "dates",
+          "pass": true
+        },
+        {
+          "name": "meeting keys",
+          "pass": true
+        },
+        {
+          "name": "deadline keys",
+          "pass": true
+        },
+        {
+          "name": "attendees sorted",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4942,
+      "answer": "[{\"type\":\"meeting\",\"date\":\"2026-11-02\",\"title\":\"Kickoff\",\"attendees\":[\"Ana\",\"Zoe\"]},{\"type\":\"deadline\",\"date\":\"2026-11-06\",\"title\":\"Design doc due\"},{\"type\":\"meeting\",\"date\":\"2026-11-20\",\"title\":\"Retro\",\"attendees\":[\"Ben\",\"Carl\",\"Zoe\"]}]"
+    },
+    {
+      "id": "structured.numeric-constraints",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "10 integers",
+          "pass": true
+        },
+        {
+          "name": "distinct",
+          "pass": true
+        },
+        {
+          "name": "range",
+          "pass": true
+        },
+        {
+          "name": "sorted",
+          "pass": true
+        },
+        {
+          "name": "sum 200",
+          "pass": true
+        },
+        {
+          "name": "4 odd",
+          "pass": true
+        }
+      ],
+      "latencyMs": 11939,
+      "answer": "[1, 3, 5, 7, 24, 26, 28, 32, 36, 38]"
+    },
+    {
+      "id": "tool_use.select-args",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "tool_use.two-calls",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "tool_use.date-args",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "tool_use.no-tool",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "tool_use.chained",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "tool_use.strict-args",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "agentic.fix-and-verify",
+      "dimension": "agentic",
+      "run": 0,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "agentic.recover-error",
+      "dimension": "agentic",
+      "run": 0,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "agentic.reach-state",
+      "dimension": "agentic",
+      "run": 0,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "agentic.iterate-to-green",
+      "dimension": "agentic",
+      "run": 0,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "agentic.paged-injection",
+      "dimension": "agentic",
+      "run": 0,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "long_context.needle",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "room",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4578,
+      "answer": "Juniper-58"
+    },
+    {
+      "id": "long_context.multi-hop",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "4.2 million euros",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4493,
+      "answer": "4.2 million euros"
+    },
+    {
+      "id": "long_context.aggregate",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "count 3",
+          "pass": true
+        },
+        {
+          "name": "sum 535",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5651,
+      "answer": "3, 535"
+    },
+    {
+      "id": "long_context.superseded",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "4.6 million euros",
+          "pass": true
+        },
+        {
+          "name": "does not report the superseded figure",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5406,
+      "answer": "4.6 million euros"
+    },
+    {
+      "id": "long_context.three-hop",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "4471",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5214,
+      "answer": "4471"
+    },
+    {
+      "id": "long_context.first-appearance",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "search, mailer, auth",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4930,
+      "answer": "search, mailer, auth"
+    },
+    {
+      "id": "general.bullets",
+      "dimension": "general",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "exactly 3 lines",
+          "pass": true
+        },
+        {
+          "name": "all start with '- '",
+          "pass": true
+        },
+        {
+          "name": "each <= 12 words",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4690,
+      "answer": "- Unit tests catch bugs early before they reach production code.\n- Tests document expected behavior for future developers to understand.\n- Automated tests enable safe refactoring without breaking existing functionality."
+    },
+    {
+      "id": "general.synthesis",
+      "dimension": "general",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "owner Priya",
+          "pass": true
+        },
+        {
+          "name": "date 2026-03-14",
+          "pass": true
+        },
+        {
+          "name": "cutover June",
+          "pass": true
+        },
+        {
+          "name": "omits Bob",
+          "pass": true
+        },
+        {
+          "name": "one sentence",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4752,
+      "answer": "Priya is the sole owner of the billing migration, which was approved by the steering group on 2026-03-14, with cutover planned for June."
+    },
+    {
+      "id": "general.facts",
+      "dimension": "general",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "format",
+          "pass": true
+        },
+        {
+          "name": "tungsten W",
+          "pass": true
+        },
+        {
+          "name": "Canberra",
+          "pass": true
+        },
+        {
+          "name": "1989",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4352,
+      "answer": "W; Canberra; 1989"
+    },
+    {
+      "id": "general.sort",
+      "dimension": "general",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "exact",
+          "pass": true
+        }
+      ],
+      "latencyMs": 3912,
+      "answer": "apple, banana, cherry, date, fig, pear"
+    },
+    {
+      "id": "general.timezone",
+      "dimension": "general",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "tokyo 23:30",
+          "pass": true
+        },
+        {
+          "name": "new york 10:30",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4888,
+      "answer": "Tokyo 23:30, New York 10:30"
+    },
+    {
+      "id": "general.word-ladder",
+      "dimension": "general",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "5 lines",
+          "pass": true
+        },
+        {
+          "name": "sentence 1 has 5 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 2 has 6 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 3 has 7 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 4 has 8 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 5 has 9 words",
+          "pass": true
+        },
+        {
+          "name": "all end with period",
+          "pass": true
+        },
+        {
+          "name": "no letter e",
+          "pass": true
+        }
+      ],
+      "latencyMs": 62090,
+      "answer": "Swift brooks rush through canyons.\nCold mountain flows supply surrounding farms.\nA winding brook flows down rocky hills.\nMany animals drink from a brook's cold rapids.\nWinding brooks nourish vast surrounding plains of human civilization."
+    },
+    {
+      "id": "general.acrostic",
+      "dimension": "general",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "6 lines",
+          "pass": true
+        },
+        {
+          "name": "spells ROUTER",
+          "pass": true
+        },
+        {
+          "name": "each 7 letters",
+          "pass": true
+        }
+      ],
+      "latencyMs": 8349,
+      "answer": "RAINBOW\nOUTLOOK\nUNIFORM\nTRIUMPH\nELEMENT\nREADING"
+    },
+    {
+      "id": "coding.parse-duration",
+      "dimension": "coding",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        },
+        {
+          "name": "test 5",
+          "pass": true
+        },
+        {
+          "name": "test 6",
+          "pass": true
+        },
+        {
+          "name": "test 7",
+          "pass": true
+        },
+        {
+          "name": "test 8",
+          "pass": true
+        },
+        {
+          "name": "test 9",
+          "pass": true
+        },
+        {
+          "name": "test 10",
+          "pass": true
+        },
+        {
+          "name": "test 11",
+          "pass": true
+        }
+      ],
+      "latencyMs": 7009,
+      "answer": "```ts\nfunction parseDuration(input: string): number {\n  if (input.length === 0) {\n    throw new Error(\"Empty input\");\n  }\n\n  const regex = /^(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+)s)?$/;\n  const match = input.match(regex);\n\n  if (!match || match[0] !== input) {\n    throw new Error(`Invalid duration: ${input}`);\n  }\n\n  const [, hours, minutes, seconds] = match;\n\n  if (hours === undefined && minutes === undefined && seconds === undefined) {\n    throw new Error(`Invalid duration: ${input}`);\n  }\n\n  return (\n    (hours !== undefined ? parseInt(hours, 10) : 0) * 3600 +\n    (minutes !== undefined ? parseInt(minutes, 10) : 0) * 60 +\n    (seconds !== undefined ? parseInt(seconds, 10) : 0)\n  );\n}\n```"
+    },
+    {
+      "id": "coding.fix-chunk",
+      "dimension": "coding",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        },
+        {
+          "name": "test 5",
+          "pass": true
+        },
+        {
+          "name": "test 6",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5532,
+      "answer": "```ts\nfunction chunk<T>(items: T[], size: number): T[][] {\n  if (!Number.isInteger(size) || size < 1) {\n    throw new RangeError(\"size must be a positive integer\")\n  }\n  const out: T[][] = []\n  for (let i = 0; i < items.length; i += size) {\n    out.push(items.slice(i, i + size))\n  }\n  return out\n}\n```"
+    },
+    {
+      "id": "coding.lru",
+      "dimension": "coding",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        },
+        {
+          "name": "test 5",
+          "pass": true
+        }
+      ],
+      "latencyMs": 7710,
+      "answer": "```ts\nclass LruCache<K, V> {\n  private readonly _capacity: number;\n  private readonly _map: Map<K, V>;\n\n  constructor(capacity: number) {\n    this._capacity = capacity;\n    this._map = new Map();\n  }\n\n  get(key: K): V | undefined {\n    if (!this._map.has(key)) return undefined;\n    const value = this._map.get(key)!;\n    this._map.delete(key);\n    this._map.set(key, value);\n    return value;\n  }\n\n  set(key: K, value: V): void {\n    if (this._map.has(key)) {\n      this._map.delete(key);\n    } else if (this._map.size >= this._capacity) {\n      this._map.delete(this._map.keys().next().value!);\n    }\n    this._map.set(key, value);\n  }\n\n  get size(): number {\n    return this._map.size;\n  }\n}\n```"
+    },
+    {
+      "id": "coding.with-timeout",
+      "dimension": "coding",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4734,
+      "answer": "```ts\nfunction withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {\n  return new Promise<T>((resolve, reject) => {\n    const timer = setTimeout(() => {\n      reject(new Error(\"timeout\"));\n    }, ms);\n\n    work.then(\n      (value) => {\n        clearTimeout(timer);\n        resolve(value);\n      },\n      (reason) => {\n        clearTimeout(timer);\n        reject(reason);\n      }\n    );\n  });\n}\n```"
+    },
+    {
+      "id": "coding.comprehension",
+      "dimension": "coding",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "prints `14 7`",
+          "pass": true
+        }
+      ],
+      "latencyMs": 9516,
+      "answer": "`14 7`"
+    },
+    {
+      "id": "coding.semver",
+      "dimension": "coding",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        },
+        {
+          "name": "test 5",
+          "pass": true
+        },
+        {
+          "name": "test 6",
+          "pass": true
+        },
+        {
+          "name": "test 7",
+          "pass": true
+        },
+        {
+          "name": "test 8",
+          "pass": true
+        },
+        {
+          "name": "test 9",
+          "pass": true
+        },
+        {
+          "name": "test 10",
+          "pass": true
+        },
+        {
+          "name": "test 11",
+          "pass": true
+        },
+        {
+          "name": "test 12",
+          "pass": true
+        },
+        {
+          "name": "test 13",
+          "pass": true
+        },
+        {
+          "name": "test 14",
+          "pass": true
+        }
+      ],
+      "latencyMs": 13522,
+      "answer": "```ts\nfunction compareSemver(a: string, b: string): -1 | 0 | 1 {\n  function parse(v: string): { major: number; minor: number; patch: number; pre: string[] | null } {\n    // Strip build metadata\n    const plusIdx = v.indexOf('+');\n    if (plusIdx !== -1) v = v.slice(0, plusIdx);\n\n    const preIdx = v.indexOf('-');\n    let core: string;\n    let preStr: string | null = null;\n    if (preIdx !== -1) {\n      core = v.slice(0, preIdx);\n      preStr = v.slice(preIdx + 1);\n    } else {\n      core = v;\n    }\n\n    const parts = core.split('.');\n    if (parts.length !== 3) throw new Error(`Invalid semver: \"${v}\"`);\n\n    function parseNumeric(s: string, label: string): number {\n      if (!/^\\d+$/.test(s)) throw new Error(`Invalid ${label} in semver: \"${s}\"`);\n      if (s.length > 1 && s[0] === '0') throw new Error(`Leading zero in ${label}: \"${s}\"`);\n      return Number(s);\n    }\n\n    const major = parseNumeric(parts[0], 'major');\n    const minor = parseNumeric(parts[1], 'minor');\n    const patch = parseNumeric(parts[2], 'patch');\n\n    let pre: string[] | null = null;\n    if (preStr !== null) {\n      if (preStr === '') throw new Error(`Empty pre-release in semver`);\n      pre = preStr.split('.');\n      for (const id of pre) {\n        if (id === '') throw new Error(`Empty pre-release identifier in semver`);\n        if (/^\\d+$/.test(id)) {\n          if (id.length > 1 && id[0] === '0') throw new Error(`Leading zero in pre-release identifier: \"${id}\"`);\n        } else {\n          if (!/^[0-9A-Za-z-]+$/.test(id)) throw new Error(`Invalid pre-release identifier: \"${id}\"`);\n        }\n      }\n    }\n\n    return { major, minor, patch, pre };\n  }\n\n  const pa = parse(a);\n  const pb = parse(b);\n\n  function cmp(x: number, y: number): -1 | 0 | 1 {\n    return x < y ? -1 : x > y ? 1 : 0;\n  }\n\n  let r: -1 | 0 | 1;\n\n  r = cmp(pa.major, pb.major);\n  if (r !== 0) return r;\n\n  r = cmp(pa.minor, pb.minor);\n  if (r !== 0) return r;\n\n  r = cmp(pa.patch, pb.patch);\n  if (r !== 0) return r;\n\n  // Pre-release comparison\n  if (pa.pre === null && pb.pre === null) return 0;\n  if (pa.pre === null && pb.pre !== null) return 1;\n  if (pa.pre !== null && pb.pre === null) return -1;\n\n  const preA = pa.pre!;\n  const preB = pb.pre!;\n  const len = Math.min(preA.length, preB.length);\n\n  for (let i = 0; i < len; i++) {\n    const idA = preA[i];\n    const idB = preB[i];\n\n    const numA = /^\\d+$/.test(idA);\n    const numB = /^\\d+$/.test(idB);\n\n    if (numA && numB) {\n      r = cmp(Number(idA), Number(idB));\n      if (r !== 0) return r;\n    } else if (!numA && !numB) {\n      if (idA < idB) return -1;\n      if (idA > idB) return 1;\n    } else {\n      // numeric < alphanumeric\n      return numA ? -1 : 1;\n    }\n  }\n\n  if (preA.length < preB.length) return -1;\n  if (preA.length > preB.length) return 1;\n  return 0;\n}\n```"
+    },
+    {
+      "id": "coding.toposort",
+      "dimension": "coding",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        },
+        {
+          "name": "test 5",
+          "pass": true
+        },
+        {
+          "name": "test 6",
+          "pass": true
+        }
+      ],
+      "latencyMs": 11104,
+      "answer": "```ts\nfunction buildOrder(deps: Record<string, string[]>): string[] {\n  // Collect all packages\n  const allPackages = new Set<string>();\n  for (const [pkg, pkgDeps] of Object.entries(deps)) {\n    allPackages.add(pkg);\n    for (const d of pkgDeps) {\n      allPackages.add(d);\n    }\n  }\n\n  // Build adjacency list and in-degree count\n  // Edge: dependency -> dependent (dep must come before pkg)\n  const graph = new Map<string, string[]>();\n  const inDegree = new Map<string, number>();\n\n  for (const pkg of allPackages) {\n    if (!graph.has(pkg)) graph.set(pkg, []);\n    if (!inDegree.has(pkg)) inDegree.set(pkg, 0);\n  }\n\n  for (const [pkg, pkgDeps] of Object.entries(deps)) {\n    for (const d of pkgDeps) {\n      graph.get(d)!.push(pkg);\n      inDegree.set(pkg, (inDegree.get(pkg) ?? 0) + 1);\n    }\n  }\n\n  // Kahn's algorithm with a min-heap (simulate with sorted array)\n  // Use a sorted set for lexicographically smallest order\n  const available: string[] = [];\n  for (const [pkg, deg] of inDegree.entries()) {\n    if (deg === 0) available.push(pkg);\n  }\n  available.sort();\n\n  const result: string[] = [];\n\n  while (available.length > 0) {\n    // Take the lexicographically smallest\n    const current = available.shift()!;\n    result.push(current);\n\n    const neighbors = graph.get(current) ?? [];\n    const newlyAvailable: string[] = [];\n\n    for (const neighbor of neighbors) {\n      const newDeg = (inDegree.get(neighbor) ?? 0) - 1;\n      inDegree.set(neighbor, newDeg);\n      if (newDeg === 0) {\n        newlyAvailable.push(neighbor);\n      }\n    }\n\n    // Insert new available packages maintaining sorted order\n    if (newlyAvailable.length > 0) {\n      newlyAvailable.sort();\n      // Merge into available (both sorted)\n      let i = 0;\n      for (const pkg of newlyAvailable) {\n        while (i < available.length && available[i] < pkg) i++;\n        available.splice(i, 0, pkg);\n        i++;\n      }\n    }\n  }\n\n  if (result.length !== allPackages.size) {\n    throw new Error(\"cycle detected in dependency graph\");\n  }\n\n  return result;\n}\n```"
+    },
+    {
+      "id": "coding.csv",
+      "dimension": "coding",
+      "run": 1,
+      "grade": 0.875,
+      "checks": [
+        {
+          "name": "test 1",
+          "pass": true
+        },
+        {
+          "name": "test 2",
+          "pass": true
+        },
+        {
+          "name": "test 3",
+          "pass": true
+        },
+        {
+          "name": "test 4",
+          "pass": true
+        },
+        {
+          "name": "test 5",
+          "pass": true
+        },
+        {
+          "name": "test 6",
+          "pass": true
+        },
+        {
+          "name": "test 7",
+          "pass": true
+        },
+        {
+          "name": "test 8",
+          "pass": false
+        }
+      ],
+      "latencyMs": 10386,
+      "answer": "```ts\nfunction parseCsvLine(line: string): string[] {\n  const fields: string[] = [];\n  let i = 0;\n\n  while (i <= line.length) {\n    if (i === line.length) {\n      fields.push(\"\");\n      break;\n    }\n\n    if (line[i] === '\"') {\n      // Quoted field\n      i++; // skip opening quote\n      let field = \"\";\n      while (true) {\n        if (i >= line.length) {\n          throw new Error(\"Unterminated quoted field\");\n        }\n        if (line[i] === '\"') {\n          if (i + 1 < line.length && line[i + 1] === '\"') {\n            // Escaped quote\n            field += '\"';\n            i += 2;\n          } else {\n            // Closing quote\n            i++; // skip closing quote\n            if (i < line.length && line[i] !== ',') {\n              throw new Error(\n                `Unexpected character '${line[i]}' after closing quote at position ${i}`\n              );\n            }\n            break;\n          }\n        } else {\n          field += line[i];\n          i++;\n        }\n      }\n      fields.push(field);\n      if (i < line.length) {\n        i++; // skip comma\n      }\n    } else {\n      // Unquoted field\n      const start = i;\n      while (i < line.length && line[i] !== ',') {\n        i++;\n      }\n      fields.push(line.slice(start, i));\n      if (i < line.length) {\n        i++; // skip comma\n      } else {\n        break;\n      }\n    }\n  }\n\n  return fields;\n}\n```"
+    },
+    {
+      "id": "reasoning.line-up",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "Dee, Ben, Ann, Cal",
+          "pass": true
+        }
+      ],
+      "latencyMs": 12463,
+      "answer": "Working through the constraints:\n\n**Cal is immediately right of Ann**, so Ann-Cal are a consecutive pair:\n- Ann=1, Cal=2 → ruled out (Ann ≠ position 1)\n- Ann=2, Cal=3 → leaves positions 1 & 4 for Ben and Dee; but Ben can't be at either end, so Ben can't be 1 or 4 → **contradiction**\n- Ann=3, Cal=4 → leaves positions 1 & 2 for Ben and Dee\n\n**With Ann=3, Cal=4:**\n- Ben can't be at either end → Ben must be **position 2**\n- Dee must be at an end → Dee takes **position 1**\n\n**Verification:**\n- Ben not at either end → position 2 ✓\n- Cal immediately right of Ann → 3→4 ✓\n- Dee at an end → position 1 ✓\n- Ann not in position 1 → position 3 ✓\n\nANSWER: Dee, Ben, Ann, Cal"
+    },
+    {
+      "id": "reasoning.tank",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "740",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4645,
+      "answer": "740\n\nANSWER: 740"
+    },
+    {
+      "id": "reasoning.timeouts",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "YES",
+          "pass": true
+        },
+        {
+          "name": "2.4 s",
+          "pass": true
+        }
+      ],
+      "latencyMs": 9118,
+      "answer": "**Step-by-step breakdown:**\n\n**Service B's total processing time:**\n- B calls C three times sequentially, each with a 0.8s timeout, no backoff.\n- C never responds, so each attempt runs to its full timeout.\n- Total time for B: 3 × 0.8s = **2.4 seconds**\n\n**Does A hit its timeout first?**\n- A's timeout: 2.0 seconds\n- B's response comes at: 2.4 seconds\n- 2.4s > 2.0s → A's 2.0s timeout fires **before** B finishes and returns.\n\n→ **YES**, A hits its own timeout first.\n→ B gives up at **2.4 seconds**.\n\nANSWER: YES, 2.4"
+    },
+    {
+      "id": "reasoning.dice",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "5/11",
+          "pass": true
+        }
+      ],
+      "latencyMs": 13539,
+      "answer": "## Setting Up the Conditional Probability\n\nUsing the formula: **P(A | B) = P(A ∩ B) / P(B)**\n\nwhere:\n- **A** = sum is at least 10\n- **B** = at least one die shows a 6\n\n---\n\n## Step 1: Outcomes Where At Least One Die Shows 6\n\nTotal sample space: 36 equally likely outcomes.\n\nOutcomes with at least one 6 (listed as die1, die2):\n\n| Outcome | Sum |\n|---------|-----|\n| (6,1) | 7 |\n| (6,2) | 8 |\n| (6,3) | 9 |\n| **(6,4)** | **10** ✓ |\n| **(6,5)** | **11** ✓ |\n| **(6,6)** | **12** ✓ |\n| (1,6) | 7 |\n| (2,6) | 8 |\n| (3,6) | 9 |\n| **(4,6)** | **10** ✓ |\n| **(5,6)** | **11** ✓ |\n\nThat gives **11 outcomes** with at least one 6.\n\n---\n\n## Step 2: Outcomes in Both A and B\n\nFrom the 11 outcomes above, those with sum ≥ 10:\n\n**(6,4), (6,5), (6,6), (4,6), (5,6)** → **5 outcomes**\n\n---\n\n## Step 3: Compute the Probability\n\n$$P(\\text{sum} \\geq 10 \\mid \\text{at least one 6}) = \\frac{5}{11}$$\n\nSince 5 and 11 share no common factors (11 is prime), this is already in lowest terms.\n\nANSWER: 5/11"
+    },
+    {
+      "id": "reasoning.critical-path",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "10",
+          "pass": true
+        }
+      ],
+      "latencyMs": 8723,
+      "answer": "**Critical path analysis:**\n\n- **A**: 0 → 3\n- **B**: 3 → 5 (after A)\n- **C**: 3 → 7 (after A)\n- **E**: 0 → 5 (no deps, runs in parallel)\n- **D**: 7 → 8 (after both B and C; C finishes last at 7)\n- **F**: 8 → 10 (after both D and E; D finishes last at 8)\n\nCritical path: **A → C → D → F** = 3 + 4 + 1 + 2 = **10**\n\nANSWER: 10"
+    },
+    {
+      "id": "reasoning.knaves",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "knave",
+          "pass": true
+        }
+      ],
+      "latencyMs": 8336,
+      "answer": "**Case 1: A is a knight**\n- A tells the truth → B is a knave.\n- B is a knave → B lies → \"A and C are the same kind\" is false → A and C are *different* kinds.\n- A is a knight, so C must be a **knave**.\n\n**Case 2: A is a knave**\n- A lies → B is *not* a knave → B is a knight.\n- B is a knight → B tells the truth → \"A and C are the same kind\" is true.\n- A is a knave, so C is also a **knave**.\n\nBoth cases yield the same result.\n\nANSWER: Knave"
+    },
+    {
+      "id": "reasoning.inclusion-exclusion",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "200",
+          "pass": true
+        }
+      ],
+      "latencyMs": 11378,
+      "answer": "**Step 1 — Count divisible by 6 or 10 (inclusion-exclusion)**\n\n- Divisible by 6: ⌊1000/6⌋ = 166\n- Divisible by 10: ⌊1000/10⌋ = 100\n- Divisible by lcm(6,10) = 30: ⌊1000/30⌋ = 33\n\n|div by 6 or 10| = 166 + 100 − 33 = **233**\n\n**Step 2 — Remove those also divisible by 15**\n\nA number in that set divisible by 15 must be divisible by lcm(6,15)=30 or lcm(10,15)=30 — both reduce to multiples of 30.\n\n|div by 30| = 33\n\n**Step 3 — Final count**\n\n233 − 33 = **200**\n\nANSWER: 200"
+    },
+    {
+      "id": "reasoning.calendar",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "Monday",
+          "pass": true
+        }
+      ],
+      "latencyMs": 6754,
+      "answer": "Monday\n\nANSWER: Monday"
+    },
+    {
+      "id": "review.injection-await",
+      "dimension": "review",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "SQL injection",
+          "pass": true
+        },
+        {
+          "name": "missing await",
+          "pass": true
+        }
+      ],
+      "latencyMs": 16474,
+      "answer": "DEFECT: SQL injection — `id` is concatenated directly into the query string; a value like `' OR '1'='1` deletes every row. Use a parameterized query (e.g. `db.query(\"DELETE FROM users WHERE id = $1\", [id])`).\n\nDEFECT: `db.query(...)` is not awaited; the Promise is fire-and-forgotten, so the 204 is returned before the deletion completes and any database error is silently swallowed.\n\nDEFECT: A missing `id` parameter falls back to `\"\"` via `?? \"\"` and silently executes `DELETE FROM users WHERE id = ''` instead of returning a 400 error; the handler should reject the request when `id` is absent or empty."
+    },
+    {
+      "id": "review.pagination",
+      "dimension": "review",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "1-based offset",
+          "pass": true
+        },
+        {
+          "name": "hasMore boundary",
+          "pass": true
+        }
+      ],
+      "latencyMs": 15937,
+      "answer": "DEFECT: `start` is computed as `page * perPage`, but because `page` is 1-based the first page's start should be `0`. The correct formula is `(page - 1) * perPage`; as written, page 1 skips the first `perPage` items entirely and every subsequent page is offset by one page.\n\nDEFECT: `hasMore` uses `<=` instead of `<`. When the current slice ends exactly at `items.length` (e.g. 10 items, `perPage = 5`, page 2 → `start + perPage = 10`), the condition `10 <= 10` is `true`, falsely signalling a next page that contains no items. The condition should be `start + perPage < items.length`."
+    },
+    {
+      "id": "review.design-payments",
+      "dimension": "review",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "duplicate charge / idempotency",
+          "pass": true
+        },
+        {
+          "name": "stale revocation",
+          "pass": true
+        },
+        {
+          "name": "card numbers logged",
+          "pass": true
+        }
+      ],
+      "latencyMs": 22073,
+      "answer": "DEFECT: Retrying POST /payments up to 3 times without an idempotency key risks duplicate charges. Amount-within-the-same-second is not a reliable deduplication key: retries under network latency routinely span a second boundary, and two legitimate payments for the same amount from the same user in the same second would be incorrectly suppressed. A server-generated or client-supplied idempotency key is required.\n\nDEFECT: The 24-hour permission cache with no immediate-revocation path is a security vulnerability. A revoked permission (e.g., fraud flag, account suspension, terminated employee) remains effective for up to 24 hours, giving an unauthorized actor a large window to continue initiating payments.\n\nDEFECT: Logging full card numbers (PANs) at INFO level violates PCI DSS Requirement 3.3, which prohibits storing or logging the full PAN in cleartext after authorization. This exposes cardholder data in log files, log aggregators, and any downstream system that consumes those logs."
+    },
+    {
+      "id": "review.race",
+      "dimension": "review",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "race / lost update",
+          "pass": true
+        }
+      ],
+      "latencyMs": 29137,
+      "answer": "DEFECT: Race condition (TOCTOU) — two concurrent calls can both read the same balance, both pass the `balance < amount` check, and both write `balance - amount`, allowing the account to go negative. Fix requires either `SELECT ... FOR UPDATE` inside a transaction, or a single atomic `UPDATE accounts SET balance = balance - $1 WHERE id = $2 AND balance >= $1` (checking rows affected).\n\nDEFECT: No transaction — the SELECT and UPDATE execute as separate auto-committed statements; a crash or connection loss between them leaves the account in a permanently inconsistent state with no rollback boundary.\n\nDEFECT: `amount` is not validated to be positive — a negative value passes the `balance < amount` guard (any non-negative balance satisfies `balance < -N` being false) and then `balance - amount` increases the balance, turning a withdraw into a covert deposit."
+    },
+    {
+      "id": "review.clean",
+      "dimension": "review",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "no false positives",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4763,
+      "answer": "NO DEFECTS"
+    },
+    {
+      "id": "review.median",
+      "dimension": "review",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "lexicographic sort",
+          "pass": true
+        },
+        {
+          "name": "mutates input",
+          "pass": true
+        }
+      ],
+      "latencyMs": 19859,
+      "answer": "DEFECT: `Array.prototype.sort()` sorts in place and returns the same array reference, so `s === xs` — the caller's array is mutated, breaking the stated contract that callers reuse it afterwards.\n\nDEFECT: `sort()` called without a comparator uses lexicographic (string) ordering, producing wrong results for numeric data — e.g., `[1, 10, 2].sort()` yields `[1, 10, 2]` (strings: \"1\" < \"10\" < \"2\"), so `median([1, 10, 2])` returns `10` instead of the correct `2`; the comparator `(a, b) => a - b` is required."
+    },
+    {
+      "id": "review.cache-key",
+      "dimension": "review",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "key collision",
+          "pass": true
+        },
+        {
+          "name": "seconds vs milliseconds",
+          "pass": true
+        }
+      ],
+      "latencyMs": 29211,
+      "answer": "DEFECT: `setTimeout` receives `ttlSeconds` directly, but its delay parameter is in milliseconds; the cache entries expire 1000× too soon. Fix: `ttlSeconds * 1000`.\n\nDEFECT: Key construction `String(userId) + String(page)` produces collisions — e.g. `userId=1, page=23` and `userId=12, page=3` both yield `\"123\"`. Fix: use a separator such as `` `${userId}:${page}` ``.\n\nDEFECT: No in-flight deduplication — concurrent calls for the same key before any `loadPage` resolves each independently miss the cache, each call `loadPage`, each overwrite the cache entry, and each register a separate expiry timer; the entry may be evicted prematurely when the first timer fires. Fix: store a `Promise<Page>` in the cache (or a pending-promises map) so concurrent callers await the same in-flight request."
+    },
+    {
+      "id": "review.clean-tricky",
+      "dimension": "review",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "no false positives",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4413,
+      "answer": "NO DEFECTS"
+    },
+    {
+      "id": "structured.extract",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "parses as object",
+          "pass": true
+        },
+        {
+          "name": "top-level keys",
+          "pass": true
+        },
+        {
+          "name": "date",
+          "pass": true
+        },
+        {
+          "name": "people",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5681,
+      "answer": "{\"date\": \"2026-03-03\", \"people\": [{\"name\": \"Lena Ortiz\", \"role\": \"author\"}, {\"name\": \"Sam Wu\", \"role\": \"reviewer\"}, {\"name\": \"Ada Park\", \"role\": \"approver\"}]}"
+    },
+    {
+      "id": "structured.array",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "array of 4",
+          "pass": true
+        },
+        {
+          "name": "keys exact",
+          "pass": true
+        },
+        {
+          "name": "ids 1..4",
+          "pass": true
+        },
+        {
+          "name": "titles <= 40",
+          "pass": true
+        },
+        {
+          "name": "priority enum + one high",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5511,
+      "answer": "[\n  {\"id\": 1, \"title\": \"Run full test suite and fix failures\", \"priority\": \"high\"},\n  {\"id\": 2, \"title\": \"Update changelog and version number\", \"priority\": \"high\"},\n  {\"id\": 3, \"title\": \"Tag release and push to repository\", \"priority\": \"medium\"},\n  {\"id\": 4, \"title\": \"Notify stakeholders of release\", \"priority\": \"low\"}\n]"
+    },
+    {
+      "id": "structured.nullable",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "parses",
+          "pass": true
+        },
+        {
+          "name": "keys",
+          "pass": true
+        },
+        {
+          "name": "city",
+          "pass": true
+        },
+        {
+          "name": "population null",
+          "pass": true
+        },
+        {
+          "name": "founded 1914",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4346,
+      "answer": "{\"city\": \"Porto Velho\", \"population\": null, \"founded\": 1914}"
+    },
+    {
+      "id": "structured.escaping",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "parses",
+          "pass": true
+        },
+        {
+          "name": "exact string",
+          "pass": true
+        }
+      ],
+      "latencyMs": 6392,
+      "answer": "{\"message\": \"She said \\\"use C:\\\\temp\\\"\\nthen left.\"}"
+    },
+    {
+      "id": "structured.conditional",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "array of 3",
+          "pass": true
+        },
+        {
+          "name": "types",
+          "pass": true
+        },
+        {
+          "name": "dates",
+          "pass": true
+        },
+        {
+          "name": "meeting keys",
+          "pass": true
+        },
+        {
+          "name": "deadline keys",
+          "pass": true
+        },
+        {
+          "name": "attendees sorted",
+          "pass": true
+        }
+      ],
+      "latencyMs": 6220,
+      "answer": "[{\"type\":\"meeting\",\"date\":\"2026-11-02\",\"title\":\"Kickoff\",\"attendees\":[\"Ana\",\"Zoe\"]},{\"type\":\"deadline\",\"date\":\"2026-11-06\",\"title\":\"Design doc\"},{\"type\":\"meeting\",\"date\":\"2026-11-20\",\"title\":\"Retro\",\"attendees\":[\"Ben\",\"Carl\",\"Zoe\"]}]"
+    },
+    {
+      "id": "structured.numeric-constraints",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "10 integers",
+          "pass": true
+        },
+        {
+          "name": "distinct",
+          "pass": true
+        },
+        {
+          "name": "range",
+          "pass": true
+        },
+        {
+          "name": "sorted",
+          "pass": true
+        },
+        {
+          "name": "sum 200",
+          "pass": true
+        },
+        {
+          "name": "4 odd",
+          "pass": true
+        }
+      ],
+      "latencyMs": 11425,
+      "answer": "[1, 3, 5, 17, 24, 26, 28, 30, 32, 34]"
+    },
+    {
+      "id": "tool_use.select-args",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "tool_use.two-calls",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "tool_use.date-args",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "tool_use.no-tool",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "tool_use.chained",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "tool_use.strict-args",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "agentic.fix-and-verify",
+      "dimension": "agentic",
+      "run": 1,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "agentic.recover-error",
+      "dimension": "agentic",
+      "run": 1,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "agentic.reach-state",
+      "dimension": "agentic",
+      "run": 1,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "agentic.iterate-to-green",
+      "dimension": "agentic",
+      "run": 1,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "agentic.paged-injection",
+      "dimension": "agentic",
+      "run": 1,
+      "grade": null,
+      "skipped": "route has no caller-defined tools"
+    },
+    {
+      "id": "long_context.needle",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "room",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4565,
+      "answer": "Juniper-58"
+    },
+    {
+      "id": "long_context.multi-hop",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "4.2 million euros",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4466,
+      "answer": "4.2 million euros"
+    },
+    {
+      "id": "long_context.aggregate",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "count 3",
+          "pass": true
+        },
+        {
+          "name": "sum 535",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5723,
+      "answer": "3, 535"
+    },
+    {
+      "id": "long_context.superseded",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "4.6 million euros",
+          "pass": true
+        },
+        {
+          "name": "does not report the superseded figure",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5072,
+      "answer": "4.6 million euros"
+    },
+    {
+      "id": "long_context.three-hop",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "4471",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5060,
+      "answer": "4471"
+    },
+    {
+      "id": "long_context.first-appearance",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "search, mailer, auth",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4411,
+      "answer": "search, mailer, auth"
+    }
+  ],
+  "speed": []
+}

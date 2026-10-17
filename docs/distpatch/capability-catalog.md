@@ -56,8 +56,8 @@ hard feature is `false`.
 
 `null` = unknown, everywhere: omitted and explicit `null` both load as `null`, overrides keep it,
 lookup returns it, JSON serializes it. `false` on a hard feature means known unsupported. No
-default of `0`, `0.5`, `1` or `false` is ever substituted. The shipped profiles carry **no
-preference scores** — none has been measured; #8 decides how unknown affects eligibility.
+default of `0`, `0.5`, `1` or `false` is ever substituted. #8 decides how unknown affects
+eligibility: an unknown score earns no credit in ranking.
 
 ## Tags
 
@@ -69,14 +69,26 @@ describe a route and stay on the Account; #8 combines both without either owning
 
 `shipped.ts`, TypeScript constants validated by Zod at build — the same shape of decision as the
 shipped price and context-window tables. Schema version `1`, revision `YYYY-MM-DD.N` (bump with
-any edit). Seeds, sparse on purpose:
+any edit); current `2026-10-17.1`. Sparse on purpose:
 
-| Id | Case | Known |
-|---|---|---|
-| `anthropic/claude-sonnet-4-6` | hosted first-party | window/output from `models/windows`, text, tools |
-| `openai/gpt-5.5` | hosted first-party | window/output from `models/windows`, text, tools |
-| `openai/gpt-oss-120b` | many OpenAI-compatible hosts, differing wire ids | identity only |
-| `mimo/mimo-v2.6-distill-9b` | DockerLM, tags `local free dockerlm` | text, tools, JSON schema (M1 live) |
+| Id | Case | Known hard facts | Calibrated scores |
+|---|---|---|---|
+| `anthropic/claude-sonnet-4-6` | hosted first-party | window/output from `models/windows`, text, tools | general 1.00, coding 0.95, agentic 1.00 |
+| `openai/gpt-5.5` | hosted first-party | window/output from `models/windows`, text, tools | none (no reachable route) |
+| `openai/gpt-oss-120b` | many OpenAI-compatible hosts, differing wire ids | 131 072 context (model card), text, tools (live) | general 0.99, coding 1.00, agentic 0.82 |
+| `mimo/mimo-v2.6-distill-9b` | DockerLM, tags `local free dockerlm` | text, tools, JSON schema (M1 live) | general 0.82, coding 0.72, agentic 1.00 |
+
+## Preference scores: calibration
+
+Shipped scores come only from the Distpatch calibration gate:
+[`evidence/capability-calibration-v1.md`](../../evidence/capability-calibration-v1.md). A
+versioned suite of deterministic, single-dimension cases (`apps/api/bench/calibration/`, run with
+`bin/calibrate`, never in `bin/check`) grades each model through whatever route reaches it; the
+normalizer pools routes per canonical id, takes the mean grade, and **withholds** a dimension that
+every measured model passes above 0.90 (the suite has not shown it can tell models apart there).
+Every shipped value equals `evidence/capability-calibration-v1/scores.json`, and a unit test fails
+if they drift. Vendor benchmarks are recorded as corroboration, not converted into scores.
+`speed`, `cost` and `vision` are not calibrated yet; see the evidence for why.
 
 ## Operator overrides
 
@@ -141,4 +153,5 @@ eligible for semantic selection is #8's decision.
 
 Model selection, demand vectors, weights, ranking (#8); `auto-*` resolution and `/v1/models`
 virtual entries (#9); live quota/latency scoring (#11); classifiers (#13); context management
-(#14); Auto-MoE (#15); learned score updates; benchmark data.
+(#14); Auto-MoE (#15); learned or live score updates. Benchmark *data* lives in `evidence/`, the
+harness in `apps/api/bench/calibration/`; neither is on the request path.
