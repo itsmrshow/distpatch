@@ -105,6 +105,13 @@ Both shapes are served on the one path, chosen by the credential style the clien
 is information, never a rename**: the request path sends the client's own string upstream unchanged
 ([Model names](#model-names)).
 
+**Distpatch virtual models follow the real ones.** `auto` and the active `auto-*` ids are appended
+after the real rows, router-owned (`owned_by: "distpatch"`), with no `resolved_model` and no size
+(a policy, not a model — whichever concrete model it selects decides those), and only for a key
+whose static scope holds an eligible concrete model. A request naming one is resolved to a concrete
+model before account selection and the wire carries that name; see
+[docs/distpatch/virtual-models.md](../distpatch/virtual-models.md).
+
 **Both OpenAI paths are first-class, and that is not redundancy.** `POST /v1/responses` is OpenAI's
 current recommended primitive and where new clients are going; `POST /v1/chat/completions` is what the
 installed base sends today. The router accepts both; neither is deprecated here.

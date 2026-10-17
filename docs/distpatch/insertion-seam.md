@@ -1,141 +1,88 @@
 # Distpatch virtual-model insertion seam
 
-Pinned upstream: `6d30948d560b4df2dab56be31879c143ddb24223`
+Status: **implemented in M2C (#9)**. Full design: [virtual-models.md](virtual-models.md).
 
-## A. Exact current boundary
+Pinned upstream at investigation: `6d30948d560b4df2dab56be31879c143ddb24223`.
 
-The requested model is admitted in:
+## A. The boundary
 
-`apps/api/src/services/dataplane/body/preflight.ts::admitRoutingModel()`
+The requested model is admitted in
+`apps/api/src/services/dataplane/body/preflight.ts::admitRoutingModel()` and reaches account
+selection in `apps/api/src/services/dataplane/orchestrator.ts`, whose `select()` closure calls
+`selectAccounts(buildSnapshot(...), { sessionKey, model, keyScope, binding, rotationCounter })`.
 
-and is first passed to account selection in:
-
-`apps/api/src/services/dataplane/orchestrator.ts`, inside the request dispatcher, where the local `select()` closure calls:
-
-```text
-selectAccounts(buildSnapshot(...), {
-  sessionKey,
-  model,
-  keyScope,
-  binding,
-  rotationCounter
-}, ...)
-```
-
-That call boundary is the insertion seam.
-
-## B. Can `auto-task` resolve before `selectAccounts()`?
-
-**Yes.** The account router can remain semantically unchanged if Distpatch resolves the virtual request to a concrete model before constructing `SelectionRequest.model`.
-
-Proposed flow:
+M2C inserts one synchronous step between the two:
 
 ```text
-request body contains: auto-task
+admitRoutingModel()                     requestedModel (exact body text)
         |
+chooseModel()                           dataplane/model-choice.ts
+        |    fixed   -> selectedModel null, concrete = requestedModel   (one namespace check)
+        |    virtual -> registry descriptor + static candidates + selectModel()
+        |               -> selectedModel; or 404 / 422 / 400 before any account is considered
         v
-admitRoutingModel()                  existing validation
+selectAccounts(... model = concreteModel ...)    unchanged
         |
-        v
-requestedModel = auto-task
-        |
-        v
-virtualModelResolver()               NEW
-        |
-        v
-selectedModel = concrete-model      NEW result
-        |
-        v
-selectAccounts(... model=selectedModel ...)
-        |
-        v
-existing account/provider routing   UNCHANGED
+existing account/provider routing                unchanged
 ```
 
-## C. Downstream model-bearing objects that need explicit handling
+`concreteModel = selectedModel ?? requestedModel`. `selectAccounts()` and the
+`GET /v1/models/:id` probe are its only callers, and both now sit behind a reserved-namespace
+check: neither ever receives `auto` or `auto-*`.
 
-### Must receive the selected concrete model for behavior
+## B. Model-bearing objects
 
-- `SelectionRequest.model`
-- candidate model-support checks / alias mapping
-- concrete model metadata lookup used for request ceilings/capabilities
-- account planning and translation inputs
+### Receive the concrete model (behavior)
 
-### Must preserve the original requested model for attribution
+- `SelectionRequest.model` and recovery hints (`hintRecoveryRejections`)
+- candidate model-support checks and alias mapping (inside `selectAccounts()`)
+- planning, output ceilings and model metadata (`Candidate.upstreamModel` derives from it)
+- translation: request bodies use the upstream name; `TranslationContext.model` (the response's
+  fallback name when an upstream omits one) is the concrete model
 
-- request progress/logging
-- client-facing error/decision explanation
-- `usage_records.model`
-- route-decision observability
+### Keep the requested model (attribution)
 
-### Must preserve current wire model behavior
+- `RequestProgress.model`, `RuntimeInput.requestedModel`, `usage_records.model`
+- the passthrough rewrite comparison (below)
+- the decision trace and client-facing errors
 
-- `Candidate.upstreamModel`
-- `ServableCandidate.upstreamModel`
-- translation output
-- usage `upstream_model`
+### Keep the selected model
 
-## Critical body-rewrite trap
+- `RuntimeInput.selectedModel` / `RequestProgress.selectedModel` → `usage_records.selected_model`
+  on every attempt (preflight failures included); `NULL` for fixed requests
 
-`dataplane/chain-body.ts::bodyFor()` currently rewrites the raw passthrough body only when:
+### Unchanged wire behavior
+
+- `Candidate.upstreamModel`, `ServableCandidate.upstreamModel`, translation output,
+  `usage_records.upstream_model`
+
+## C. The body-rewrite trap — closed
+
+`dataplane/chain-body.ts::bodyFor()` rewrites the passthrough body when
 
 ```text
-servable.upstreamModel != ctx.runtime.model
+servable.upstreamModel !== ctx.runtime.requestedModel
 ```
 
-Today `ctx.runtime.model` is the exact model text found in the original request bytes. If M1 simply changes it to the selected concrete model, an `auto-task` request with no account alias can incorrectly leave `"model":"auto-task"` in the passthrough JSON body because the selected and upstream models match each other even though neither matches the original bytes.
-
-M1 therefore needs explicit three-name state:
-
-```text
-requestedModel = auto-task              # model encoded in client body
-selectedModel  = claude-sonnet-...      # Distpatch decision
-upstreamModel  = claude-sonnet-...      # after existing account alias mapping
-```
-
-The raw-body rewrite decision must compare `upstreamModel` against **requestedModel**.
+The raw bytes carry the requested name, so a virtual request whose selected and upstream names
+agree is still rewritten (`auto-task` → `alpha`), while a fixed request with no alias stays
+byte-identical. Asserted byte-for-byte in `test/integration/virtual-models.test.ts`.
 
 ## D. Observability
 
-Preserve both requested virtual and selected concrete identities. In practice keep all three:
-
 | Field | Meaning |
 |---|---|
-| `requested_model` | exact client request (`auto-task`) |
-| `selected_model` | Distpatch concrete model choice |
-| `upstream_model` | actual wire model after existing account aliasing |
+| `usage_records.model` | exact client request (`auto-task`) |
+| `usage_records.selected_model` | Distpatch concrete choice; `NULL` for fixed / legacy rows |
+| `usage_records.upstream_model` | wire model after the account alias |
 
-Do not overwrite existing `usage_records.model`, whose current documented meaning is the client-requested name. Add `selected_model` (nullable for fixed/non-Distpatch historical traffic) and later a route decision ID/policy version.
+Each virtual request also logs one `virtual model selected` line with the policy id/version and
+digest, catalog effective revision, selector version and decision digest. Route decisions are not
+persisted.
 
-## E. `/v1/models` design
+## E. `/v1/models`
 
-Current real-model discovery and reachability should remain intact.
-
-Extend the endpoint additively:
-
-```text
-current reachableModels(key scope)
-        +
-configured Distpatch virtual model descriptors
-        =
-/v1/models response
-```
-
-Rules:
-
-- never create fake provider accounts for virtual model names
-- do not call current `selectAccounts()` with `auto-*`
-- `GET /v1/models/:id` needs a virtual-model branch before the current concrete reachability probe
-- preserve current real models and their scope-aware reachability
-- expose virtual metadata as router-owned metadata, not fabricated upstream ownership
-- preferably suppress a virtual model when its policy has zero concrete candidates reachable under the presenting key, once the capability catalog exists
-
-## Smallest safe M1 seam patch
-
-Before semantic scoring, prove the plumbing with deterministic static mappings:
-
-```text
-auto-task -> configured concrete model
-```
-
-Add three-name attribution and raw-body rewrite tests, while leaving `selectAccounts()`, provider selection, failover, auth, and drivers untouched. This validates the seam without introducing classifier, capability scoring, quota-aware semantic choice, context compression, or MoE.
+`withVirtualModels()` appends router-owned virtual entries to the unchanged real listing, only
+those with an eligible candidate under the key's static scope. `virtualModelProbe()` answers
+reserved names on `GET /v1/models/:id` before the concrete reachability probe. No fake provider
+accounts, no `resolved_model`, no fixed size claims.
