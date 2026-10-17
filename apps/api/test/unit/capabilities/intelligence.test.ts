@@ -423,6 +423,21 @@ describe("Artificial Analysis adapter & fixtures", () => {
     expect(doubled.observations.length).toBe(single.observations.length)
   })
 
+  test("fails the fetch rather than returning partial evidence when pagination hits maxPages", async () => {
+    const source = createArtificialAnalysisSource({
+      apiKey: "aa_secret_token_value_123456",
+      endpointPath: "/api/v2/language/models/free",
+      maxPages: 1,
+      fetchImpl: (async () =>
+        new Response(JSON.stringify(VALID_AA_PAGE_1), {
+          // page 1 of total_pages 2, has_more true — and maxPages 1 stops after it
+          status: 200,
+        })) as unknown as typeof fetch,
+      now: () => NOW,
+    })
+    await expect(source.fetch()).rejects.toThrow(/pagination incomplete/)
+  })
+
   test("handles pagination, Pro->Free 403 fallback, rate-limit headers, and never leaks the API key", async () => {
     const seenUrls: string[] = []
     const seenAuthHeaders: (string | null)[] = []

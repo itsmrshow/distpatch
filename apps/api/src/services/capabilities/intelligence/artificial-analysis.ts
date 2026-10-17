@@ -648,6 +648,7 @@ export function createArtificialAnalysisSource(
 
       let currentPage = processPageResponse(firstRes)
       let nextPageNumber = 2
+      let pagesRemaining = 0
       while (
         currentPage.pagination?.has_more === true &&
         nextPageNumber <= (currentPage.pagination.total_pages || maxPages) &&
@@ -656,6 +657,20 @@ export function createArtificialAnalysisSource(
         const nextRes = await fetchPage(chosenPath, nextPageNumber, apiKey)
         currentPage = processPageResponse(nextRes)
         nextPageNumber += 1
+      }
+
+      // Incomplete pagination is a failed fetch, not a partial success: publishing a snapshot
+      // compiled from this partial feed plus retained historical rows would look like an ordinary
+      // successful ingestion in the metadata while silently mixing old and current evidence.
+      if (currentPage.pagination?.has_more === true) {
+        pagesRemaining =
+          (currentPage.pagination.total_pages || 0) >= nextPageNumber
+            ? (currentPage.pagination.total_pages ?? 0) - (nextPageNumber - 1)
+            : 1
+        throw new ArtificialAnalysisError(
+          "http_error",
+          `Artificial Analysis pagination incomplete after ${maxPages} pages (${pagesRemaining} page(s) remain); increase maxPages or raise the API tier`,
+        )
       }
 
       return {

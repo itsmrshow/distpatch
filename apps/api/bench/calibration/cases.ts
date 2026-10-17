@@ -202,7 +202,10 @@ export async function runBun(source: string, options: RunBunOptions = {}): Promi
         "/work",
         "/bin/sh",
         "-c",
-        `ulimit -t ${cpuSeconds} -f 8192 -c 0 2>/dev/null || true; exec /opt/bin/bun /work/case.ts`,
+        // `ulimit` accepts only one option set per invocation under some shells (dash fails with
+        // exit 2 when combining `-t`, `-f`, `-c`), so each limit is installed separately and a
+        // failure aborts rather than launching the generated program unrestricted.
+        `ulimit -t ${cpuSeconds} || exit 97; ulimit -f 8192 || exit 97; ulimit -c 0 || exit 97; exec /opt/bin/bun /work/case.ts`,
       ],
       {
         cwd: dir,
