@@ -49,6 +49,19 @@ const capabilities = buildCapabilityCatalog({
     { id: "vendor/exhausted" },
     { id: "vendor/reauth" },
     { id: "vendor/sonnet-nine", aliases: ["claude-sonnet-9"] },
+    // Known non-text profiles, deliberately out-scoring every text model above.
+    { id: "vendor/no-text-in", hard: { textInput: false }, scores: { general: 1, reasoning: 1 } },
+    { id: "vendor/no-text-out", hard: { textOutput: false }, scores: { general: 1, reasoning: 1 } },
+    {
+      id: "vendor/no-text",
+      hard: { textInput: false, textOutput: false },
+      scores: { general: 1, reasoning: 1 },
+    },
+    {
+      id: "vendor/text-yes",
+      hard: { textInput: true, textOutput: true },
+      scores: { general: 0.4 },
+    },
   ],
 })
 
@@ -257,6 +270,58 @@ describe("scopedConcreteModels", () => {
       modelsOf: () => rows,
     })
     expect(found).toEqual(["claude-sonnet-9"])
+  })
+})
+
+describe("known non-text models are never virtual candidates", () => {
+  const NON_TEXT = ["vendor/no-text", "vendor/no-text-in", "vendor/no-text-out"]
+  const names = (models: readonly string[]) =>
+    scopedConcreteModels(catalog([serving("a", models)]), ALL, capabilities)
+
+  test.each(NON_TEXT)("%s is excluded", (model) => {
+    expect(names([model, "vendor/plain"])).toEqual(["vendor/plain"])
+  })
+
+  test("unknown (null) and known (true) text support both stay candidates", () => {
+    // `vendor/plain` declares neither text fact: null is unknown, never read as false.
+    expect(capabilities.resolve("vendor/plain")?.hard).toMatchObject({
+      textInput: null,
+      textOutput: null,
+    })
+    expect(names(["vendor/plain", "vendor/text-yes"])).toEqual(["vendor/plain", "vendor/text-yes"])
+  })
+
+  test("a higher-scored non-text model never enters selection; the text model wins", () => {
+    const choice = chooseModel(
+      routing,
+      catalog([serving("a", [...NON_TEXT, "vendor/plain"])]),
+      ALL,
+      "auto",
+      "messages",
+    )
+    expect(choice.selectedModel).toBe("vendor/plain")
+    expect(choice.virtual?.decision.ranked.map((r) => r.model)).toEqual(["vendor/plain"])
+    expect(choice.virtual?.decision.rejected).toEqual([])
+  })
+
+  test("only non-text candidates in scope is the existing 422, not a non-text selection", () => {
+    const store = catalog([serving("a", NON_TEXT)])
+    expect(() => chooseModel(routing, store, ALL, "auto", "messages")).toThrow(NoEligibleModelError)
+  })
+
+  test("only non-text candidates in scope: no virtual model is listed or probeable", () => {
+    const store = catalog([serving("a", NON_TEXT)])
+    expect(withVirtualModels(routing, store, ALL, [])).toEqual([])
+    expect(() => virtualModelProbe(routing, store, ALL, "auto")).toThrow(ModelNotFoundError)
+  })
+
+  test.each(NON_TEXT)("a fixed request for %s passes through untouched", (model) => {
+    const store = catalog([serving("a", NON_TEXT)])
+    expect(chooseModel(routing, store, ALL, model, "messages")).toEqual({
+      requestedModel: model,
+      selectedModel: null,
+      virtual: null,
+    })
   })
 })
 

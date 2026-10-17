@@ -244,6 +244,76 @@ describe("embeddings", () => {
   })
 })
 
+describe("known non-text models", () => {
+  /** Out-scores every text model on every dimension, yet can never be sent a chat body. */
+  const withNonText = buildCapabilityCatalog({
+    schemaVersion: 1,
+    revision: "2026-10-17.1",
+    profiles: [
+      { id: "vendor/beta", aliases: ["beta"], scores: { general: 0.5, speed: 0.5 } },
+      {
+        id: "vendor/painter",
+        aliases: ["painter"],
+        hard: { textOutput: false },
+        scores: { general: 1, reasoning: 1, speed: 1, long_context: 1, review: 1 },
+      },
+      {
+        id: "vendor/embedder",
+        aliases: ["embedder"],
+        hard: { textInput: false, textOutput: false },
+        scores: { general: 1, reasoning: 1, speed: 1, long_context: 1, review: 1 },
+      },
+    ],
+  })
+
+  test("`auto` selects the text model on the wire, never the higher-scored non-text one", async () => {
+    const seen = watchAccountSelection()
+    const { app, upstream } = harness({
+      accounts: [anthropicAccount("acct-1", ["painter", "embedder", "beta"])],
+      responses: [() => jsonResponse(200, {})],
+      capabilities: withNonText,
+    })
+
+    const res = await app.request("/v1/messages", post(message("auto"), bearer()))
+    await res.text()
+
+    expect(res.status).toBe(200)
+    expect(seen).toEqual(["beta"])
+    expect(wireModel(upstream.calls[0]?.body)).toBe("beta")
+  })
+
+  test("a key whose only candidates are non-text is offered no virtual model", async () => {
+    const { app } = harness({
+      accounts: [anthropicAccount("acct-1", ["painter", "embedder"])],
+      responses: [],
+      capabilities: withNonText,
+    })
+
+    const listed = (await (await app.request("/v1/models", { headers: bearer() })).json()) as {
+      data: { id: string }[]
+    }
+
+    expect(listed.data.map((entry) => entry.id)).toEqual(["embedder", "painter"])
+  })
+
+  test("a fixed request for a non-text model is untouched, byte for byte", async () => {
+    const seen = watchAccountSelection()
+    const { app, upstream } = harness({
+      accounts: [anthropicAccount("acct-1", ["painter", "beta"])],
+      responses: [() => jsonResponse(200, {})],
+      capabilities: withNonText,
+    })
+
+    const body = message("painter")
+    const res = await app.request("/v1/messages", post(body, bearer()))
+    await res.text()
+
+    expect(res.status).toBe(200)
+    expect(seen).toEqual(["painter"])
+    expect(upstream.calls[0]?.body).toBe(body)
+  })
+})
+
 describe("B: the bytes on the wire", () => {
   test("fixed, no alias: byte-identical", async () => {
     const { app, upstream } = harness({

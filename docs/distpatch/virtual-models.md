@@ -136,6 +136,11 @@ not enumerated and pays no support check.
   windows, rate-limit readings, latency, concurrency, reserves, spend;
 - a passthrough account declaring no models contributes only its alias keys;
 - names in the reserved namespace are never candidates;
+- a profile that declares `hard.textInput: false` or `hard.textOutput: false` is never a
+  candidate: every active virtual model is a chat policy whose winner is sent a text inference
+  body, and a policy need not require either fact, so such a profile could otherwise win on score.
+  `null` (unknown) stays a candidate. This also keeps `GET /v1/models` from offering an `auto-*`
+  backed only by non-text models. A fixed request for such a model is untouched;
 - the candidate keeps the account's own spelling (`Deep`), which is what routing and the wire use.
 
 An account alias key (`sonnet → glm-4.7`) is a candidate under the client-facing name only; it

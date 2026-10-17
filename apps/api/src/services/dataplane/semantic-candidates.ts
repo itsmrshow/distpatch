@@ -12,6 +12,12 @@ import type { RoutingCatalog } from "./types"
  * rejects it as `no-profile` — so it is not enumerated, and the per-name support check is spent only
  * on names a policy can rank.
  *
+ * Every active virtual model is a chat policy: its selection is sent to a text inference endpoint.
+ * A profile that **knows** it cannot take text in or give text out (`hard.textInput === false` or
+ * `hard.textOutput === false`) is therefore never a candidate, whatever its scores — policies need
+ * not require either fact, so without this it could win on score alone. `null` is unknown, not
+ * `false`, and stays a candidate. A fixed request for such a model never reaches this function.
+ *
  * Deliberately **static**. Scope is the configured intersection (pools, account lists), and the
  * only status read is the operator's own `disabled`. Live health, cooldowns, quota windows,
  * rate-limit readings, `exhausted` / `needs_reauth` overlays, latency and concurrency are not
@@ -48,13 +54,16 @@ export function scopedConcreteModels(
     { sessionKey: "", model: "", keyScope: scope },
   )
   const inScope = new Set(diagnostics.inScopeAccountIds)
-  const catalogued = (name: string) =>
-    !isVirtualModelName(name) && capabilities.resolve(name) !== null
+  const candidate = (name: string) => {
+    if (isVirtualModelName(name)) return false
+    const profile = capabilities.resolve(name)
+    return profile !== null && profile.hard.textInput !== false && profile.hard.textOutput !== false
+  }
   const names = new Set<string>()
   for (const account of accounts) {
     if (!inScope.has(account.id) || account.snapshot.status === "disabled") continue
     const rows = models?.modelsOf(account.id) ?? []
-    for (const name of listableModelIds(account.snapshot, rows, catalogued)) names.add(name)
+    for (const name of listableModelIds(account.snapshot, rows, candidate)) names.add(name)
   }
   return [...names].sort()
 }
