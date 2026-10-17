@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { describeError, VERSION } from "@multi-ai-router/core"
 import {
   createAdminCredentialRepository,
+  createCapabilityIntelligenceRepository,
   createDatabase,
   type DatabaseHandle,
   runMigrations,
@@ -17,9 +18,12 @@ import { initSentry } from "./observability"
 import { ConfigDirError } from "./providers/claude-sdk/config-dir"
 import { adminAuthBootProblem } from "./services/admin-auth"
 import {
+  applyPublishedSnapshotToBootstrap,
   CapabilityCatalogError,
   loadCapabilityCatalog,
   type ModelCapabilityCatalog,
+  readCapabilityOverridesFile,
+  SHIPPED_CAPABILITY_CATALOG,
 } from "./services/capabilities"
 import { createAccountProbe } from "./services/health/accountProbe"
 import { createClaudeCliProbe } from "./services/health/claudeCliProbe"
@@ -45,9 +49,10 @@ async function main(): Promise<void> {
   warnOnInsecureSessionCookie(env, logger)
 
   // Malformed shipped data or operator overrides exit here, before migrations or the listener.
-  // Loaded exactly once: this snapshot — the revision logged here — is the one virtual-model
-  // resolution routes on, injected through composition; nothing re-reads the override file.
-  const capabilities = loadBootCapabilityCatalog(env, logger)
+  // Validates bootstrap + overrides upfront; after migrations, any published capability-intelligence
+  // snapshot in Postgres is layered beneath operator overrides (or falls back to this bootstrap
+  // catalog if none has been published or the read fails).
+  const bootstrapCapabilities = loadBootCapabilityCatalog(env, logger)
 
   // Migrations run before the listener opens. A failure exits non-zero rather than serving
   // traffic on a half-migrated schema — docs/idea/09-deployment.md#migrations.
@@ -59,6 +64,12 @@ async function main(): Promise<void> {
   // row, and the row does not exist until migrations have run. Same fail-fast
   // UX as a malformed variable: the process exits before the listener opens.
   await assertAdminSignInConfigured(env, database, logger)
+  const capabilities = await resolveRuntimeCapabilityCatalog(
+    env,
+    database,
+    bootstrapCapabilities,
+    logger,
+  )
 
   const runtime = buildRuntime({
     env,
@@ -262,6 +273,41 @@ function loadBootCapabilityCatalog(env: Env, logger: Logger): ModelCapabilityCat
       process.exit(1)
     }
     throw error
+  }
+}
+
+async function resolveRuntimeCapabilityCatalog(
+  env: Env,
+  database: DatabaseHandle,
+  fallback: ModelCapabilityCatalog,
+  logger: Logger,
+): Promise<ModelCapabilityCatalog> {
+  try {
+    const published = await createCapabilityIntelligenceRepository(
+      database.db,
+    ).getPublishedSnapshot()
+    if (published === undefined) return fallback
+    const overrides =
+      env.modelCapabilityOverridesPath === null
+        ? null
+        : readCapabilityOverridesFile(env.modelCapabilityOverridesPath)
+    const layered = applyPublishedSnapshotToBootstrap(
+      SHIPPED_CAPABILITY_CATALOG,
+      published.payload,
+      overrides,
+    )
+    logger.info("published capability snapshot adopted", {
+      component: "capabilities",
+      snapshotRevision: published.revision,
+      ...layered.revision(),
+    })
+    return layered
+  } catch (error) {
+    logger.warn("failed to adopt published capability snapshot — retaining bootstrap catalog", {
+      component: "capabilities",
+      reason: describeError(error, Number.POSITIVE_INFINITY),
+    })
+    return fallback
   }
 }
 

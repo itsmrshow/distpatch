@@ -1,17 +1,15 @@
 import { CAPABILITY_SCHEMA_VERSION, type ShippedCatalogInput } from "./schema"
 
 /**
- * The capability profiles shipped with the image.
+ * The capability profiles shipped with the image (static bootstrap catalog).
  *
  * Deliberately sparse. A hard fact appears only when this repository already states it (the
- * shipped context-window table, live evidence) or the vendor documents it. A preference score
- * appears only when the calibration gate published it: `distpatch-calibration-v1` suite,
- * `distpatch-norm-v1` normalization, every value copied verbatim from
- * `evidence/capability-calibration-v1/scores.json` and explained per model × dimension in
- * `evidence/capability-calibration-v1.md`. Everything else stays **unknown** — dimensions the
- * suite could not tell models apart on (reasoning, review, structured output, tool use, long
- * context), dimensions it does not measure (vision, speed, cost), and models it could not reach
- * (`openai/gpt-5.5`). No score here is a guess dressed as a measurement.
+ * shipped context-window table, live evidence) or the vendor documents it; every preference
+ * score is **unknown** in the static bootstrap table. Preference scores enter at runtime through
+ * the Capability Intelligence Pipeline (published snapshot layered over this bootstrap table) or
+ * an explicit operator override (`MODEL_CAPABILITY_OVERRIDES_PATH`). Partial local calibration
+ * runs (`evidence/capability-calibration-v1.md`) remain supplemental evidence, never hardcoded
+ * as universal shipped rankings.
  *
  * Canonical ids are `vendor/model` and say nothing about which provider serves the model: the
  * same profile answers for Groq's `openai/gpt-oss-120b` and Cerebras's `gpt-oss-120b`. Aliases
@@ -21,11 +19,10 @@ import { CAPABILITY_SCHEMA_VERSION, type ShippedCatalogInput } from "./schema"
  */
 export const SHIPPED_CAPABILITY_CATALOG: ShippedCatalogInput = {
   schemaVersion: CAPABILITY_SCHEMA_VERSION,
-  revision: "2026-10-17.1",
+  revision: "2026-10-17.2",
   profiles: [
     {
-      // Hosted first-party. Sizes mirror `models/windows/anthropic.ts`. Calibrated through the
-      // Claude Code CLI (tools via a per-case MCP server).
+      // Hosted first-party. Sizes mirror `models/windows/anthropic.ts`.
       id: "anthropic/claude-sonnet-4-6",
       family: "claude-sonnet",
       aliases: ["claude-sonnet-4-6"],
@@ -36,16 +33,13 @@ export const SHIPPED_CAPABILITY_CATALOG: ShippedCatalogInput = {
         textOutput: true,
         toolUse: true,
       },
-      scores: { general: 1, coding: 0.95, agentic: 1 },
       sources: [
         "repo:apps/api/src/services/models/windows/anthropic.ts",
         "https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview",
-        "repo:evidence/capability-calibration-v1.md",
       ],
     },
     {
-      // Hosted first-party. Sizes mirror `models/windows/openai.ts`. Not calibrated: no route
-      // reachable from the calibration host served it, so every score stays unknown.
+      // Hosted first-party. Sizes mirror `models/windows/openai.ts`.
       id: "openai/gpt-5.5",
       family: "gpt-5",
       aliases: ["gpt-5.5"],
@@ -63,8 +57,8 @@ export const SHIPPED_CAPABILITY_CATALOG: ShippedCatalogInput = {
     },
     {
       // Open weights served by several OpenAI-compatible hosts under different wire ids
-      // (`cost/tables/groq.ts`, `together.ts`, `cerebras.ts`). Calibrated through Ollama Cloud;
-      // text and caller-defined function calling exercised live there. Context per the model card.
+      // (`cost/tables/groq.ts`, `together.ts`, `cerebras.ts`). Text and caller-defined function
+      // calling exercised live during local evaluation; context window per the model card.
       id: "openai/gpt-oss-120b",
       family: "gpt-oss",
       aliases: ["gpt-oss-120b"],
@@ -74,7 +68,6 @@ export const SHIPPED_CAPABILITY_CATALOG: ShippedCatalogInput = {
         textOutput: true,
         toolUse: true,
       },
-      scores: { general: 0.99, coding: 1, agentic: 0.82 },
       sources: [
         "repo:apps/api/src/services/cost/tables/groq.ts",
         "https://huggingface.co/openai/gpt-oss-120b",
@@ -83,7 +76,7 @@ export const SHIPPED_CAPABILITY_CATALOG: ShippedCatalogInput = {
     },
     {
       // The M1 DockerLM model: text, forced/streamed function calls and JSON schema tested live;
-      // vision deferred, so unknown. Context size was not measured. Calibrated on DockerLM.
+      // vision deferred, so unknown. Context size was not measured.
       id: "mimo/mimo-v2.6-distill-9b",
       family: "mimo",
       aliases: ["mimo-v2.6-distill-9b"],
@@ -94,11 +87,9 @@ export const SHIPPED_CAPABILITY_CATALOG: ShippedCatalogInput = {
         toolUse: true,
         structuredOutput: true,
       },
-      scores: { general: 0.82, coding: 0.72, agentic: 1 },
       sources: [
         "repo:docs/distpatch/provider-matrix.md",
         "repo:evidence/m1a-generic-provider-closure.md",
-        "repo:evidence/capability-calibration-v1.md",
       ],
     },
   ],

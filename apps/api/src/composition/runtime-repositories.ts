@@ -1,9 +1,11 @@
 import {
+  type CapabilityIntelligenceRepository,
   createAccountRepository,
   createAdminCredentialRepository,
   createApiKeyRepository,
   createApiKeyTombstoneRepository,
   createAuditRepository,
+  createCapabilityIntelligenceRepository,
   createCredentialRefreshLockPool,
   createModelCatalogRepository,
   createOauthStateRepository,
@@ -35,6 +37,7 @@ export interface RuntimeRepositories {
   readonly usageReports: ReturnType<typeof createUsageReportRepository>
   readonly scheduledTasks: ReturnType<typeof createScheduledTaskRepository>
   readonly modelCatalog: ReturnType<typeof createModelCatalogRepository>
+  readonly capabilityIntelligence: CapabilityIntelligenceRepository
 }
 
 export function createRuntimeRepositories(deps: RuntimeDeps): RuntimeRepositories {
@@ -77,6 +80,7 @@ export function createRuntimeRepositories(deps: RuntimeDeps): RuntimeRepositorie
   // writes it and nothing in selection reads it, which is what lets it refresh on a timer at all
   // while `accounts.supported_models` deliberately does not.
   const modelCatalog = createModelCatalogRepository(database)
+  const capabilityIntelligence = createCapabilityIntelligenceRepository(database)
 
   return {
     refreshLock,
@@ -95,5 +99,6 @@ export function createRuntimeRepositories(deps: RuntimeDeps): RuntimeRepositorie
     usageReports,
     scheduledTasks,
     modelCatalog,
+    capabilityIntelligence,
   }
 }
