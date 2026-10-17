@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { CAPABILITY_DIMENSIONS, type CapabilityDimension } from "../capabilities"
+import { CAPABILITY_DIMENSIONS, CanonicalModelId, type CapabilityDimension } from "../capabilities"
 
 /**
  * The two inputs a model-selection decision is made from besides the catalog, validated once at
@@ -64,7 +64,7 @@ export const SelectionPolicy = z
     unknownHardFacts: z.enum(["reject", "accept"]).optional(),
     /** Canonical ids, most preferred first: the tie-break after score and coverage. */
     preference: z
-      .array(z.string().min(1))
+      .array(CanonicalModelId)
       .max(64)
       .refine((list) => new Set(list).size === list.length, "must not contain duplicates")
       .optional(),

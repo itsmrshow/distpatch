@@ -230,6 +230,41 @@ describe("versioned decision", () => {
   })
 })
 
+describe("policy preference ids", () => {
+  const parses = (preference: readonly string[]) =>
+    SelectionPolicy.safeParse({ id: "p", version: 1, weights: { coding: 1 }, preference }).success
+
+  test("a canonical `vendor/model` id is accepted", () => {
+    expect(parses(["vendor/twin-b", "openai/gpt-5.5"])).toBe(true)
+  })
+
+  test.each([
+    ["uppercase", "Vendor/Twin-B"],
+    ["missing vendor", "twin-b"],
+    ["empty model", "vendor/"],
+    ["extra segment", "vendor/a/b"],
+    ["whitespace", "vendor/twin b"],
+    ["empty", ""],
+  ])("%s is rejected", (_name, id) => {
+    expect(parses([id])).toBe(false)
+  })
+
+  test("duplicates remain rejected", () => {
+    expect(parses(["vendor/twin-a", "vendor/twin-a"])).toBe(false)
+  })
+
+  test("on an exact tie a valid preference changes the winner, independent of candidate order", () => {
+    const preferB = policy({ preference: ["vendor/twin-b"] })
+    const a = select({ candidates: ["vendor/twin-a", "vendor/twin-b"], policy: preferB })
+    const b = select({ candidates: ["vendor/twin-b", "vendor/twin-a"], policy: preferB })
+    expect(select({ candidates: ["vendor/twin-a", "vendor/twin-b"] }).selected?.profileId).toBe(
+      "vendor/twin-a",
+    )
+    expect(a.selected).toMatchObject({ profileId: "vendor/twin-b", preferenceRank: 0 })
+    expect(b).toEqual(a)
+  })
+})
+
 describe("boundary schemas", () => {
   test("a policy with no positive weight is rejected", () => {
     expect(SelectionPolicy.safeParse({ id: "p", version: 1, weights: { coding: 0 } }).success).toBe(

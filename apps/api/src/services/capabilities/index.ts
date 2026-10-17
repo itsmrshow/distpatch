@@ -3,6 +3,7 @@ export { loadCapabilityCatalog } from "./load"
 export {
   CAPABILITY_DIMENSIONS,
   CAPABILITY_SCHEMA_VERSION,
+  CanonicalModelId,
   type CapabilityDimension,
   type CatalogOverridesInput,
   HARD_FEATURES,
@@ -11,7 +12,6 @@ export {
 } from "./schema"
 export { SHIPPED_CAPABILITY_CATALOG } from "./shipped"
 export type {
-  CanonicalModelId,
   CapabilityScores,
   CatalogRevision,
   HardFacts,
