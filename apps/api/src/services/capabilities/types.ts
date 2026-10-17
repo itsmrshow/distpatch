@@ -34,8 +34,8 @@ export interface ModelCapabilityProfile {
   readonly hard: HardFacts
   readonly scores: CapabilityScores
   readonly sources: readonly string[]
-  /** `shipped` with the image, or added whole by the operator's override file. */
-  readonly origin: "shipped" | "operator"
+  /** `shipped` with the image, `discovered` from a route-model source, or added by the operator. */
+  readonly origin: "shipped" | "discovered" | "operator"
   /** Field paths an operator override changed (`enabled`, `scores.coding`, …), sorted. */
   readonly overridden: readonly string[]
 }

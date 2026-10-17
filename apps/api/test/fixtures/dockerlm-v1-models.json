@@ -1,0 +1,267 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "qwen3.8-27b",
+      "object": "model",
+      "created": 1760659200,
+      "owned_by": "llama-swap",
+      "meta": {
+        "llamaswap": {
+          "model_identity": {
+            "semantic_model": "Qwen/Qwen3.8-27B",
+            "base_model": "Qwen/Qwen3.8-27B",
+            "derivative_model": null
+          },
+          "artifact": {
+            "repository": "jakeatx/Qwen3.8-27B-ATX-IQ4_XS-M-GGUF",
+            "files": ["Qwen3.8-27B-ATX-4-XS.gguf"],
+            "format": "gguf",
+            "quantization": "ATX-IQ4_XS-M (4.56 bpw)"
+          },
+          "runtime": {
+            "name": "llamampere",
+            "version": "v0.5.4 (image 17c8fe4)"
+          },
+          "model_capabilities": {
+            "context_tokens": 204800,
+            "text_input": true,
+            "text_output": true,
+            "image_input": false,
+            "embedding": false
+          },
+          "routing": {
+            "model_type": "chat",
+            "endpoint": "/v1/chat/completions"
+          },
+          "provenance": {
+            "semantic_model_source": "https://huggingface.co/Qwen/Qwen3.8-27B",
+            "artifact_source": "https://huggingface.co/jakeatx/Qwen3.8-27B-ATX-IQ4_XS-M-GGUF",
+            "resolution_method": "verified-embedded-metadata-and-hf-repo",
+            "confidence": "verified"
+          }
+        }
+      }
+    },
+    {
+      "id": "mimo-v2.6-distill-9b",
+      "object": "model",
+      "created": 1760659200,
+      "owned_by": "llama-swap",
+      "meta": {
+        "llamaswap": {
+          "model_identity": {
+            "semantic_model": "XiaomiMiMo/MiMo-V2.6-Distill-Qwen-9B",
+            "base_model": "Qwen/Qwen3.5-9B",
+            "derivative_model": "XiaomiMiMo/MiMo-V2.6-Distill-Qwen-9B"
+          },
+          "artifact": {
+            "repository": "ggml-org/MiMo-V2.6-Distill-Qwen-9B-GGUF",
+            "files": [
+              "MiMo-V2.6-Distill-Qwen-9B-Q8_0.gguf",
+              "mmproj-MiMo-V2.6-Distill-Qwen-9B-Q8_0.gguf"
+            ],
+            "format": "gguf",
+            "quantization": "Q8_0"
+          },
+          "runtime": {
+            "name": "atomic",
+            "version": "TurboQuant b10269-1.6.0 (grammar-fix-20261004)"
+          },
+          "model_capabilities": {
+            "context_tokens": 262144,
+            "text_input": true,
+            "text_output": true,
+            "image_input": true,
+            "embedding": false
+          },
+          "routing": {
+            "model_type": "chat",
+            "endpoint": "/v1/chat/completions"
+          },
+          "provenance": {
+            "semantic_model_source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Distill-Qwen-9B",
+            "artifact_source": "https://huggingface.co/ggml-org/MiMo-V2.6-Distill-Qwen-9B-GGUF",
+            "resolution_method": "verified-embedded-metadata-and-hf-repo",
+            "confidence": "verified"
+          }
+        }
+      }
+    },
+    {
+      "id": "qwen36-35b-apex-v21",
+      "object": "model",
+      "created": 1760659200,
+      "owned_by": "llama-swap",
+      "meta": {
+        "llamaswap": {
+          "model_identity": {
+            "semantic_model": "IsValorum/Qwen3.6-35B-A3B-MTP-APEX-I-MiniPlus-V2.1-Abliterated",
+            "base_model": "Qwen/Qwen3.6-35B-A3B",
+            "derivative_model": "IsValorum/Qwen3.6-35B-A3B-MTP-APEX-I-MiniPlus-V2.1-Abliterated"
+          },
+          "artifact": {
+            "repository": "IsValorum/Qwen3.6-35B-A3B-MTP-APEX-I-MiniPlus-V2.1-Abliterated-GGUF",
+            "files": [
+              "Qwen3.6-35B-A3B.APEX-I-MiniPlus-V2.1-Abliterated.gguf",
+              "mmproj-Q8_0.gguf",
+              "mtp-Qwen3.6-35B-A3B-Q8_0.gguf"
+            ],
+            "format": "gguf",
+            "quantization": "APEX-I-MiniPlus V2.1 Abliterated (3.38 BPW, custom mixed)"
+          },
+          "runtime": {
+            "name": "atomic",
+            "version": "TurboQuant b10269-1.6.0 (grammar-fix-20261004)"
+          },
+          "model_capabilities": {
+            "context_tokens": 131072,
+            "text_input": true,
+            "text_output": true,
+            "image_input": true,
+            "embedding": false
+          },
+          "routing": {
+            "model_type": "chat",
+            "endpoint": "/v1/chat/completions"
+          },
+          "provenance": {
+            "semantic_model_source": "https://huggingface.co/Qwen/Qwen3.6-35B-A3B",
+            "artifact_source": "https://huggingface.co/IsValorum/Qwen3.6-35B-A3B-MTP-APEX-I-MiniPlus-V2.1-Abliterated-GGUF",
+            "resolution_method": "verified-model-card-and-hf-repo",
+            "confidence": "verified"
+          }
+        }
+      }
+    },
+    {
+      "id": "qwen3-embedding-0.6b",
+      "object": "model",
+      "created": 1760659200,
+      "owned_by": "llama-swap",
+      "meta": {
+        "llamaswap": {
+          "model_identity": {
+            "semantic_model": "Qwen/Qwen3-Embedding-0.6B",
+            "base_model": "Qwen/Qwen3-0.6B-Base",
+            "derivative_model": "Qwen/Qwen3-Embedding-0.6B"
+          },
+          "artifact": {
+            "repository": "Qwen/Qwen3-Embedding-0.6B-GGUF",
+            "files": ["Qwen3-Embedding-0.6B-Q8_0.gguf"],
+            "format": "gguf",
+            "quantization": "Q8_0"
+          },
+          "runtime": {
+            "name": "text-embeddings-inference / atomic",
+            "version": "tei 1.9.4 / atomic TurboQuant b10269-1.6.0"
+          },
+          "model_capabilities": {
+            "context_tokens": 32768,
+            "text_input": true,
+            "text_output": false,
+            "image_input": false,
+            "embedding": true
+          },
+          "routing": {
+            "model_type": "embedding",
+            "endpoint": "/v1/embeddings"
+          },
+          "provenance": {
+            "semantic_model_source": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B",
+            "artifact_source": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
+            "resolution_method": "verified-embedded-metadata-and-hf-repo",
+            "confidence": "verified"
+          }
+        }
+      }
+    },
+    {
+      "id": "qwen3.8-27b-rvn",
+      "object": "model",
+      "created": 1760659200,
+      "owned_by": "llama-swap",
+      "meta": {
+        "llamaswap": {
+          "model_identity": {
+            "semantic_model": "0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored",
+            "base_model": "Qwen/Qwen3.8-27B",
+            "derivative_model": "0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored (via trohrbaugh/Qwen3.8-27B-heretic-ara)"
+          },
+          "artifact": {
+            "repository": "0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored-GGUF",
+            "files": ["RVN-Q4_K_M-multilingual-mtp.gguf"],
+            "format": "gguf",
+            "quantization": "RVN Q4_K_M multilingual"
+          },
+          "runtime": {
+            "name": "atomic",
+            "version": "TurboQuant b10269-1.6.0 (grammar-fix-20261004)"
+          },
+          "model_capabilities": {
+            "context_tokens": 204800,
+            "text_input": true,
+            "text_output": true,
+            "image_input": false,
+            "embedding": false
+          },
+          "routing": {
+            "model_type": "chat",
+            "endpoint": "/v1/chat/completions"
+          },
+          "provenance": {
+            "semantic_model_source": "https://huggingface.co/Qwen/Qwen3.8-27B",
+            "artifact_source": "https://huggingface.co/0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored-GGUF",
+            "resolution_method": "verified-model-card-and-hf-repo",
+            "confidence": "verified"
+          }
+        }
+      }
+    },
+    {
+      "id": "strata-qwen38-flash-next",
+      "object": "model",
+      "created": 1760659200,
+      "owned_by": "llama-swap",
+      "meta": {
+        "llamaswap": {
+          "model_identity": {
+            "semantic_model": "Qwen/Qwen3.8-Flash-Next",
+            "base_model": "Qwen/Qwen3.8-Flash-Next",
+            "derivative_model": null
+          },
+          "artifact": {
+            "repository": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
+            "files": [
+              "Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00001-of-00002.gguf",
+              "Qwen3.8-Flash-Next-GSQ-RCO-IQ2_XS-00002-of-00002.gguf"
+            ],
+            "format": "gguf",
+            "quantization": "GSQ-RCO IQ2_XS"
+          },
+          "runtime": {
+            "name": "strata",
+            "version": "0.1.44.1-296b59d"
+          },
+          "model_capabilities": {
+            "context_tokens": 131072,
+            "text_input": true,
+            "text_output": true,
+            "image_input": false,
+            "embedding": false
+          },
+          "routing": {
+            "model_type": "chat",
+            "endpoint": "/v1/chat/completions"
+          },
+          "provenance": {
+            "semantic_model_source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+            "artifact_source": "https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
+            "resolution_method": "verified-embedded-metadata-and-hf-repo",
+            "confidence": "verified"
+          }
+        }
+      }
+    }
+  ]
+}

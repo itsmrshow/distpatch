@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import type { CapabilityDimension } from "../schema"
+import type { CapabilityDimension, ProfileInput } from "../schema"
 
 /**
  * Capability Intelligence Pipeline types.
@@ -84,6 +84,8 @@ export interface CompiledCapabilitySnapshotPayload {
   readonly normalizerVersion: string
   readonly evidenceDigest: string
   readonly models: Readonly<Record<string, CompiledModelIntelligence>>
+  /** Profiles derived from route-model discovery, merged into the catalog as `discovered`. */
+  readonly discoveredProfiles?: readonly ProfileInput[]
 }
 
 /**

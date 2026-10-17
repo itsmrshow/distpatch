@@ -224,8 +224,14 @@ export type {
   CapabilitySnapshotRow,
   NewCapabilityObservationRow,
   NewCapabilitySnapshotRow,
+  RouteModelInventoryRow,
+  RouteModelInventoryStatus,
 } from "./schema/capability-intelligence"
-export { capabilityObservations, capabilitySnapshots } from "./schema/capability-intelligence"
+export {
+  capabilityObservations,
+  capabilitySnapshots,
+  routeModelInventory,
+} from "./schema/capability-intelligence"
 export type { CostBasis, UsageOutcome } from "./schema/enums"
 // --- enums ------------------------------------------------------------------
 export {

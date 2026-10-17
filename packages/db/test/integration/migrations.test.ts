@@ -53,6 +53,7 @@ const EXPECTED_TABLES = [
   "price_overrides",
   "capability_observations",
   "capability_snapshots",
+  "route_model_inventory",
 ] as const
 
 describe.skipIf(!runnable)("migrations against a live database", () => {
@@ -454,5 +455,30 @@ describe.skipIf(!runnable)("migrations against a live database", () => {
     expect(allSnapshots.find((s) => s.revision === "sha256:test-rev-1")?.publicationState).toBe(
       "superseded",
     )
+  })
+
+  test("route model inventory upserts keep first-seen, mark absence, and never delete", async () => {
+    db = (handle as DatabaseHandle).db
+    const repository = createCapabilityIntelligenceRepository(db)
+    const t1 = new Date("2026-10-17T10:00:00.000Z")
+    const t2 = new Date("2026-10-17T11:00:00.000Z")
+    const row = {
+      source: "test-host",
+      routeModelId: "route-a",
+      descriptor: { routeModelId: "route-a", semanticModelId: "acme/a" },
+      tags: ["local"],
+      status: "present" as const,
+      firstSeenAt: t1,
+      lastSeenAt: t1,
+      absentSince: null,
+    }
+    await repository.saveRouteModels([row])
+    await repository.saveRouteModels([
+      { ...row, firstSeenAt: t2, lastSeenAt: t2, status: "absent", absentSince: t2 },
+    ])
+    const stored = (await repository.listRouteModels()).filter((r) => r.source === "test-host")
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toMatchObject({ status: "absent", firstSeenAt: t1, absentSince: t2 })
+    expect(stored[0]?.descriptor).toEqual(row.descriptor)
   })
 })

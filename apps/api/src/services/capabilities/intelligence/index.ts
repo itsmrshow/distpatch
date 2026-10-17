@@ -43,9 +43,17 @@ export {
   type CompileAndPublishOptions,
   compileAndPublishCapabilitySnapshot,
   createCapabilityCatalogStore,
+  type RouteDiscoveryReport,
   type SyncCapabilityIntelligenceOptions,
   syncCapabilityIntelligence,
 } from "./lifecycle"
+export {
+  createLlamaSwapDiscoverySource,
+  DOCKERLM_SOURCE_ID,
+  type LlamaSwapDiscoveryOptions,
+  parseLlamaSwapModelList,
+  RouteDiscoveryError,
+} from "./llamaswap-discovery"
 export {
   createLocalEvaluationSource,
   DEFAULT_LOCAL_EVAL_SCORES_PATH,
@@ -59,6 +67,18 @@ export {
   LOCAL_EVAL_NORMALIZATION_VERSION,
   LOCAL_EVAL_SUITE_VERSION,
 } from "./local-eval-versions"
+export {
+  deriveDiscoveredProfiles,
+  isEmbeddingRoute,
+  type RejectedRouteModel,
+  type RouteDiscoveryResult,
+  type RouteModelDescriptor,
+  RouteModelDescriptorSchema,
+  type RouteModelSource,
+  type RouteReconciliationSummary,
+  reconcileRouteModels,
+  type StoredRouteModel,
+} from "./route-discovery"
 export {
   type CapabilityEvidenceSource,
   type CompiledCapabilitySnapshotPayload,

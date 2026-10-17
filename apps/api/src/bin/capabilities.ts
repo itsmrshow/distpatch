@@ -12,9 +12,11 @@ import {
   compileAndPublishCapabilitySnapshot,
   createArtificialAnalysisSource,
   createExternalIdentityResolver,
+  createLlamaSwapDiscoverySource,
   createLocalEvaluationSource,
   LOCAL_EVAL_SOURCE_ID,
   parseArtificialAnalysisPayload,
+  type RouteModelSource,
   readCapabilityOverridesFile,
   SHIPPED_CAPABILITY_CATALOG,
   syncCapabilityIntelligence,
@@ -23,7 +25,7 @@ import {
 /**
  * `bin/capabilities` — Capability Intelligence Pipeline manual CLI.
  *
- *   bin/capabilities sync [--fixture <path>] [--no-local-eval]
+ *   bin/capabilities sync [--fixture <path>] [--no-local-eval] [--route-fixture <path>] [--no-route-discovery]
  *   bin/capabilities compile
  *   bin/capabilities status
  *   bin/capabilities show
@@ -33,7 +35,7 @@ import {
  */
 
 const USAGE = `usage:
-  bin/capabilities sync [--fixture <path>] [--no-local-eval]
+  bin/capabilities sync [--fixture <path>] [--no-local-eval] [--route-fixture <path>] [--no-route-discovery]
   bin/capabilities compile
   bin/capabilities status
   bin/capabilities show`
@@ -90,6 +92,28 @@ function createFixtureArtificialAnalysisSource(fixturePath: string): CapabilityE
   }
 }
 
+/**
+ * Route-model discovery sources for a manual sync: the DockerLM host named by `DOCKERLM_BASE_URL`
+ * (its own `GET {base}/models`, the same variable `bin/calibrate` and `provider-smoke` read), or a
+ * saved `/v1/models` body via `--route-fixture`. `--no-route-discovery` skips it. An unset
+ * variable simply means no discovery: the catalog keeps whatever was last discovered.
+ */
+function routeSources(args: readonly string[]): RouteModelSource[] {
+  if (args.includes("--no-route-discovery")) return []
+  const fixture = flagValue(args, "--route-fixture")
+  if (fixture !== null) {
+    return [
+      createLlamaSwapDiscoverySource({
+        baseUrl: "fixture:",
+        fetch: (async () =>
+          new Response(await readFile(fixture, "utf8"))) as unknown as typeof fetch,
+      }),
+    ]
+  }
+  const baseUrl = process.env.DOCKERLM_BASE_URL?.trim()
+  return baseUrl ? [createLlamaSwapDiscoverySource({ baseUrl })] : []
+}
+
 const [verb, ...args] = process.argv.slice(2)
 if (verb !== "sync" && verb !== "compile" && verb !== "status" && verb !== "show") {
   fail(USAGE, 2)
@@ -114,12 +138,13 @@ try {
     const result = await syncCapabilityIntelligence({
       repository,
       sources,
+      routeSources: routeSources(args),
     })
 
-    const shippedIds = SHIPPED_CAPABILITY_CATALOG.profiles.map((p) => p.id)
+    const catalogIds = result.compiled.catalog.list().map((p) => p.id)
     const aaMeta = result.sources.find((s) => s.source === ARTIFICIAL_ANALYSIS_SOURCE_ID)
     const aaMatched = new Set(aaMeta?.matchedModels ?? [])
-    const unmatchedShippedInAa = shippedIds.filter((id) => !aaMatched.has(id))
+    const unmatchedShippedInAa = catalogIds.filter((id) => !aaMatched.has(id))
 
     const output = {
       status: "ok",
@@ -134,6 +159,9 @@ try {
       identityUpdates: result.identityUpdates,
       scoredModels: result.compiled.summary.scoredModels,
       staleDimensions: result.compiled.summary.staleDimensions,
+      discoveredModels: result.compiled.summary.discoveredModels,
+      skippedDiscoveredModels: result.compiled.summary.skippedDiscoveredModels,
+      routeDiscovery: result.routeDiscovery,
       sources: result.sources.map((s) => ({
         source: s.source,
         endpoint: s.endpoint,
@@ -167,11 +195,12 @@ try {
       )}\n`,
     )
   } else if (verb === "status") {
-    const [published, latest, allObs, unresolvedObs] = await Promise.all([
+    const [published, latest, allObs, unresolvedObs, routeRows] = await Promise.all([
       repository.getPublishedSnapshot(),
       repository.getLatestSnapshot(),
       repository.listObservations(),
       repository.listUnresolvedObservations(),
+      repository.listRouteModels(),
     ])
     const bySource: Record<string, number> = {}
     for (const o of allObs) {
@@ -204,6 +233,16 @@ try {
             unresolved: unresolvedObs.length,
             bySource,
             bySourceKnownKeys: [ARTIFICIAL_ANALYSIS_SOURCE_ID, LOCAL_EVAL_SOURCE_ID],
+          },
+          routeModels: {
+            present: routeRows.filter((r) => r.status === "present").length,
+            absent: routeRows.filter((r) => r.status === "absent").length,
+            bySource: Object.fromEntries(
+              [...new Set(routeRows.map((r) => r.source))].map((s) => [
+                s,
+                routeRows.filter((r) => r.source === s).length,
+              ]),
+            ),
           },
         },
         null,

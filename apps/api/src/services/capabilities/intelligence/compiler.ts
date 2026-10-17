@@ -4,6 +4,7 @@ import {
   CAPABILITY_DIMENSIONS,
   CAPABILITY_SCHEMA_VERSION,
   type CapabilityDimension,
+  type ProfileInput,
   type ShippedCatalogInput,
 } from "../schema"
 import { SHIPPED_CAPABILITY_CATALOG } from "../shipped"
@@ -11,6 +12,7 @@ import type { ModelCapabilityCatalog } from "../types"
 import { ARTIFICIAL_ANALYSIS_SOURCE_ID } from "./artificial-analysis"
 import { isProductionComparable, type SourceComparability } from "./comparability"
 import { LOCAL_EVAL_SOURCE_ID } from "./local-eval"
+import { deriveDiscoveredProfiles, type StoredRouteModel } from "./route-discovery"
 import type {
   CompiledCapabilitySnapshotPayload,
   CompiledDimensionEvidence,
@@ -367,6 +369,8 @@ export interface CompileCapabilitySnapshotOptions {
   readonly staleDays?: number
   /** Source scale comparability registry; defaults to the shipped one. */
   readonly comparability?: SourceComparability
+  /** Reconciled route-model rows (`route-discovery.ts`); only `present` rows make profiles. */
+  readonly routeModels?: readonly StoredRouteModel[]
 }
 
 export interface CompiledCapabilitySnapshotResult {
@@ -381,6 +385,8 @@ export interface CompiledCapabilitySnapshotResult {
     readonly unresolvedObservations: number
     readonly scoredModels: readonly string[]
     readonly staleDimensions: readonly string[]
+    readonly discoveredModels: readonly string[]
+    readonly skippedDiscoveredModels: readonly string[]
   }
 }
 
@@ -411,7 +417,14 @@ export function compileCapabilitySnapshot(
   const scoredModels: string[] = []
   const staleDimensions: string[] = []
 
-  const sortedProfiles = [...bootstrap.profiles].sort((a, b) => (a.id < b.id ? -1 : 1))
+  const discovered = deriveDiscoveredProfiles(
+    options.routeModels ?? [],
+    new Set(bootstrap.profiles.map((p) => p.id)),
+    new Set(bootstrap.profiles.flatMap((p) => p.aliases ?? [])),
+  )
+  const sortedProfiles = [...bootstrap.profiles, ...discovered.profiles].sort((a, b) =>
+    a.id < b.id ? -1 : 1,
+  )
 
   for (const profile of sortedProfiles) {
     const isLocalModel = (profile.tags ?? []).includes("local")
@@ -481,6 +494,7 @@ export function compileCapabilitySnapshot(
         // observations (pricing, saturated raw audits) must produce a new immutable revision, not
         // silently reuse the previously published snapshot.
         evidenceDigest,
+        discoveredProfiles: discovered.profiles,
         models: Object.keys(models)
           .sort()
           .map((id) => ({
@@ -501,6 +515,7 @@ export function compileCapabilitySnapshot(
     normalizerVersion: CAPABILITY_NORMALIZER_VERSION,
     evidenceDigest,
     models,
+    discoveredProfiles: discovered.profiles,
   }
 
   // Validate candidate snapshot by building the layered catalog (bootstrap + snapshot).
@@ -519,6 +534,8 @@ export function compileCapabilitySnapshot(
       unresolvedObservations: observations.length - resolvedObs.length,
       scoredModels: scoredModels.sort(),
       staleDimensions: staleDimensions.sort(),
+      discoveredModels: discovered.profiles.map((p) => p.id),
+      skippedDiscoveredModels: discovered.skipped,
     },
   }
 }
@@ -558,16 +575,22 @@ export function applyPublishedSnapshotToBootstrap(
     ])
   }
 
-  const bootstrapIds = new Set(bootstrap.profiles.map((p) => p.id))
+  const discoveredProfiles: readonly ProfileInput[] = Array.isArray(snap.discoveredProfiles)
+    ? (snap.discoveredProfiles as readonly ProfileInput[])
+    : []
+  const knownIds = new Set([
+    ...bootstrap.profiles.map((p) => p.id),
+    ...discoveredProfiles.map((p) => p.id),
+  ])
   for (const modelId of Object.keys(snap.models)) {
-    if (!bootstrapIds.has(modelId)) {
+    if (!knownIds.has(modelId)) {
       throw new CapabilityCatalogError([
-        `publishedSnapshot.models.${modelId}: unknown canonical model id (not in bootstrap catalog)`,
+        `publishedSnapshot.models.${modelId}: unknown canonical model id (not in bootstrap catalog or discovered profiles)`,
       ])
     }
   }
 
-  const mergedProfiles = bootstrap.profiles.map((profile) => {
+  const withCompiled = (profile: ProfileInput): ProfileInput => {
     const compiled = snap.models?.[profile.id]
     if (!compiled) return profile
 
@@ -590,13 +613,14 @@ export function applyPublishedSnapshotToBootstrap(
       scores: mergedScores,
       sources: mergedSources,
     }
-  })
+  }
 
   return buildCapabilityCatalog(
     {
       ...bootstrap,
-      profiles: mergedProfiles,
+      profiles: bootstrap.profiles.map(withCompiled),
     },
     operatorOverrides,
+    discoveredProfiles.map(withCompiled),
   )
 }

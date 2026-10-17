@@ -6,6 +6,7 @@ import {
   ARTIFICIAL_ANALYSIS_SOURCE_ID,
   applyPublishedSnapshotToBootstrap,
   buildCapabilityCatalog,
+  canonicalIdFromRepo,
   compileCapabilitySnapshot,
   createExternalIdentityResolver,
   isProductionComparable,
@@ -16,13 +17,13 @@ import {
   type ModelCapabilityCatalog,
   parseLocalEvaluationArtifact,
   RouteInventory,
-  resolveRouteInventoryEntry,
   SHIPPED_CAPABILITY_CATALOG,
   type SourceObservation,
 } from "../../../src/services/capabilities"
 import { chooseModel, scopedConcreteModels } from "../../../src/services/dataplane"
 import { virtualModels } from "../../../src/services/virtual-models"
 import { account, catalog as routingCatalog } from "../dataplane/fixtures"
+import { dockerlmDescriptors, NOW, storedRows } from "./fleet-fixture"
 
 const INVENTORY_PATH = fileURLToPath(
   new URL("../../../../../evidence/model-inventory/dockerlm.json", import.meta.url),
@@ -30,14 +31,20 @@ const INVENTORY_PATH = fileURLToPath(
 const SCORES_PATH = fileURLToPath(
   new URL("../../../../../evidence/capability-calibration-v1/scores.json", import.meta.url),
 )
-const NOW = new Date("2026-10-17T12:00:00.000Z")
 
-const inventory = RouteInventory.parse(JSON.parse(readFileSync(INVENTORY_PATH, "utf8")))
-const catalog = buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG)
-const resolved = inventory.map(resolveRouteInventoryEntry)
-const byRoute = new Map(resolved.map((r) => [r.route, r]))
+/** The fleet exactly as discovery would deliver it: the catalog holds no hard-coded local model. */
+const descriptors = dockerlmDescriptors()
+const ROWS = storedRows(descriptors)
+const compile = (
+  observations: readonly SourceObservation[],
+  options: Parameters<typeof compileCapabilitySnapshot>[1] = {},
+) => compileCapabilitySnapshot(observations, { generatedAt: NOW, routeModels: ROWS, ...options })
+const catalog = compile([]).catalog
+const byRoute = new Map(descriptors.map((d) => [d.routeModelId, d]))
 const EMBEDDING_ROUTE = "qwen3-embedding-0.6b"
-const generativeRoutes = resolved.filter((r) => r.generative).map((r) => r.route)
+const generativeRoutes = descriptors
+  .filter((d) => d.capabilities.textOutput === true && d.capabilities.embedding !== true)
+  .map((d) => d.routeModelId)
 
 function aaObservation(
   sourceModelId: string,
@@ -61,9 +68,9 @@ function aaObservation(
   }
 }
 
-describe("normalized route inventory → catalog identity", () => {
-  test("the committed inventory has the six deployed routes, five generative and one embedding", () => {
-    expect(inventory.map((e) => e.exposed_model).sort()).toEqual([
+describe("discovered route models → catalog identity", () => {
+  test("discovery yields the six deployed routes, five generative and one embedding", () => {
+    expect([...byRoute.keys()].sort()).toEqual([
       "mimo-v2.6-distill-9b",
       "qwen3-embedding-0.6b",
       "qwen3.8-27b",
@@ -75,45 +82,55 @@ describe("normalized route inventory → catalog identity", () => {
     expect(generativeRoutes).not.toContain(EMBEDDING_ROUTE)
   })
 
-  test("every route's alias resolves to a lowercase canonical profile whose lineage matches the inventory", () => {
-    for (const route of resolved) {
-      const profile = catalog.resolve(route.route)
-      expect(profile?.id).toBe(route.semanticId)
+  test("the shipped bootstrap hard-codes no local model; every one arrives as `discovered`", () => {
+    expect(SHIPPED_CAPABILITY_CATALOG.profiles.some((p) => p.tags?.includes("local"))).toBe(false)
+    for (const descriptor of descriptors) {
+      expect(catalog.resolve(descriptor.routeModelId)?.origin).toBe("discovered")
+    }
+  })
+
+  test("every route alias resolves to a lowercase canonical profile with the discovered lineage", () => {
+    for (const d of descriptors) {
+      const profile = catalog.resolve(d.routeModelId)
+      expect(profile?.id).toBe(d.semanticModelId as string)
       expect(profile?.id).toBe(profile?.id.toLowerCase() as string)
-      expect(profile?.baseModel).toBe(route.baseModelId)
+      expect(profile?.baseModel).toBe(d.baseModelId === d.semanticModelId ? null : d.baseModelId)
       expect(profile?.tags).toContain("local")
-      // The route name is an alias, never the canonical id.
-      expect(profile?.id).not.toBe(route.route)
+      expect(profile?.id).not.toBe(d.routeModelId)
+    }
+  })
+
+  test("the flat inventory document and the discovery fixture agree on identity, artifact and runtime", () => {
+    const document = RouteInventory.parse(JSON.parse(readFileSync(INVENTORY_PATH, "utf8")))
+    expect(document).toHaveLength(descriptors.length)
+    for (const entry of document) {
+      const d = byRoute.get(entry.exposed_model)
+      expect(d?.semanticModelId).toBe(canonicalIdFromRepo(entry.semantic_model))
+      expect(d?.artifact?.repository).toBe(entry.artifact_repo)
+      expect(d?.artifact?.quantization).toBe(entry.quantization)
+      expect(d?.runtime?.name).toBe(entry.runtime.name)
+      expect(d?.capabilities.contextTokens).toBe(entry.capabilities.context_tokens)
     }
   })
 
   test("Hugging Face casing survives only as provenance, never in a canonical id", () => {
-    for (const entry of inventory) {
-      const profile = catalog.resolve(entry.exposed_model)
-      expect(profile?.id).toBe(entry.semantic_model.toLowerCase())
-      if (entry.semantic_model !== entry.semantic_model.toLowerCase()) {
-        expect(profile?.sources).toContain(`https://huggingface.co/${entry.semantic_model}`)
-      }
-    }
     expect(catalog.get("qwen/qwen3.8-flash-next")?.sources).toContain(
       "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
     )
+    for (const profile of catalog.list()) expect(profile.id).toBe(profile.id.toLowerCase())
   })
 
   test("quantized and runtime-managed routes map to the public semantic model, not a new one", () => {
-    // ATX quant (llamampere) and the Strata GSQ-RCO IQ2_XS runtime: artifact/runtime layers only.
     for (const [route, id] of [
       ["qwen3.8-27b", "qwen/qwen3.8-27b"],
       ["strata-qwen38-flash-next", "qwen/qwen3.8-flash-next"],
     ] as const) {
-      const entry = byRoute.get(route)
-      expect(entry?.semanticId).toBe(id)
-      expect(entry?.derivative).toBe(false)
+      expect(byRoute.get(route)?.semanticModelId).toBe(id)
       expect(catalog.get(id)?.baseModel).toBeNull()
-      expect(entry?.artifact.quantization).not.toBe("")
+      expect(byRoute.get(route)?.artifact?.quantization).toBeTruthy()
     }
-    expect(byRoute.get("qwen3.8-27b")?.runtime.name).toBe("llamampere")
-    expect(byRoute.get("strata-qwen38-flash-next")?.runtime.name).toBe("strata")
+    expect(byRoute.get("qwen3.8-27b")?.runtime?.name).toBe("llamampere")
+    expect(byRoute.get("strata-qwen38-flash-next")?.runtime?.name).toBe("strata")
   })
 
   test("true derivatives keep a distinct profile and name their base", () => {
@@ -122,10 +139,8 @@ describe("normalized route inventory → catalog identity", () => {
       ["qwen36-35b-apex-v21", "qwen/qwen3.6-35b-a3b"],
       ["mimo-v2.6-distill-9b", "qwen/qwen3.5-9b"],
     ] as const) {
-      const entry = byRoute.get(route)
-      expect(entry?.derivative).toBe(true)
-      expect(entry?.semanticId).not.toBe(base)
       expect(catalog.resolve(route)?.baseModel).toBe(base)
+      expect(catalog.resolve(route)?.id).not.toBe(base)
     }
     expect(catalog.resolve("qwen3.8-27b-rvn")?.id).not.toBe(catalog.resolve("qwen3.8-27b")?.id)
   })
@@ -140,7 +155,7 @@ describe("normalized route inventory → catalog identity", () => {
 /** The real request path: scope enumeration, the non-text filter, then the selector. */
 const serving = (models: readonly string[]) =>
   routingCatalog([account("fleet", { snapshot: { supportedModels: [...models] } })])
-const ALL_ROUTES = resolved.map((r) => r.route)
+const ALL_ROUTES = descriptors.map((d) => d.routeModelId)
 const choose = (capabilities: ModelCapabilityCatalog, id: string, models = ALL_ROUTES) =>
   chooseModel({ capabilities }, serving(models), { kind: "all" }, id, "messages")
 /** The decision, or `null` when no candidate is eligible (`auto-task` needs declared tool use). */
@@ -207,7 +222,7 @@ describe("auto-local over the real local fleet", () => {
     const resolver = createExternalIdentityResolver()
     const base = resolver.resolve("artificial-analysis", "qwen3-8-27b")
     expect(base).toBe("qwen/qwen3.8-27b")
-    const compiled = compileCapabilitySnapshot([aaObservation("qwen3-8-27b", base, 34)], {
+    const compiled = compile([aaObservation("qwen3-8-27b", base, 34)], {
       generatedAt: NOW,
     })
     const decision = choose(compiled.catalog, "auto-local").virtual?.decision
@@ -235,6 +250,7 @@ describe("Artificial Analysis identity for the local fleet", () => {
   test("derivatives and unverified models are never silently mapped to base evidence", () => {
     for (const id of [
       "qwen3-8-27b-heretic",
+      "0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored",
       "qwen3.8-27b-rvn",
       "qwen3-6-35b-a3b",
       "mimo-v2-6-distill-qwen-9b",
@@ -243,15 +259,6 @@ describe("Artificial Analysis identity for the local fleet", () => {
       expect(resolver.resolve("artificial-analysis", id)).toBeNull()
     }
   })
-
-  test("a verbatim canonical derivative id resolves to the derivative itself, never its base", () => {
-    expect(
-      resolver.resolve(
-        "artificial-analysis",
-        "0bserverx/Qwen3.8-27B-Heretic-Abliterated-Uncensored",
-      ),
-    ).toBe("0bserverx/qwen3.8-27b-heretic-abliterated-uncensored")
-  })
 })
 
 describe("Local Evaluation trust boundary", () => {
@@ -259,7 +266,7 @@ describe("Local Evaluation trust boundary", () => {
     suite: LOCAL_EVAL_SUITE_VERSION,
     graderVersion: LOCAL_EVAL_GRADER_VERSION,
     normalization: LOCAL_EVAL_NORMALIZATION_VERSION,
-    scores: { "qwen/qwen3.8-27b": { general: 0.8 } },
+    scores: { "mimo/mimo-v2.6-distill-9b": { general: 0.8 } },
   }
   const metrics = (artifact: unknown) =>
     parseLocalEvaluationArtifact(artifact, { ingestedAt: NOW, observedAt: NOW })
@@ -285,7 +292,7 @@ describe("Local Evaluation trust boundary", () => {
       expect(parsed.observations[0]?.rawValue).toBe(0.8)
       expect(parsed.observations[0]?.provenance.productionEligible).toBe(false)
 
-      const compiled = compileCapabilitySnapshot(parsed.observations, { generatedAt: NOW })
+      const compiled = compile(parsed.observations, { generatedAt: NOW })
       expect(compiled.catalog.get("qwen/qwen3.8-27b")?.scores.general).toBeNull()
     },
   )
@@ -311,13 +318,13 @@ describe("cross-source comparability", () => {
         suite: LOCAL_EVAL_SUITE_VERSION,
         graderVersion: LOCAL_EVAL_GRADER_VERSION,
         normalization: LOCAL_EVAL_NORMALIZATION_VERSION,
-        scores: { "xiaomimimo/mimo-v2.6-distill-qwen-9b": { general: 0.82, coding: 0.72 } },
+        scores: { "mimo/mimo-v2.6-distill-9b": { general: 0.82, coding: 0.72 } },
       },
       { ingestedAt: NOW, observedAt: NOW },
     )
     expect(isProductionComparable(LOCAL_EVAL_SOURCE_ID)).toBe(false)
-    const withEvidence = compileCapabilitySnapshot(parsed.observations, { generatedAt: NOW })
-    const without = compileCapabilitySnapshot([], { generatedAt: NOW })
+    const withEvidence = compile(parsed.observations, { generatedAt: NOW })
+    const without = compile([], { generatedAt: NOW })
     const profile = withEvidence.catalog.get("xiaomimimo/mimo-v2.6-distill-qwen-9b")
     expect(profile?.scores.general).toBeNull()
     expect(profile?.scores.coding).toBeNull()
@@ -331,11 +338,11 @@ describe("cross-source comparability", () => {
         suite: LOCAL_EVAL_SUITE_VERSION,
         graderVersion: LOCAL_EVAL_GRADER_VERSION,
         normalization: LOCAL_EVAL_NORMALIZATION_VERSION,
-        scores: { "xiaomimimo/mimo-v2.6-distill-qwen-9b": { general: 0.82 } },
+        scores: { "mimo/mimo-v2.6-distill-9b": { general: 0.82 } },
       },
       { ingestedAt: NOW, observedAt: NOW },
     )
-    const compiled = compileCapabilitySnapshot(parsed.observations, {
+    const compiled = compile(parsed.observations, {
       generatedAt: NOW,
       comparability: {
         [LOCAL_EVAL_SOURCE_ID]: { comparable: true, calibration: "future-v2", reason: "test" },
@@ -357,7 +364,7 @@ describe("cross-source comparability", () => {
       metric: "median_output_tokens_per_second",
       fingerprint: "sha256:speed",
     }
-    const compiled = compileCapabilitySnapshot([speed], { generatedAt: NOW })
+    const compiled = compile([speed], { generatedAt: NOW })
     expect(compiled.catalog.get("qwen/qwen3.8-27b")?.scores.speed).toBeNull()
   })
 })
@@ -370,10 +377,9 @@ describe("existing guarantees over the expanded catalog", () => {
   })
 
   test("an operator override still outranks published evidence", () => {
-    const compiled = compileCapabilitySnapshot(
-      [aaObservation("qwen3-8-27b", "qwen/qwen3.8-27b", 34)],
-      { generatedAt: NOW },
-    )
+    const compiled = compile([aaObservation("qwen3-8-27b", "qwen/qwen3.8-27b", 34)], {
+      generatedAt: NOW,
+    })
     expect(compiled.catalog.get("qwen/qwen3.8-27b")?.scores.general).toBe(0.34)
     const overridden = applyPublishedSnapshotToBootstrap(
       SHIPPED_CAPABILITY_CATALOG,

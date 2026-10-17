@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import type { z } from "zod"
+import { z } from "zod"
 import { createCatalogLookup } from "./lookup"
 import {
   CAPABILITY_DIMENSIONS,
@@ -7,7 +7,7 @@ import {
   CatalogOverridesInput,
   HARD_FEATURES,
   type HardFactsInput,
-  type ProfileInput,
+  ProfileInput,
   type ProfileOverride,
   type ScoresInput,
   ShippedCatalogInput,
@@ -44,15 +44,18 @@ const HARD_KEYS = ["contextTokens", "maxOutputTokens", ...HARD_FEATURES] as cons
 export function buildCapabilityCatalog(
   shipped: unknown,
   overrides: unknown = null,
+  discovered: unknown = [],
 ): ModelCapabilityCatalog {
   const problems: string[] = []
   const base = parse(ShippedCatalogInput, shipped, "shipped", problems)
   const edits =
     overrides === null ? null : parse(CatalogOverridesInput, overrides, "overrides", problems)
+  const found = parse(z.array(ProfileInput), discovered, "discovered", problems)
   if (base === null || problems.length > 0) throw new CapabilityCatalogError(problems)
 
   const drafts = new Map<string, Draft>()
   addProfiles(drafts, base.profiles, "shipped", problems)
+  addProfiles(drafts, found ?? [], "discovered", problems)
   addProfiles(drafts, edits?.profiles ?? [], "operator", problems)
   applyOverrides(drafts, edits?.overrides ?? [], problems)
 

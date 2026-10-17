@@ -289,3 +289,10 @@ for local models and policy results:
   `agentic`, `speed`). Caveat: AA scores describe the public full-precision model; the local
   `qwen/qwen3.8-flash-next` route is a 2-bit IQ2_XS quant, and quant quality loss is **not modeled**,
   so its lead is an artifact of that identity decision, not a measured local result.
+
+**Superseded mechanism (local fleet source).** The local fleet is no longer shipped in the static
+catalog and `evidence/model-inventory/dockerlm.json` is no longer a catalog input: DockerLM's
+`GET /v1/models` (`meta.llamaswap`) is discovered by `bin/capabilities sync` and published as
+`discovered` profiles (see `docs/distpatch/capability-catalog.md`). The policy table above was
+measured when the same six models were still bootstrap profiles; the identities, hard facts and AA
+matches are unchanged, and the figures need a re-run against a live discovery sync to be refreshed.

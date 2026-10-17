@@ -7,6 +7,8 @@ import {
   type CapabilitySnapshotRow,
   capabilityObservations,
   capabilitySnapshots,
+  type RouteModelInventoryRow,
+  routeModelInventory,
 } from "../schema/capability-intelligence"
 
 /**
@@ -109,9 +111,23 @@ export interface CapabilityIntelligenceRepository {
 
   /** Snapshot history ordered newest first. */
   listSnapshots(limit?: number): Promise<CapabilitySnapshotRow[]>
+
+  /** Every reconciled route-model row, present and absent, ordered by `(source, route_model_id)`. */
+  listRouteModels(): Promise<RouteModelInventoryRow[]>
+
+  /**
+   * Upsert reconciled route-model rows in one transaction (`first_seen_at` is kept on conflict).
+   * Reconciliation itself (what is new, changed, absent) is pure and lives in the API layer.
+   */
+  saveRouteModels(rows: readonly RouteModelInventoryRow[]): Promise<void>
 }
 
-export type { CapabilityObservationRow, CapabilitySnapshotPublicationState, CapabilitySnapshotRow }
+export type {
+  CapabilityObservationRow,
+  CapabilitySnapshotPublicationState,
+  CapabilitySnapshotRow,
+  RouteModelInventoryRow,
+}
 
 const SNAPSHOT_PUBLISH_LOCK_CLASS = 0x726f_7574
 const SNAPSHOT_PUBLISH_LOCK_KEY = advisoryLockKey("capability_snapshot_publish")
@@ -404,5 +420,32 @@ export function createCapabilityIntelligenceRepository(
         .from(capabilitySnapshots)
         .orderBy(desc(capabilitySnapshots.generatedAt), desc(capabilitySnapshots.publishedAt))
         .limit(limit),
+
+    listRouteModels: () =>
+      db
+        .select()
+        .from(routeModelInventory)
+        .orderBy(asc(routeModelInventory.source), asc(routeModelInventory.routeModelId)),
+
+    saveRouteModels: async (rows) => {
+      if (rows.length === 0) return
+      await db.transaction(async (tx) => {
+        for (const row of rows) {
+          await tx
+            .insert(routeModelInventory)
+            .values(row)
+            .onConflictDoUpdate({
+              target: [routeModelInventory.source, routeModelInventory.routeModelId],
+              set: {
+                descriptor: row.descriptor,
+                tags: row.tags,
+                status: row.status,
+                lastSeenAt: row.lastSeenAt,
+                absentSince: row.absentSince,
+              },
+            })
+        }
+      })
+    },
   }
 }

@@ -1,9 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import type {
-  CapabilityIntelligenceRepository,
-  CapabilityObservationRow,
-  CapabilitySnapshotRow,
-} from "@multi-ai-router/db"
 import { redact, redactValue } from "../../../src/logging/redact"
 import {
   ARTIFICIAL_ANALYSIS_SOURCE_ID,
@@ -25,6 +20,8 @@ import {
   syncCapabilityIntelligence,
 } from "../../../src/services/capabilities"
 import { selectVirtualModel, virtualModels } from "../../../src/services/virtual-models"
+import { dockerlmDescriptors, storedRows } from "./fleet-fixture"
+import { createMemoryCapabilityRepo } from "./memory-repo"
 
 const NOW = new Date("2026-10-17T12:00:00.000Z")
 
@@ -148,189 +145,6 @@ const VALID_AA_PAGE_2 = {
       },
     },
   ],
-}
-
-function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository & {
-  observations: CapabilityObservationRow[]
-  snapshots: CapabilitySnapshotRow[]
-  failNextPublish: boolean
-  failNextRecord: boolean
-} {
-  const observations: CapabilityObservationRow[] = []
-  const snapshots: CapabilitySnapshotRow[] = []
-  let failNextPublish = false
-  let failNextRecord = false
-
-  return {
-    observations,
-    snapshots,
-    get failNextPublish() {
-      return failNextPublish
-    },
-    set failNextPublish(v: boolean) {
-      failNextPublish = v
-    },
-    get failNextRecord() {
-      return failNextRecord
-    },
-    set failNextRecord(v: boolean) {
-      failNextRecord = v
-    },
-
-    async recordObservations(rows) {
-      if (failNextRecord) {
-        failNextRecord = false
-        throw new Error("simulated database write failure")
-      }
-      let inserted = 0
-      let deduplicated = 0
-      for (const row of rows) {
-        const latest = [...observations]
-          .filter(
-            (o) =>
-              o.source === row.source &&
-              o.sourceModelId === row.sourceModelId &&
-              o.metric === row.metric,
-          )
-          .sort(
-            (a, b) =>
-              b.observedAt.getTime() - a.observedAt.getTime() ||
-              b.ingestedAt.getTime() - a.ingestedAt.getTime(),
-          )[0]
-        if (latest?.fingerprint === row.fingerprint) {
-          deduplicated += 1
-          continue
-        }
-        const existingIdx = observations.findIndex((o) => o.fingerprint === row.fingerprint)
-        if (existingIdx !== -1) {
-          const existing = observations[existingIdx]
-          if (existing) {
-            observations[existingIdx] = {
-              ...existing,
-              canonicalModelId: row.canonicalModelId,
-              observedAt: row.observedAt,
-              ingestedAt: row.ingestedAt,
-              sourceRef: row.sourceRef,
-              provenance: row.provenance,
-            }
-          }
-          inserted += 1
-          continue
-        }
-        observations.push({
-          id: crypto.randomUUID(),
-          ...row,
-        })
-        inserted += 1
-      }
-      return { inserted, deduplicated }
-    },
-
-    async resolveObservationIdentities(resolve) {
-      let updated = 0
-      for (let i = 0; i < observations.length; i++) {
-        const obs = observations[i]
-        if (!obs) continue
-        const next = resolve(obs.source, obs.sourceModelId, obs.provenance)
-        if (next !== obs.canonicalModelId) {
-          observations[i] = { ...obs, canonicalModelId: next }
-          updated += 1
-        }
-      }
-      return updated
-    },
-
-    async listObservations() {
-      return [...observations].sort(
-        (a, b) =>
-          a.observedAt.getTime() - b.observedAt.getTime() ||
-          a.ingestedAt.getTime() - b.ingestedAt.getTime() ||
-          (a.fingerprint < b.fingerprint ? -1 : a.fingerprint > b.fingerprint ? 1 : 0),
-      )
-    },
-
-    async listResolvedObservations() {
-      return (await this.listObservations()).filter((o) => o.canonicalModelId !== null)
-    },
-
-    async listUnresolvedObservations() {
-      return observations.filter((o) => o.canonicalModelId === null)
-    },
-
-    async saveSnapshot(snap) {
-      const idx = snapshots.findIndex((s) => s.revision === snap.revision)
-      if (idx !== -1) {
-        const current = snapshots[idx]
-        if (current && current.publicationState === "published") return current
-        const updated: CapabilitySnapshotRow = {
-          id: current?.id ?? crypto.randomUUID(),
-          revision: snap.revision,
-          generatedAt: snap.generatedAt,
-          publishedAt: snap.publishedAt ?? current?.publishedAt ?? null,
-          compilerVersion: snap.compilerVersion,
-          normalizerVersion: snap.normalizerVersion,
-          evidenceDigest: snap.evidenceDigest,
-          publicationState: snap.publicationState,
-          payload: snap.payload,
-          summary: snap.summary,
-        }
-        snapshots[idx] = updated
-        return updated
-      }
-      const created: CapabilitySnapshotRow = {
-        id: crypto.randomUUID(),
-        revision: snap.revision,
-        generatedAt: snap.generatedAt,
-        publishedAt: snap.publishedAt ?? null,
-        compilerVersion: snap.compilerVersion,
-        normalizerVersion: snap.normalizerVersion,
-        evidenceDigest: snap.evidenceDigest,
-        publicationState: snap.publicationState,
-        payload: snap.payload,
-        summary: snap.summary,
-      }
-      snapshots.push(created)
-      return created
-    },
-
-    async publishSnapshot(revision, publishedAt) {
-      if (failNextPublish) {
-        failNextPublish = false
-        throw new Error("simulated atomic publish transaction failure")
-      }
-      const targetIdx = snapshots.findIndex((s) => s.revision === revision)
-      if (targetIdx === -1) throw new Error(`unknown snapshot ${revision}`)
-      for (let i = 0; i < snapshots.length; i++) {
-        const s = snapshots[i]
-        if (s && s.publicationState === "published") {
-          snapshots[i] = { ...s, publicationState: "superseded" }
-        }
-      }
-      const target = snapshots[targetIdx]
-      if (!target) throw new Error(`unknown snapshot ${revision}`)
-      const published: CapabilitySnapshotRow = {
-        ...target,
-        publicationState: "published",
-        publishedAt,
-      }
-      snapshots[targetIdx] = published
-      return published
-    },
-
-    async getPublishedSnapshot() {
-      return snapshots.find((s) => s.publicationState === "published")
-    },
-
-    async getLatestSnapshot() {
-      return [...snapshots].sort((a, b) => b.generatedAt.getTime() - a.generatedAt.getTime())[0]
-    },
-
-    async listSnapshots(limit = 20) {
-      return [...snapshots]
-        .sort((a, b) => b.generatedAt.getTime() - a.generatedAt.getTime())
-        .slice(0, limit)
-    },
-  }
 }
 
 describe("external identity mapping", () => {
@@ -615,7 +429,7 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
 
     const compiled = compileCapabilitySnapshot(
       [...aaParsed.observations, ...localParsed.observations],
-      { generatedAt: NOW },
+      { generatedAt: NOW, routeModels: storedRows(dockerlmDescriptors()) },
     )
 
     const sonnet = compiled.catalog.get("anthropic/claude-sonnet-4-6")
@@ -653,7 +467,7 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     // Deterministic revision and digest across observation ordering
     const reversed = compileCapabilitySnapshot(
       [...localParsed.observations, ...aaParsed.observations].reverse(),
-      { generatedAt: NOW },
+      { generatedAt: NOW, routeModels: storedRows(dockerlmDescriptors()) },
     )
     expect(reversed.snapshot.revision).toBe(compiled.snapshot.revision)
     expect(reversed.snapshot.evidenceDigest).toBe(compiled.snapshot.evidenceDigest)
@@ -849,7 +663,7 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     ).toThrow(CapabilityCatalogError)
 
     // Routing determinism over controlled snapshot: no DB or HTTP calls on request path
-    const candidates = ["claude-sonnet-4-6", "gpt-5.5", "gpt-oss-120b", "mimo-v2.6-distill-9b"]
+    const candidates = ["claude-sonnet-4-6", "gpt-5.5", "gpt-oss-120b"]
     for (const descriptor of virtualModels()) {
       const d1 = selectVirtualModel(compiled.catalog, descriptor, candidates)
       const d2 = selectVirtualModel(compiled.catalog, descriptor, [...candidates].reverse())
@@ -859,18 +673,14 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
   })
 
   test("never scores a dimension when bootstrap hard feature is explicitly false", () => {
-    const customBootstrap = {
-      ...SHIPPED_CAPABILITY_CATALOG,
-      profiles: SHIPPED_CAPABILITY_CATALOG.profiles.map((p) =>
-        p.id === "xiaomimimo/mimo-v2.6-distill-qwen-9b"
-          ? { ...p, hard: { ...p.hard, toolUse: false } }
-          : p,
-      ),
+    const id = "openai/gpt-oss-120b"
+    const comparable = {
+      [LOCAL_EVAL_SOURCE_ID]: { comparable: true, calibration: "test-calibration", reason: "test" },
     }
-    const fakeToolObs: SourceObservation = {
+    const toolObs: SourceObservation = {
       source: LOCAL_EVAL_SOURCE_ID,
-      sourceModelId: "xiaomimimo/mimo-v2.6-distill-qwen-9b",
-      canonicalModelId: "xiaomimimo/mimo-v2.6-distill-qwen-9b",
+      sourceModelId: id,
+      canonicalModelId: id,
       metric: "local_eval_tool_use",
       rawValue: 0.9,
       unit: "score_0_1",
@@ -882,17 +692,24 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
       sourceRef: "repo:evidence/capability-calibration-v1.md",
       provenance: {},
     }
-    const compiled = compileCapabilitySnapshot([fakeToolObs], {
+    // Control: with comparability granted, the measurement does score.
+    const scored = compileCapabilitySnapshot([toolObs], {
+      generatedAt: NOW,
+      comparability: comparable,
+    })
+    expect(scored.catalog.get(id)?.scores.tool_use).toBe(0.9)
+
+    const customBootstrap = {
+      ...SHIPPED_CAPABILITY_CATALOG,
+      profiles: SHIPPED_CAPABILITY_CATALOG.profiles.map((p) =>
+        p.id === id ? { ...p, hard: { ...p.hard, toolUse: false } } : p,
+      ),
+    }
+    const compiled = compileCapabilitySnapshot([toolObs], {
       bootstrap: customBootstrap,
       generatedAt: NOW,
-      comparability: {
-        [LOCAL_EVAL_SOURCE_ID]: {
-          comparable: true,
-          calibration: "test-calibration",
-          reason: "test",
-        },
-      },
+      comparability: comparable,
     })
-    expect(compiled.catalog.get("xiaomimimo/mimo-v2.6-distill-qwen-9b")?.scores.tool_use).toBeNull()
+    expect(compiled.catalog.get(id)?.scores.tool_use).toBeNull()
   })
 })

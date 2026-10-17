@@ -4,6 +4,7 @@ import {
   index,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -140,6 +141,35 @@ export const capabilitySnapshots = pgTable(
     ),
   ],
 )
+
+export type RouteModelInventoryStatus = "present" | "absent"
+
+/**
+ * Reconciled route-model discovery state, one row per `(source, route_model_id)`: what a discovery
+ * source (`GET /v1/models` of a local OpenAI-compatible host, …) last told us a route serves.
+ *
+ * Provider-neutral: `descriptor` is the validated `RouteModelDescriptor` (semantic identity, base
+ * lineage, artifact, runtime, capabilities, provenance) and `tags` are the semantic classifications
+ * the *source* contributes (`local`). Rows are never deleted: a route that stops being listed turns
+ * `absent` (history retained, excluded from compilation), and an outage or malformed entry leaves
+ * the previous row untouched (last-known-good). Off the request path like the rest of this module.
+ */
+export const routeModelInventory = pgTable(
+  "route_model_inventory",
+  {
+    source: text("source").notNull(),
+    routeModelId: text("route_model_id").notNull(),
+    descriptor: jsonb("descriptor").$type<Record<string, unknown>>().notNull(),
+    tags: jsonb("tags").$type<string[]>().notNull(),
+    status: text("status").$type<RouteModelInventoryStatus>().notNull(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true, mode: "date" }).notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" }).notNull(),
+    absentSince: timestamp("absent_since", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [primaryKey({ columns: [table.source, table.routeModelId] })],
+)
+
+export type RouteModelInventoryRow = typeof routeModelInventory.$inferSelect
 
 export type CapabilityObservationRow = typeof capabilityObservations.$inferSelect
 export type NewCapabilityObservationRow = typeof capabilityObservations.$inferInsert

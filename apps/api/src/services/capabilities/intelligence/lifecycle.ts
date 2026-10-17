@@ -1,4 +1,4 @@
-import type { CapabilityIntelligenceRepository } from "@multi-ai-router/db"
+import type { CapabilityIntelligenceRepository, RouteModelInventoryRow } from "@multi-ai-router/db"
 import { redactValue } from "../../../logging/redact"
 import { createSnapshotRefresh } from "../../snapshots/refresh"
 import { readCapabilityOverridesFile } from "../load"
@@ -11,12 +11,45 @@ import {
   compileCapabilitySnapshot,
 } from "./compiler"
 import { createExternalIdentityResolver, type ExternalIdentityResolver } from "./identity"
+import {
+  RouteModelDescriptorSchema,
+  type RouteModelSource,
+  type RouteReconciliationSummary,
+  reconcileRouteModels,
+  type StoredRouteModel,
+} from "./route-discovery"
 import type {
   CapabilityEvidenceSource,
   CompiledCapabilitySnapshotPayload,
   EvidenceFetchMetadata,
   SourceObservation,
 } from "./types"
+
+export type RouteDiscoveryReport =
+  | { readonly source: string; readonly ok: true; readonly summary: RouteReconciliationSummary }
+  | { readonly source: string; readonly ok: false; readonly error: string }
+
+/** A stored row whose descriptor no longer validates is skipped, never fatal. */
+function storedRouteModelFromRow(row: RouteModelInventoryRow): StoredRouteModel[] {
+  const descriptor = RouteModelDescriptorSchema.safeParse(row.descriptor)
+  if (!descriptor.success) return []
+  return [
+    {
+      source: row.source,
+      routeModelId: row.routeModelId,
+      descriptor: descriptor.data,
+      tags: row.tags,
+      status: row.status,
+      firstSeenAt: row.firstSeenAt,
+      lastSeenAt: row.lastSeenAt,
+      absentSince: row.absentSince,
+    },
+  ]
+}
+
+function routeModelToRow(row: StoredRouteModel): RouteModelInventoryRow {
+  return { ...row, descriptor: row.descriptor, tags: [...row.tags] }
+}
 
 /**
  * Capability Intelligence Pipeline lifecycle and warm runtime catalog store.
@@ -37,6 +70,7 @@ import type {
 
 export interface CapabilitySyncResult {
   readonly sources: readonly EvidenceFetchMetadata[]
+  readonly routeDiscovery: readonly RouteDiscoveryReport[]
   readonly insertedObservations: number
   readonly deduplicatedObservations: number
   readonly identityUpdates: number
@@ -48,6 +82,8 @@ export interface CapabilitySyncResult {
 export interface SyncCapabilityIntelligenceOptions {
   readonly repository: CapabilityIntelligenceRepository
   readonly sources: readonly CapabilityEvidenceSource[]
+  /** Route-model discovery sources (`bin/capabilities sync`); never consulted by inference. */
+  readonly routeSources?: readonly RouteModelSource[]
   readonly bootstrap?: ShippedCatalogInput
   readonly identityResolver?: ExternalIdentityResolver
   readonly now?: () => Date
@@ -65,6 +101,23 @@ export async function syncCapabilityIntelligence(
 
   const metadataList: EvidenceFetchMetadata[] = []
   const fetchedObservations: SourceObservation[] = []
+
+  // 0. Route-model discovery (`GET /v1/models` of configured hosts). Independent of evidence
+  //    fetching and never fatal: an outage or unreadable listing leaves stored route state — and so
+  //    the catalog derived from it — exactly as it was (last-known-good), and is reported instead.
+  const routeDiscovery: RouteDiscoveryReport[] = []
+  for (const source of options.routeSources ?? []) {
+    try {
+      const result = await source.discover()
+      const stored = (await repository.listRouteModels()).flatMap(storedRouteModelFromRow)
+      const { rows, summary } = reconcileRouteModels(stored, source, result, now())
+      await repository.saveRouteModels(rows.map(routeModelToRow))
+      routeDiscovery.push({ source: source.id, ok: true, summary })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      routeDiscovery.push({ source: source.id, ok: false, error: redactValue(message) })
+    }
+  }
 
   // 1. Fetch & validate source payloads (fails closed before touching published state if any source fails)
   for (const source of sources) {
@@ -100,6 +153,7 @@ export async function syncCapabilityIntelligence(
 
   return {
     sources: metadataList,
+    routeDiscovery,
     insertedObservations: writeResult.inserted,
     deduplicatedObservations: writeResult.deduplicated,
     identityUpdates,
@@ -146,10 +200,12 @@ export async function compileAndPublishCapabilitySnapshot(
   }))
 
   // 4 & 5. Compile candidate snapshot and validate against bootstrap catalog
+  const routeModels = (await repository.listRouteModels()).flatMap(storedRouteModelFromRow)
   const compiled = compileCapabilitySnapshot(observations, {
     bootstrap: options.bootstrap,
     generatedAt: timestamp,
     staleDays: options.staleDays,
+    routeModels,
   })
 
   // Record candidate snapshot

@@ -288,6 +288,13 @@
       "when": 1792247667885,
       "tag": "0040_glossy_energizer",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792261187191,
+      "tag": "0041_route_model_inventory",
+      "breakpoints": true
     }
   ]
 }
