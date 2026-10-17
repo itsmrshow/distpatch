@@ -449,6 +449,10 @@ export function compileCapabilitySnapshot(
         compilerVersion: CAPABILITY_COMPILER_VERSION,
         normalizerVersion: CAPABILITY_NORMALIZER_VERSION,
         bootstrapRevision: bootstrap.revision,
+        // Content-address the retained-evidence digest too: a sync that only adds provenance-only
+        // observations (pricing, saturated raw audits) must produce a new immutable revision, not
+        // silently reuse the previously published snapshot.
+        evidenceDigest,
         models: Object.keys(models)
           .sort()
           .map((id) => ({

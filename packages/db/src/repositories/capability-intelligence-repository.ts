@@ -330,6 +330,27 @@ export function createCapabilityIntelligenceRepository(
           throw new Error(`Cannot publish rejected capability snapshot revision ${revision}`)
         }
 
+        // Stale-compile guard: under READ COMMITTED, an overlapping compile that read the older
+        // observation set can finish after a newer snapshot has already been published. Reject
+        // it rather than letting it regress the active catalog until another compilation runs.
+        const [currentPublished] = await tx
+          .select({
+            revision: capabilitySnapshots.revision,
+            generatedAt: capabilitySnapshots.generatedAt,
+          })
+          .from(capabilitySnapshots)
+          .where(eq(capabilitySnapshots.publicationState, "published"))
+          .limit(1)
+        if (
+          currentPublished !== undefined &&
+          currentPublished.revision !== revision &&
+          currentPublished.generatedAt.getTime() > target.generatedAt.getTime()
+        ) {
+          throw new Error(
+            `Refusing to publish snapshot ${revision} generated at ${target.generatedAt.toISOString()}: a newer snapshot ${currentPublished.revision} (${currentPublished.generatedAt.toISOString()}) is already published`,
+          )
+        }
+
         await tx
           .update(capabilitySnapshots)
           .set({ publicationState: "superseded" })

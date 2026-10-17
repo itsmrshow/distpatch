@@ -217,10 +217,17 @@ export async function runBun(source: string, options: RunBunOptions = {}): Promi
     )
     let timedOut = false
     let overflowed = false
+    // `--die-with-parent` + `--new-session` make the sandboxed PID the process-group leader
+    // inside its own session, so a negative-PID SIGKILL sweeps every forked grandchild rather
+    // than leaving a fork bomb's children running against the 10 s parent deadline.
     const killProc = () => {
       try {
-        proc.kill("SIGKILL")
-      } catch {}
+        process.kill(-proc.pid, "SIGKILL")
+      } catch {
+        try {
+          proc.kill("SIGKILL")
+        } catch {}
+      }
     }
     const timer = setTimeout(() => {
       timedOut = true
