@@ -5,6 +5,7 @@ import {
   CAPABILITY_DIMENSIONS,
   type CapabilityDimension,
   type CompiledCapabilitySnapshotPayload,
+  readCapabilityOverridesFile,
   SHIPPED_CAPABILITY_CATALOG,
   type ShippedCatalogInput,
 } from "../../src/services/capabilities"
@@ -31,8 +32,25 @@ async function loadPublishedSnapshot(): Promise<CompiledCapabilitySnapshotPayloa
   }
 }
 
+function operatorOverrides(): unknown {
+  const path = process.env.MODEL_CAPABILITY_OVERRIDES_PATH?.trim() || null
+  if (!path) return null
+  try {
+    return readCapabilityOverridesFile(path)
+  } catch (error) {
+    process.stderr.write(
+      `bin/calibrate matrix: refusing to run with invalid operator overrides (${(error as Error).message})\n`,
+    )
+    process.exit(1)
+  }
+}
+
 const published = await loadPublishedSnapshot()
-const base = applyPublishedSnapshotToBootstrap(SHIPPED_CAPABILITY_CATALOG, published, null)
+const base = applyPublishedSnapshotToBootstrap(
+  SHIPPED_CAPABILITY_CATALOG,
+  published,
+  operatorOverrides(),
+)
 const effectiveInput: ShippedCatalogInput = {
   schemaVersion: SHIPPED_CAPABILITY_CATALOG.schemaVersion,
   revision: SHIPPED_CAPABILITY_CATALOG.revision,

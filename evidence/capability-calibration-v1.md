@@ -224,6 +224,12 @@ From `bin/calibrate matrix` over catalog `sha256:90aa4da5246fb9b7ae05f1d9f455dcb
 
 ## 10. Sensitivity & M3 readiness classification
 
+> **Grader version gate (v1-bwrap):** `bin/calibrate score` now refuses any result file whose
+> `graderVersion` differs from the current grader (`distpatch-grader-v1-bwrap`, sandboxed). The
+> committed raw results predate the sandbox and carry no `graderVersion`, so re-normalizing them
+> via `bin/calibrate score` fails closed until every model is re-run; `scores.json` remains the
+> frozen v1 record that `distpatch-local-eval` evidence ingestion reads. Never mix grader versions.
+
 - **`auto-fast` — READY**: 100% coverage (`speed` + `general`) across all hosted models from
   Artificial Analysis, 0.2118 margin (`openai/gpt-oss-120b` over `openai/gpt-5.5`), zero flips at
   ±0.05 or ±0.10.

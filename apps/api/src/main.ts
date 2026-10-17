@@ -18,12 +18,11 @@ import { initSentry } from "./observability"
 import { ConfigDirError } from "./providers/claude-sdk/config-dir"
 import { adminAuthBootProblem } from "./services/admin-auth"
 import {
-  applyPublishedSnapshotToBootstrap,
   CapabilityCatalogError,
+  createCapabilityCatalogStore,
   loadCapabilityCatalog,
   type ModelCapabilityCatalog,
   readCapabilityOverridesFile,
-  SHIPPED_CAPABILITY_CATALOG,
 } from "./services/capabilities"
 import { createAccountProbe } from "./services/health/accountProbe"
 import { createClaudeCliProbe } from "./services/health/claudeCliProbe"
@@ -64,12 +63,51 @@ async function main(): Promise<void> {
   // row, and the row does not exist until migrations have run. Same fail-fast
   // UX as a malformed variable: the process exits before the listener opens.
   await assertAdminSignInConfigured(env, database, logger)
-  const capabilities = await resolveRuntimeCapabilityCatalog(
-    env,
-    database,
-    bootstrapCapabilities,
-    logger,
-  )
+
+  // One warm capability-catalog store for the process lifetime: request paths read its immutable
+  // in-memory snapshot, while a jittered timer (plus boot refresh) adopts newly published
+  // capability-intelligence snapshots without restarting. A failed refresh retains the held
+  // last-known-good catalog.
+  const overrides =
+    env.modelCapabilityOverridesPath === null
+      ? null
+      : readCapabilityOverridesFile(env.modelCapabilityOverridesPath)
+  const capabilityStore = createCapabilityCatalogStore({
+    initialCatalog: bootstrapCapabilities,
+    overrides,
+    loadPublishedSnapshot: async () => {
+      const published = await createCapabilityIntelligenceRepository(
+        database.db,
+      ).getPublishedSnapshot()
+      return published === undefined
+        ? undefined
+        : { revision: published.revision, payload: published.payload }
+    },
+    refreshIntervalMs: env.dataPlane.catalogRefreshSeconds * 1_000,
+    onRefreshError: (reason) =>
+      logger.warn("capability snapshot refresh failed — retaining last-known-good", {
+        component: "capabilities",
+        reason,
+      }),
+  })
+  // Awaited: the boot adoption of any published snapshot happens here, so the first request is
+  // served against the effective catalog. A first-time failure retains the bootstrap catalog but
+  // must not kill a deployment whose shared Postgres is briefly unavailable during a rolling boot.
+  try {
+    await capabilityStore.refresh()
+  } catch (error) {
+    logger.warn("published capability snapshot unavailable at boot — retaining bootstrap catalog", {
+      component: "capabilities",
+      reason: describeError(error, Number.POSITIVE_INFINITY),
+    })
+  }
+  const capabilities: ModelCapabilityCatalog = capabilityStore
+  logger.info("model capability catalog ready", {
+    component: "capabilities",
+    profiles: capabilities.list().length,
+    ...capabilities.revision(),
+    publishedSnapshotRevision: capabilityStore.publishedSnapshotRevision(),
+  })
 
   const runtime = buildRuntime({
     env,
@@ -87,6 +125,9 @@ async function main(): Promise<void> {
   // Before the listener opens: the catalog is loaded and the background writers are
   // running, so the first request is served against real state rather than an empty one.
   await runtime.start()
+  // Same staleness bound as the routing catalog / price book: a snapshot published by
+  // `bin/capabilities sync` (or by another replica) is adopted without a restart.
+  capabilityStore.start()
 
   // Resolves which `claude` binary the Agent SDK would spawn. Called once here so the winning rung
   // is in the boot log before the first request, then again per `/readyz`.
@@ -147,6 +188,7 @@ async function main(): Promise<void> {
         { name: "admission", run: () => runtime.closeAdmission() },
         { name: "readiness-grace", run: () => announceUnready(env, logger) },
         { name: "http-drain", run: () => drain(server, env, logger) },
+        { name: "capability-catalog-timer", run: () => capabilityStore.stop() },
         { name: "runtime", run: () => runtime.stop() },
         { name: "database", run: () => database.close() },
       ],
@@ -273,41 +315,6 @@ function loadBootCapabilityCatalog(env: Env, logger: Logger): ModelCapabilityCat
       process.exit(1)
     }
     throw error
-  }
-}
-
-async function resolveRuntimeCapabilityCatalog(
-  env: Env,
-  database: DatabaseHandle,
-  fallback: ModelCapabilityCatalog,
-  logger: Logger,
-): Promise<ModelCapabilityCatalog> {
-  try {
-    const published = await createCapabilityIntelligenceRepository(
-      database.db,
-    ).getPublishedSnapshot()
-    if (published === undefined) return fallback
-    const overrides =
-      env.modelCapabilityOverridesPath === null
-        ? null
-        : readCapabilityOverridesFile(env.modelCapabilityOverridesPath)
-    const layered = applyPublishedSnapshotToBootstrap(
-      SHIPPED_CAPABILITY_CATALOG,
-      published.payload,
-      overrides,
-    )
-    logger.info("published capability snapshot adopted", {
-      component: "capabilities",
-      snapshotRevision: published.revision,
-      ...layered.revision(),
-    })
-    return layered
-  } catch (error) {
-    logger.warn("failed to adopt published capability snapshot — retaining bootstrap catalog", {
-      component: "capabilities",
-      reason: describeError(error, Number.POSITIVE_INFINITY),
-    })
-    return fallback
   }
 }
 

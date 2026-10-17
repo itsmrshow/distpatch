@@ -147,9 +147,15 @@ const median = (xs: readonly number[]) => {
 
 /** Normalizes every result file and writes `scores.json` beside them (also printed). */
 async function score() {
-  const runs: (ModelRun & { route: string; speed?: SpeedSample[] })[] = []
+  const runs: (ModelRun & { route: string; graderVersion?: string; speed?: SpeedSample[] })[] = []
   for (const name of (await readdir(RESULTS)).filter((n) => n.endsWith(".json")).sort()) {
-    runs.push(await Bun.file(join(RESULTS, name)).json())
+    const run = await Bun.file(join(RESULTS, name)).json()
+    if (run.graderVersion !== GRADER_VERSION) {
+      throw new Error(
+        `${name}: grader version ${String(run.graderVersion ?? "(missing)")} does not match the current grader ${GRADER_VERSION}; re-run every model rather than mixing grader versions`,
+      )
+    }
+    runs.push(run)
   }
   const normalized = normalize(runs, CASES, SUITE_VERSION)
   const cases: Record<string, Record<string, number | null>> = {}
