@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm"
+import { and, asc, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm"
 import { advisoryLockKey } from "../advisory-lock"
 import type { Database } from "../client"
 import {
@@ -73,7 +73,11 @@ export interface CapabilityIntelligenceRepository {
    * is updated, so historical observations can be recompiled without re-fetching.
    */
   resolveObservationIdentities(
-    resolve: (source: string, sourceModelId: string) => string | null,
+    resolve: (
+      source: string,
+      sourceModelId: string,
+      provenance: Record<string, unknown>,
+    ) => string | null,
   ): Promise<number>
 
   /** All observations ordered deterministically (`observed_at` asc, `ingested_at` asc, `fingerprint` asc). */
@@ -106,7 +110,6 @@ export interface CapabilityIntelligenceRepository {
 
 export type { CapabilityObservationRow, CapabilitySnapshotPublicationState, CapabilitySnapshotRow }
 
-const BATCH_SIZE = 200
 const SNAPSHOT_PUBLISH_LOCK_CLASS = 0x726f_7574
 const SNAPSHOT_PUBLISH_LOCK_KEY = advisoryLockKey("capability_snapshot_publish")
 
@@ -117,34 +120,80 @@ export function createCapabilityIntelligenceRepository(
     recordObservations: async (rows) => {
       if (rows.length === 0) return { inserted: 0, deduplicated: 0 }
       let inserted = 0
+      let deduplicated = 0
       await db.transaction(async (tx) => {
-        for (let offset = 0; offset < rows.length; offset += BATCH_SIZE) {
-          const slice = rows.slice(offset, offset + BATCH_SIZE)
-          const written = await tx
-            .insert(capabilityObservations)
-            .values(
-              slice.map((row) => ({
-                source: row.source,
-                sourceModelId: row.sourceModelId,
+        for (const row of rows) {
+          // Find the latest stored observation for this (source, sourceModelId, metric)
+          const [latest] = await tx
+            .select({
+              id: capabilityObservations.id,
+              fingerprint: capabilityObservations.fingerprint,
+              observedAt: capabilityObservations.observedAt,
+              ingestedAt: capabilityObservations.ingestedAt,
+            })
+            .from(capabilityObservations)
+            .where(
+              and(
+                eq(capabilityObservations.source, row.source),
+                eq(capabilityObservations.sourceModelId, row.sourceModelId),
+                eq(capabilityObservations.metric, row.metric),
+              ),
+            )
+            .orderBy(
+              desc(capabilityObservations.observedAt),
+              desc(capabilityObservations.ingestedAt),
+              desc(capabilityObservations.fingerprint),
+            )
+            .limit(1)
+
+          if (latest?.fingerprint === row.fingerprint) {
+            // Latest reading already has this exact value/version — unchanged sync, deduplicate.
+            deduplicated += 1
+            continue
+          }
+
+          const [existingByFp] = await tx
+            .select({ id: capabilityObservations.id })
+            .from(capabilityObservations)
+            .where(eq(capabilityObservations.fingerprint, row.fingerprint))
+            .limit(1)
+
+          if (existingByFp !== undefined) {
+            // Value reverted to an earlier historical fingerprint after an intermediate value B:
+            // advance observedAt / ingestedAt on that row so the compiler sees the reverted value as latest.
+            await tx
+              .update(capabilityObservations)
+              .set({
                 canonicalModelId: row.canonicalModelId,
-                metric: row.metric,
-                rawValue: row.rawValue,
-                unit: row.unit,
-                benchmark: row.benchmark,
-                benchmarkVersion: row.benchmarkVersion,
-                fingerprint: row.fingerprint,
                 observedAt: row.observedAt,
                 ingestedAt: row.ingestedAt,
                 sourceRef: row.sourceRef,
                 provenance: row.provenance,
-              })),
-            )
-            .onConflictDoNothing({ target: capabilityObservations.fingerprint })
-            .returning({ id: capabilityObservations.id })
-          inserted += written.length
+              })
+              .where(eq(capabilityObservations.id, existingByFp.id))
+            inserted += 1
+            continue
+          }
+
+          await tx.insert(capabilityObservations).values({
+            source: row.source,
+            sourceModelId: row.sourceModelId,
+            canonicalModelId: row.canonicalModelId,
+            metric: row.metric,
+            rawValue: row.rawValue,
+            unit: row.unit,
+            benchmark: row.benchmark,
+            benchmarkVersion: row.benchmarkVersion,
+            fingerprint: row.fingerprint,
+            observedAt: row.observedAt,
+            ingestedAt: row.ingestedAt,
+            sourceRef: row.sourceRef,
+            provenance: row.provenance,
+          })
+          inserted += 1
         }
       })
-      return { inserted, deduplicated: rows.length - inserted }
+      return { inserted, deduplicated }
     },
 
     resolveObservationIdentities: async (resolve) => {
@@ -154,13 +203,14 @@ export function createCapabilityIntelligenceRepository(
           source: capabilityObservations.source,
           sourceModelId: capabilityObservations.sourceModelId,
           canonicalModelId: capabilityObservations.canonicalModelId,
+          provenance: capabilityObservations.provenance,
         })
         .from(capabilityObservations)
 
       let updated = 0
       await db.transaction(async (tx) => {
         for (const row of existing) {
-          const next = resolve(row.source, row.sourceModelId)
+          const next = resolve(row.source, row.sourceModelId, row.provenance)
           if (next === row.canonicalModelId) continue
           await tx
             .update(capabilityObservations)
@@ -204,46 +254,55 @@ export function createCapabilityIntelligenceRepository(
           asc(capabilityObservations.metric),
         ),
 
-    saveSnapshot: async (snapshot) => {
-      const existing = await db
-        .select()
-        .from(capabilitySnapshots)
-        .where(eq(capabilitySnapshots.revision, snapshot.revision))
-        .limit(1)
-      if (existing[0] !== undefined) {
-        if (existing[0].publicationState === "published") return existing[0]
-        const [updated] = await db
-          .update(capabilitySnapshots)
-          .set({
+    saveSnapshot: (snapshot) =>
+      db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
+        )
+        const existing = await tx
+          .select()
+          .from(capabilitySnapshots)
+          .where(eq(capabilitySnapshots.revision, snapshot.revision))
+          .limit(1)
+        if (existing[0] !== undefined) {
+          if (existing[0].publicationState === "published") return existing[0]
+          const [updated] = await tx
+            .update(capabilitySnapshots)
+            .set({
+              generatedAt: snapshot.generatedAt,
+              compilerVersion: snapshot.compilerVersion,
+              normalizerVersion: snapshot.normalizerVersion,
+              evidenceDigest: snapshot.evidenceDigest,
+              publicationState: snapshot.publicationState,
+              payload: snapshot.payload,
+              summary: snapshot.summary,
+              publishedAt: snapshot.publishedAt ?? existing[0].publishedAt,
+            })
+            .where(
+              and(
+                eq(capabilitySnapshots.revision, snapshot.revision),
+                ne(capabilitySnapshots.publicationState, "published"),
+              ),
+            )
+            .returning()
+          return (updated ?? existing[0]) as CapabilitySnapshotRow
+        }
+        const [created] = await tx
+          .insert(capabilitySnapshots)
+          .values({
+            revision: snapshot.revision,
             generatedAt: snapshot.generatedAt,
+            publishedAt: snapshot.publishedAt ?? null,
             compilerVersion: snapshot.compilerVersion,
             normalizerVersion: snapshot.normalizerVersion,
             evidenceDigest: snapshot.evidenceDigest,
             publicationState: snapshot.publicationState,
             payload: snapshot.payload,
             summary: snapshot.summary,
-            publishedAt: snapshot.publishedAt ?? existing[0].publishedAt,
           })
-          .where(eq(capabilitySnapshots.revision, snapshot.revision))
           .returning()
-        return updated as CapabilitySnapshotRow
-      }
-      const [created] = await db
-        .insert(capabilitySnapshots)
-        .values({
-          revision: snapshot.revision,
-          generatedAt: snapshot.generatedAt,
-          publishedAt: snapshot.publishedAt ?? null,
-          compilerVersion: snapshot.compilerVersion,
-          normalizerVersion: snapshot.normalizerVersion,
-          evidenceDigest: snapshot.evidenceDigest,
-          publicationState: snapshot.publicationState,
-          payload: snapshot.payload,
-          summary: snapshot.summary,
-        })
-        .returning()
-      return created as CapabilitySnapshotRow
-    },
+        return created as CapabilitySnapshotRow
+      }),
 
     publishSnapshot: (revision, publishedAt) =>
       db.transaction(async (tx) => {

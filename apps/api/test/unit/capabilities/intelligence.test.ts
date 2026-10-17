@@ -183,15 +183,47 @@ function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository & {
         throw new Error("simulated database write failure")
       }
       let inserted = 0
+      let deduplicated = 0
       for (const row of rows) {
-        if (observations.some((existing) => existing.fingerprint === row.fingerprint)) continue
+        const latest = [...observations]
+          .filter(
+            (o) =>
+              o.source === row.source &&
+              o.sourceModelId === row.sourceModelId &&
+              o.metric === row.metric,
+          )
+          .sort(
+            (a, b) =>
+              b.observedAt.getTime() - a.observedAt.getTime() ||
+              b.ingestedAt.getTime() - a.ingestedAt.getTime(),
+          )[0]
+        if (latest?.fingerprint === row.fingerprint) {
+          deduplicated += 1
+          continue
+        }
+        const existingIdx = observations.findIndex((o) => o.fingerprint === row.fingerprint)
+        if (existingIdx !== -1) {
+          const existing = observations[existingIdx]
+          if (existing) {
+            observations[existingIdx] = {
+              ...existing,
+              canonicalModelId: row.canonicalModelId,
+              observedAt: row.observedAt,
+              ingestedAt: row.ingestedAt,
+              sourceRef: row.sourceRef,
+              provenance: row.provenance,
+            }
+          }
+          inserted += 1
+          continue
+        }
         observations.push({
           id: crypto.randomUUID(),
           ...row,
         })
         inserted += 1
       }
-      return { inserted, deduplicated: rows.length - inserted }
+      return { inserted, deduplicated }
     },
 
     async resolveObservationIdentities(resolve) {
@@ -199,7 +231,7 @@ function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository & {
       for (let i = 0; i < observations.length; i++) {
         const obs = observations[i]
         if (!obs) continue
-        const next = resolve(obs.source, obs.sourceModelId)
+        const next = resolve(obs.source, obs.sourceModelId, obs.provenance)
         if (next !== obs.canonicalModelId) {
           observations[i] = { ...obs, canonicalModelId: next }
           updated += 1

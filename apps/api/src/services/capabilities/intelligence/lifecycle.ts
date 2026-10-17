@@ -77,8 +77,16 @@ export async function syncCapabilityIntelligence(
   const writeResult = await repository.recordObservations(fetchedObservations)
 
   // 3. Re-resolve identities across stored observations in case mappings were added
-  const identityUpdates = await repository.resolveObservationIdentities((src, extId) =>
-    resolver.resolve(src, extId),
+  const identityUpdates = await repository.resolveObservationIdentities(
+    (src, extId, provenance) => {
+      const candidates = [
+        extId,
+        typeof provenance.slug === "string" ? provenance.slug : "",
+        typeof provenance.openrouterApiId === "string" ? provenance.openrouterApiId : "",
+        typeof provenance.aaModelId === "string" ? provenance.aaModelId : "",
+      ].filter((c) => c.length > 0)
+      return resolver.resolve(src, candidates)
+    },
   )
 
   // 4–7. Compile candidate, validate, publish atomically, and notify warm store

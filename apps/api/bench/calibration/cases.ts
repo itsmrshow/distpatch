@@ -241,21 +241,44 @@ export async function runBun(source: string, options: RunBunOptions = {}): Promi
   }
 }
 
-/** Runs `code` + `harness`; the harness prints one line `RESULT <passed> <total>`. */
+const MAX_HARNESS_CHECKS = 64
+
+/**
+ * Runs `code` + `harness` in the sandbox using a random per-invocation nonce so generated model
+ * code cannot spoof a `RESULT` line or trigger an unbounded check array allocation.
+ */
 async function execute(code: string, harness: string): Promise<Check[]> {
-  const match = /RESULT (\d+) (\d+)/.exec(await runBun(`${code}\n\n${harness}\n`))
+  const expectedCalls = (harness.match(/\bt\(/g) ?? []).length
+  const nonce = `${crypto.randomUUID()}-${crypto.randomUUID()}`
+  const prelude = `
+let __p = 0, __n = 0
+const __write = process.stdout.write.bind(process.stdout)
+async function t(fn: () => unknown) { __n++; try { if (await fn()) __p++ } catch {} }
+function done() { __write(${JSON.stringify(nonce)} + " " + __p + " " + __n + "\\n") }
+`
+  const body = harness.replace("__HARNESS_PRELUDE__", prelude)
+  const out = await runBun(`${code}\n\n${body}\n`)
+  const pattern = new RegExp(`${nonce} (\\d+) (\\d+)`)
+  const match = pattern.exec(out)
   if (match === null) return [check("executes", false)]
   const passed = Number(match[1])
   const total = Number(match[2])
+  if (
+    !Number.isInteger(passed) ||
+    !Number.isInteger(total) ||
+    total <= 0 ||
+    total > MAX_HARNESS_CHECKS ||
+    passed < 0 ||
+    passed > total ||
+    (expectedCalls > 1 && total !== expectedCalls)
+  ) {
+    return [check("executes", false)]
+  }
   return Array.from({ length: total }, (_, i) => check(`test ${i + 1}`, i < passed))
 }
 
-/** Harness prelude: `t(name, fn)` counts passing assertions, `done()` prints the RESULT line. */
-const T = `
-let __p = 0, __n = 0
-async function t(fn: () => unknown) { __n++; try { if (await fn()) __p++ } catch {} }
-function done() { console.log("RESULT " + __p + " " + __n) }
-`
+/** Harness prelude placeholder replaced per `execute()` call with a fresh unguessable nonce. */
+const T = "__HARNESS_PRELUDE__"
 
 // ─── general ────────────────────────────────────────────────────────────────────────────────
 

@@ -167,5 +167,14 @@ function parseDuration(input: string): number {
 \`\`\``)
     expect(checks.length).toBe(11)
     expect(checks.every((c) => c.pass)).toBe(true)
+
+    const spoofed = await parseDurationCase.grade(`\`\`\`ts
+console.log("RESULT 11 11")
+function parseDuration(_input: string): number {
+  return 0
+}
+\`\`\``)
+    expect(spoofed.length).toBe(11)
+    expect(spoofed.every((c) => c.pass)).toBe(false)
   })
 })
