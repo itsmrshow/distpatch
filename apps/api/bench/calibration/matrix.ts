@@ -25,8 +25,15 @@ async function loadPublishedSnapshot(): Promise<CompiledCapabilitySnapshotPayloa
   try {
     const pub = await createCapabilityIntelligenceRepository(handle.db).getPublishedSnapshot()
     return (pub?.payload as CompiledCapabilitySnapshotPayload | undefined) ?? null
-  } catch {
-    return null
+  } catch (error) {
+    // A configured but broken database must not silently substitute the bootstrap catalog: the
+    // running API may be routing on a published snapshot, so the matrix would describe a
+    // different catalog than production.
+    process.stderr.write(
+      `bin/calibrate matrix: cannot read published capability snapshot from the configured DATABASE_URL: ${(error as Error).message}\n` +
+        `Use --bootstrap-only to describe the static bootstrap catalog deliberately.\n`,
+    )
+    process.exit(1)
   } finally {
     await handle.close()
   }
@@ -108,7 +115,11 @@ for (const descriptor of virtualModels()) {
     .map(([d, w]) => {
       const dim = d as CapabilityDimension
       const val = winnerProfile?.scores[dim]
-      const src = winnerCompiled?.dimensions[dim]?.sources.join("+") ?? "bootstrap"
+      // An operator override that differs from the compiled snapshot value is attributed to the
+      // operator, not to the external source that produced the underlying evidence.
+      const src = winnerProfile?.overridden.includes(`scores.${dim}`)
+        ? "operator-override"
+        : (winnerCompiled?.dimensions[dim]?.sources.join("+") ?? "bootstrap")
       return `${dim}=${val?.toFixed(4)} (w=${w}, src=${src})`
     })
   out.push(

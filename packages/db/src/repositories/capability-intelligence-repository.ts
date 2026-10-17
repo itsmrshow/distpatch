@@ -175,22 +175,31 @@ export function createCapabilityIntelligenceRepository(
             continue
           }
 
-          await tx.insert(capabilityObservations).values({
-            source: row.source,
-            sourceModelId: row.sourceModelId,
-            canonicalModelId: row.canonicalModelId,
-            metric: row.metric,
-            rawValue: row.rawValue,
-            unit: row.unit,
-            benchmark: row.benchmark,
-            benchmarkVersion: row.benchmarkVersion,
-            fingerprint: row.fingerprint,
-            observedAt: row.observedAt,
-            ingestedAt: row.ingestedAt,
-            sourceRef: row.sourceRef,
-            provenance: row.provenance,
-          })
-          inserted += 1
+          await tx
+            .insert(capabilityObservations)
+            .values({
+              source: row.source,
+              sourceModelId: row.sourceModelId,
+              canonicalModelId: row.canonicalModelId,
+              metric: row.metric,
+              rawValue: row.rawValue,
+              unit: row.unit,
+              benchmark: row.benchmark,
+              benchmarkVersion: row.benchmarkVersion,
+              fingerprint: row.fingerprint,
+              observedAt: row.observedAt,
+              ingestedAt: row.ingestedAt,
+              sourceRef: row.sourceRef,
+              provenance: row.provenance,
+            })
+            // Conflict-safe against a concurrent sync that inserted the same fingerprint after the
+            // preceding select: that process also advanced the timestamps, so deduplicate.
+            .onConflictDoNothing({ target: capabilityObservations.fingerprint })
+            .returning({ id: capabilityObservations.id })
+            .then((written) => {
+              if (written.length === 0) deduplicated += 1
+              else inserted += 1
+            })
         }
       })
       return { inserted, deduplicated }

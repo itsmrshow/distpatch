@@ -1351,6 +1351,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "capability_snapshots_single_published_idx": {
+          "name": "capability_snapshots_single_published_idx",
+          "columns": [
+            {
+              "expression": "publication_state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {},
+          "where": "capability_snapshots.publication_state = 'published'"
         }
       },
       "foreignKeys": {},
