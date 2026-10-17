@@ -27,7 +27,8 @@ const SECRET_FIELD_NAMES = new Set(
     "set-cookie",
     "x-api-key",
     "api-key",
-    // Google's API-key header, and the quota project it is billed against. The project id is not a
+    "aa_api_key",
+    "artificial_analysis_api_key",
     // credential, but it names a tenant, and a log line is the wrong place to learn one.
     "x-goog-api-key",
     "x-goog-user-project",
@@ -149,6 +150,8 @@ const SECRET_VALUE_PATTERNS: readonly ValuePattern[] = [
   // Cerebras. DeepSeek's keys are `sk-…` and are covered above; Mistral's and Together's carry no
   // prefix at all, so nothing here can recognize one — their field names are what protects them.
   { pattern: /\bcsk-[A-Za-z0-9-]{16,}/g, replacement: REDACTED },
+  // Artificial Analysis (`aa_…`).
+  { pattern: /\baa_[A-Za-z0-9_-]{12,}/g, replacement: REDACTED },
 ]
 
 const MAX_DEPTH = 4
