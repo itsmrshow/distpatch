@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { describeError, VERSION } from "@multi-ai-router/core"
 import {
   createAdminCredentialRepository,
+  createCapabilityIntelligenceRepository,
   createDatabase,
   type DatabaseHandle,
   runMigrations,
@@ -18,8 +19,10 @@ import { ConfigDirError } from "./providers/claude-sdk/config-dir"
 import { adminAuthBootProblem } from "./services/admin-auth"
 import {
   CapabilityCatalogError,
+  createCapabilityCatalogStore,
   loadCapabilityCatalog,
   type ModelCapabilityCatalog,
+  readCapabilityOverridesFile,
 } from "./services/capabilities"
 import { createAccountProbe } from "./services/health/accountProbe"
 import { createClaudeCliProbe } from "./services/health/claudeCliProbe"
@@ -45,9 +48,10 @@ async function main(): Promise<void> {
   warnOnInsecureSessionCookie(env, logger)
 
   // Malformed shipped data or operator overrides exit here, before migrations or the listener.
-  // Loaded exactly once: this snapshot — the revision logged here — is the one virtual-model
-  // resolution routes on, injected through composition; nothing re-reads the override file.
-  const capabilities = loadBootCapabilityCatalog(env, logger)
+  // Validates bootstrap + overrides upfront; after migrations, any published capability-intelligence
+  // snapshot in Postgres is layered beneath operator overrides (or falls back to this bootstrap
+  // catalog if none has been published or the read fails).
+  const bootstrapCapabilities = loadBootCapabilityCatalog(env, logger)
 
   // Migrations run before the listener opens. A failure exits non-zero rather than serving
   // traffic on a half-migrated schema — docs/idea/09-deployment.md#migrations.
@@ -59,6 +63,51 @@ async function main(): Promise<void> {
   // row, and the row does not exist until migrations have run. Same fail-fast
   // UX as a malformed variable: the process exits before the listener opens.
   await assertAdminSignInConfigured(env, database, logger)
+
+  // One warm capability-catalog store for the process lifetime: request paths read its immutable
+  // in-memory snapshot, while a jittered timer (plus boot refresh) adopts newly published
+  // capability-intelligence snapshots without restarting. A failed refresh retains the held
+  // last-known-good catalog.
+  const overrides =
+    env.modelCapabilityOverridesPath === null
+      ? null
+      : readCapabilityOverridesFile(env.modelCapabilityOverridesPath)
+  const capabilityStore = createCapabilityCatalogStore({
+    initialCatalog: bootstrapCapabilities,
+    overrides,
+    loadPublishedSnapshot: async () => {
+      const published = await createCapabilityIntelligenceRepository(
+        database.db,
+      ).getPublishedSnapshot()
+      return published === undefined
+        ? undefined
+        : { revision: published.revision, payload: published.payload }
+    },
+    refreshIntervalMs: env.dataPlane.catalogRefreshSeconds * 1_000,
+    onRefreshError: (reason) =>
+      logger.warn("capability snapshot refresh failed — retaining last-known-good", {
+        component: "capabilities",
+        reason,
+      }),
+  })
+  // Awaited: the boot adoption of any published snapshot happens here, so the first request is
+  // served against the effective catalog. A first-time failure retains the bootstrap catalog but
+  // must not kill a deployment whose shared Postgres is briefly unavailable during a rolling boot.
+  try {
+    await capabilityStore.refresh()
+  } catch (error) {
+    logger.warn("published capability snapshot unavailable at boot — retaining bootstrap catalog", {
+      component: "capabilities",
+      reason: describeError(error, Number.POSITIVE_INFINITY),
+    })
+  }
+  const capabilities: ModelCapabilityCatalog = capabilityStore
+  logger.info("model capability catalog ready", {
+    component: "capabilities",
+    profiles: capabilities.list().length,
+    ...capabilities.revision(),
+    publishedSnapshotRevision: capabilityStore.publishedSnapshotRevision(),
+  })
 
   const runtime = buildRuntime({
     env,
@@ -76,6 +125,9 @@ async function main(): Promise<void> {
   // Before the listener opens: the catalog is loaded and the background writers are
   // running, so the first request is served against real state rather than an empty one.
   await runtime.start()
+  // Same staleness bound as the routing catalog / price book: a snapshot published by
+  // `bin/capabilities sync` (or by another replica) is adopted without a restart.
+  capabilityStore.start()
 
   // Resolves which `claude` binary the Agent SDK would spawn. Called once here so the winning rung
   // is in the boot log before the first request, then again per `/readyz`.
@@ -136,6 +188,7 @@ async function main(): Promise<void> {
         { name: "admission", run: () => runtime.closeAdmission() },
         { name: "readiness-grace", run: () => announceUnready(env, logger) },
         { name: "http-drain", run: () => drain(server, env, logger) },
+        { name: "capability-catalog-timer", run: () => capabilityStore.stop() },
         { name: "runtime", run: () => runtime.stop() },
         { name: "database", run: () => database.close() },
       ],

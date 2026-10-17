@@ -1,0 +1,491 @@
+{
+  "suite": "distpatch-calibration-v1",
+  "graderVersion": "distpatch-grader-v1-pre-sandbox",
+  "profileId": "anthropic/claude-sonnet-4-6",
+  "route": "claude-cli",
+  "wireModel": "claude-sonnet-4-6",
+  "recordedAt": "2026-10-17T13:58:13.649Z",
+  "cases": [
+    {
+      "id": "tool_use.select-args",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "only convert_currency",
+          "pass": true
+        },
+        {
+          "name": "amount 250",
+          "pass": true
+        },
+        {
+          "name": "EUR\u2192JPY",
+          "pass": true
+        },
+        {
+          "name": "uses result",
+          "pass": true
+        }
+      ],
+      "latencyMs": 5784,
+      "transcript": {
+        "calls": [
+          {
+            "name": "convert_currency",
+            "args": {
+              "amount": 250,
+              "from": "EUR",
+              "to": "JPY"
+            }
+          }
+        ],
+        "final": "**250 euros = \u00a540,712.50 Japanese yen** at today's rate (October 17, 2026).",
+        "turns": 2
+      },
+      "state": null
+    },
+    {
+      "id": "tool_use.two-calls",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "weather for Oslo",
+          "pass": true
+        },
+        {
+          "name": "weather for Lima",
+          "pass": true
+        },
+        {
+          "name": "no unrelated tools",
+          "pass": true
+        },
+        {
+          "name": "answer Lima warmer",
+          "pass": true
+        }
+      ],
+      "latencyMs": 7457,
+      "transcript": {
+        "calls": [
+          {
+            "name": "get_weather",
+            "args": {
+              "city": "Oslo"
+            }
+          },
+          {
+            "name": "get_weather",
+            "args": {
+              "city": "Lima"
+            }
+          }
+        ],
+        "final": "Here are the current temperatures:\n\n| City | Temperature |\n|------|------------|\n| \ud83c\uddf3\ud83c\uddf4 Oslo | **-3\u00b0C (27\u00b0F)** |\n| \ud83c\uddf5\ud83c\uddea Lima | **19\u00b0C (66\u00b0F)** |\n\n**Lima is warmer** \u2014 by a significant 22\u00b0C! Oslo is currently below freezing, while Lima is enjoying a mild, pleasant temperature.",
+        "turns": 3
+      },
+      "state": null
+    },
+    {
+      "id": "tool_use.date-args",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "search_flights called",
+          "pass": true
+        },
+        {
+          "name": "IATA args",
+          "pass": true
+        },
+        {
+          "name": "date format",
+          "pass": true
+        },
+        {
+          "name": "answer",
+          "pass": true
+        }
+      ],
+      "latencyMs": 6809,
+      "transcript": {
+        "calls": [
+          {
+            "name": "search_flights",
+            "args": {
+              "origin": "LIS",
+              "destination": "BER",
+              "date": "2026-07-09"
+            }
+          }
+        ],
+        "final": "Here are the results for **Lisbon (LIS) \u2192 Berlin (BER)** on **July 9th, 2026**:\n\n| Flight ID | Price (EUR) |\n|-----------|-------------|\n| XY123     | \u20ac89         |\n| QZ808     | \u20ac142        |\n\n\u2705 **Cheapest Flight:**\n- **Flight ID:** `XY123`\n- **Price:** **\u20ac89**\n\nThat's a saving of \u20ac53 compared to the next available option!",
+        "turns": 2
+      },
+      "state": null
+    },
+    {
+      "id": "tool_use.no-tool",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "no tool call",
+          "pass": true
+        },
+        {
+          "name": "51",
+          "pass": true
+        }
+      ],
+      "latencyMs": 2606,
+      "transcript": {
+        "calls": [],
+        "final": "51",
+        "turns": 1
+      },
+      "state": null
+    },
+    {
+      "id": "tool_use.chained",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "searched first",
+          "pass": true
+        },
+        {
+          "name": "converted cheapest price",
+          "pass": true
+        },
+        {
+          "name": "EUR\u2192USD",
+          "pass": true
+        },
+        {
+          "name": "answer 96.12",
+          "pass": true
+        }
+      ],
+      "latencyMs": 15014,
+      "transcript": {
+        "calls": [
+          {
+            "name": "search_flights",
+            "args": {
+              "origin": "LIS",
+              "destination": "BER",
+              "date": "2026-07-09"
+            }
+          },
+          {
+            "name": "convert_currency",
+            "args": {
+              "amount": 89,
+              "from": "EUR",
+              "to": "USD"
+            }
+          }
+        ],
+        "final": "Here's the summary:\n\n| Flight | Price (EUR) | Price (USD) |\n|--------|------------|------------|\n| **XY123** \u2708\ufe0f *(cheapest)* | \u20ac89 | **$96.12** |\n| QZ808 | \u20ac142 | \u2014 |\n\nThe cheapest flight from **LIS \u2192 BER on July 9, 2026** is flight **XY123**, costing **\u20ac89 (~$96.12 USD)** at today's exchange rate.",
+        "turns": 3
+      },
+      "state": null
+    },
+    {
+      "id": "tool_use.strict-args",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "single create_event",
+          "pass": true
+        },
+        {
+          "name": "title",
+          "pass": true
+        },
+        {
+          "name": "start",
+          "pass": true
+        },
+        {
+          "name": "duration 90",
+          "pass": true
+        },
+        {
+          "name": "attendees",
+          "pass": true
+        }
+      ],
+      "latencyMs": 7043,
+      "transcript": {
+        "calls": [
+          {
+            "name": "create_event",
+            "args": {
+              "title": "Design review",
+              "start": "2026-11-03T15:30:00Z",
+              "duration_minutes": 90,
+              "attendees": ["Ana", "Ben"]
+            }
+          }
+        ],
+        "final": "Done! Here's a summary of what was booked:\n\n- \ud83d\udcc5 **Date:** Tuesday, 3 November 2026\n- \ud83d\udd5e **Time:** 3:30 PM \u2013 5:00 PM UTC\n- \u23f1\ufe0f **Duration:** 1.5 hours\n- \ud83d\udc65 **Attendees:** Ana & Ben\n- \ud83d\udccc **Event:** Design review",
+        "turns": 2
+      },
+      "state": null
+    },
+    {
+      "id": "tool_use.select-args",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "only convert_currency",
+          "pass": true
+        },
+        {
+          "name": "amount 250",
+          "pass": true
+        },
+        {
+          "name": "EUR\u2192JPY",
+          "pass": true
+        },
+        {
+          "name": "uses result",
+          "pass": true
+        }
+      ],
+      "latencyMs": 7171,
+      "transcript": {
+        "calls": [
+          {
+            "name": "convert_currency",
+            "args": {
+              "amount": 250,
+              "from": "EUR",
+              "to": "JPY"
+            }
+          }
+        ],
+        "final": "**250 euros (EUR) = \u00a540,712.50 Japanese yen (JPY)** today (October 17, 2026).\n\nThat works out to an exchange rate of approximately **\u00a5162.85 per euro**.",
+        "turns": 2
+      },
+      "state": null
+    },
+    {
+      "id": "tool_use.two-calls",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "weather for Oslo",
+          "pass": true
+        },
+        {
+          "name": "weather for Lima",
+          "pass": true
+        },
+        {
+          "name": "no unrelated tools",
+          "pass": true
+        },
+        {
+          "name": "answer Lima warmer",
+          "pass": true
+        }
+      ],
+      "latencyMs": 6316,
+      "transcript": {
+        "calls": [
+          {
+            "name": "get_weather",
+            "args": {
+              "city": "Oslo"
+            }
+          },
+          {
+            "name": "get_weather",
+            "args": {
+              "city": "Lima"
+            }
+          }
+        ],
+        "final": "Here are the current temperatures:\n\n| City | Temperature |\n|------|------------|\n| \ud83c\uddf3\ud83c\uddf4 Oslo | -3\u00b0C (27\u00b0F) |\n| \ud83c\uddf5\ud83c\uddea Lima | 19\u00b0C (66\u00b0F) |\n\n**Lima is warmer** \u2014 by a significant margin of **22\u00b0C (40\u00b0F)**! Oslo is currently below freezing, while Lima is enjoying a mild and pleasant day.",
+        "turns": 3
+      },
+      "state": null
+    },
+    {
+      "id": "tool_use.date-args",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "search_flights called",
+          "pass": true
+        },
+        {
+          "name": "IATA args",
+          "pass": true
+        },
+        {
+          "name": "date format",
+          "pass": true
+        },
+        {
+          "name": "answer",
+          "pass": true
+        }
+      ],
+      "latencyMs": 6292,
+      "transcript": {
+        "calls": [
+          {
+            "name": "search_flights",
+            "args": {
+              "origin": "LIS",
+              "destination": "BER",
+              "date": "2026-07-09"
+            }
+          }
+        ],
+        "final": "Here are the results for **Lisbon (LIS) \u2192 Berlin (BER)** on **July 9th, 2026**:\n\n| Flight ID | Price (EUR) |\n|-----------|-------------|\n| XY123     | \u20ac89         |\n| QZ808     | \u20ac142        |\n\n\u2705 **The cheapest flight is `XY123` at just \u20ac89!** That's \u20ac53 cheaper than the next available option. Grab it while you can! \ud83d\udeeb",
+        "turns": 2
+      },
+      "state": null
+    },
+    {
+      "id": "tool_use.no-tool",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "no tool call",
+          "pass": true
+        },
+        {
+          "name": "51",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4779,
+      "transcript": {
+        "calls": [],
+        "final": "51",
+        "turns": 1
+      },
+      "state": null
+    },
+    {
+      "id": "tool_use.chained",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "searched first",
+          "pass": true
+        },
+        {
+          "name": "converted cheapest price",
+          "pass": true
+        },
+        {
+          "name": "EUR\u2192USD",
+          "pass": true
+        },
+        {
+          "name": "answer 96.12",
+          "pass": true
+        }
+      ],
+      "latencyMs": 9692,
+      "transcript": {
+        "calls": [
+          {
+            "name": "search_flights",
+            "args": {
+              "origin": "LIS",
+              "destination": "BER",
+              "date": "2026-07-09"
+            }
+          },
+          {
+            "name": "convert_currency",
+            "args": {
+              "amount": 89,
+              "from": "EUR",
+              "to": "USD"
+            }
+          }
+        ],
+        "final": "Here's the summary:\n\n| Flight | Price (EUR) | Price (USD) |\n|--------|-------------|-------------|\n| **XY123** \u2708\ufe0f | \u20ac89.00 | **$96.12** |\n| QZ808 | \u20ac142.00 | \u2014 |\n\nThe **cheapest flight from Lisbon (LIS) to Berlin (BER) on July 9, 2026** is flight **XY123**, costing **\u20ac89 (~$96.12 USD)** at today's exchange rate.",
+        "turns": 3
+      },
+      "state": null
+    },
+    {
+      "id": "tool_use.strict-args",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "single create_event",
+          "pass": true
+        },
+        {
+          "name": "title",
+          "pass": true
+        },
+        {
+          "name": "start",
+          "pass": true
+        },
+        {
+          "name": "duration 90",
+          "pass": true
+        },
+        {
+          "name": "attendees",
+          "pass": true
+        }
+      ],
+      "latencyMs": 8201,
+      "transcript": {
+        "calls": [
+          {
+            "name": "create_event",
+            "args": {
+              "title": "Design review",
+              "start": "2026-11-03T15:30:00Z",
+              "duration_minutes": 90,
+              "attendees": ["Ana", "Ben"]
+            }
+          }
+        ],
+        "final": "Done! Here's a summary of what was booked:\n\n- \ud83d\udcc5 **Date:** Tuesday, 3 November 2026\n- \ud83d\udd5e **Time:** 3:30 PM \u2013 5:00 PM UTC\n- \u23f1\ufe0f **Duration:** 1.5 hours\n- \ud83d\udc65 **Attendees:** Ana & Ben",
+        "turns": 2
+      },
+      "state": null
+    }
+  ],
+  "speed": []
+}

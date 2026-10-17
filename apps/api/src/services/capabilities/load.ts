@@ -12,11 +12,11 @@ import type { ModelCapabilityCatalog } from "./types"
 export function loadCapabilityCatalog(overridesPath: string | null): ModelCapabilityCatalog {
   return buildCapabilityCatalog(
     SHIPPED_CAPABILITY_CATALOG,
-    overridesPath === null ? null : readJson(overridesPath),
+    overridesPath === null ? null : readCapabilityOverridesFile(overridesPath),
   )
 }
 
-function readJson(path: string): unknown {
+export function readCapabilityOverridesFile(path: string): unknown {
   let text: string
   try {
     text = readFileSync(path, "utf8")

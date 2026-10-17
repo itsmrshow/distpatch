@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import { getTableConfig, type PgTable } from "drizzle-orm/pg-core"
-import { apiKeys, sessions, usageDaily, usageRecords } from "../../src/schema/index"
+import {
+  apiKeys,
+  capabilityObservations,
+  capabilitySnapshots,
+  sessions,
+  usageDaily,
+  usageRecords,
+} from "../../src/schema/index"
 
 /** Index columns are columns or raw SQL; only the former carry a name. */
 function nameOf(target: object): string | undefined {
@@ -122,5 +129,20 @@ describe("the indexes the access patterns actually need", () => {
     const index = indexShape(usageDaily, "usage_daily_grain_key")
     expect(index.columns[3]).toContain("coalesce")
     expect(index.columns[3]).toContain("pool_id")
+  })
+
+  test("capability observations and snapshots index compilation and publication lookups", () => {
+    expect(
+      indexShape(capabilityObservations, "capability_observations_canonical_metric_idx").columns,
+    ).toEqual(["canonical_model_id", "metric", "observed_at"])
+    expect(
+      indexShape(capabilityObservations, "capability_observations_source_model_idx").columns,
+    ).toEqual(["source", "source_model_id", "observed_at"])
+    const singlePub = indexShape(capabilitySnapshots, "capability_snapshots_single_published_idx")
+    expect(singlePub.unique).toBe(true)
+    expect(singlePub.columns).toEqual(["publication_state"])
+    expect(
+      indexShape(capabilitySnapshots, "capability_snapshots_state_published_idx").columns,
+    ).toEqual(["publication_state", "published_at", "generated_at"])
   })
 })

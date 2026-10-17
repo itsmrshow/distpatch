@@ -44,16 +44,15 @@ describe("shipped catalog", () => {
     expect(catalog.revision().shipped).toBe(SHIPPED_CAPABILITY_CATALOG.revision)
   })
 
-  test("represents the local/free/dockerlm tags on the DockerLM model", () => {
-    const profile = buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG).resolve(
-      "mimo-v2.6-distill-9b",
-    )
-    expect(profile?.tags).toEqual(["dockerlm", "free", "local"])
-  })
-
-  test("ships no invented preference score", () => {
+  test("ships no preference scores in the static bootstrap table; scores enter via published snapshot or override", () => {
     for (const profile of buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG).list()) {
-      for (const dimension of CAPABILITY_DIMENSIONS) expect(profile.scores[dimension]).toBeNull()
+      for (const dimension of CAPABILITY_DIMENSIONS) {
+        expect([profile.id, dimension, profile.scores[dimension]]).toEqual([
+          profile.id,
+          dimension,
+          null,
+        ])
+      }
     }
   })
 })

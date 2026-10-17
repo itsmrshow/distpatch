@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { createLogger } from "../../src/logging/logger"
-import { buildCapabilityCatalog } from "../../src/services/capabilities"
+import { buildCapabilityCatalog, SHIPPED_CAPABILITY_CATALOG } from "../../src/services/capabilities"
 import * as accountSelection from "../../src/services/routing/select"
 import { isVirtualModelName } from "../../src/services/virtual-models"
 import { account, jsonResponse } from "../unit/dataplane/fixtures"
@@ -325,6 +325,25 @@ describe("B: the bytes on the wire", () => {
     await app.request("/v1/messages", post(MESSAGE, bearer()))
 
     expect(upstream.calls[0]?.body).toBe(MESSAGE)
+  })
+
+  test("fixed, with the calibrated shipped catalog: a scored model's request is untouched", async () => {
+    // A real score must never pull a fixed request toward a "better" model: gpt-oss-120b is
+    // scored and outranked under every policy, yet a request naming it reaches it byte for byte.
+    const seen = watchAccountSelection()
+    const { app, upstream } = harness({
+      accounts: [anthropicAccount("acct-1", ["gpt-oss-120b", "claude-sonnet-4-6"])],
+      responses: [() => jsonResponse(200, {})],
+      capabilities: buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG),
+    })
+
+    const body = message("gpt-oss-120b")
+    const res = await app.request("/v1/messages", post(body, bearer()))
+    await res.text()
+
+    expect(res.status).toBe(200)
+    expect(seen).toEqual(["gpt-oss-120b"])
+    expect(upstream.calls[0]?.body).toBe(body)
   })
 
   test("fixed, aliased: only the alias rewrite, exactly as before", async () => {

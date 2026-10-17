@@ -94,13 +94,15 @@ is not tied to any provider or `premium` tag; `auto-local` is only as truthful a
 on capability profiles (the DockerLM seed carries it); `auto-task` rejects a model whose tool use is
 unknown (`unknownHardFacts: reject`).
 
-### Unknown capability data
+### Unknown capability data and evidence layering
 
-Scores are not invented. The shipped profiles carry no preference scores, so until an operator
-supplies measured scores (override file) every eligible candidate scores `0` with coverage `0`
-and the M2B total order decides: policy preference (none) → canonical id → candidate name. That is
-deterministic and documented, not a quality judgement. Synthetic scores appear only in tests.
-
+Scores are not invented. The static bootstrap catalog (`shipped.ts`) ships verified hard facts and
+`null` preference scores; preference scores enter through the off-request-path Capability
+Intelligence Pipeline ([capability-catalog.md](capability-catalog.md),
+[`evidence/capability-calibration-v1.md`](../../evidence/capability-calibration-v1.md)) or
+operator overrides (`MODEL_CAPABILITY_OVERRIDES_PATH`). Unknown dimensions (`null`) earn no credit
+in M2B ranking (`coverage < 1.0`). Where scores tie, the M2B total order decides: policy
+preference (none) → canonical id → candidate name. Synthetic scores appear only in tests.
 ### Request-derived requirements
 
 None in M2C. The body scanner reads only the model and a bounded conversation prefix; there is no

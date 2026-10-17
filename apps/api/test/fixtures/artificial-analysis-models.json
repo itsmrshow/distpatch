@@ -1,0 +1,124 @@
+{
+  "tier": "free",
+  "intelligence_index_version": 4.1,
+  "pagination": {
+    "page": 1,
+    "page_size": 200,
+    "total_pages": 1,
+    "has_more": false
+  },
+  "data": [
+    {
+      "id": "aa-fixture-sonnet-46",
+      "name": "Claude 4.6 Sonnet",
+      "slug": "claude-sonnet-4-6",
+      "release_date": "2026-02-17",
+      "model_creator": {
+        "id": "aa-creator-anthropic",
+        "name": "Anthropic"
+      },
+      "evaluations": {
+        "artificial_analysis_intelligence_index": 64.2,
+        "artificial_analysis_coding_index": 61.5,
+        "artificial_analysis_agentic_index": 68.0,
+        "artificial_analysis_finance_and_accounting_index": 52.1,
+        "artificial_analysis_strategy_and_ops_index": 49.0,
+        "artificial_analysis_legal_index": 55.3,
+        "artificial_analysis_healthcare_and_medical_index": 58.1,
+        "artificial_analysis_engineering_index": 59.4,
+        "artificial_analysis_economics_index": 50.2
+      },
+      "artificial_analysis_intelligence_index_cost": {
+        "total_cost": 420.5,
+        "cost_per_task": {
+          "total_cost": 0.45
+        }
+      },
+      "pricing": {
+        "price_1m_input_tokens": 3.0,
+        "price_1m_output_tokens": 15.0,
+        "price_1m_cache_hit_tokens": 0.3,
+        "price_1m_cache_write_tokens": 3.75
+      },
+      "performance": {
+        "median_output_tokens_per_second": 92.4,
+        "median_time_to_first_token_seconds": 0.85,
+        "median_time_to_first_answer_token_seconds": 1.2,
+        "median_end_to_end_response_time_seconds": 6.4
+      }
+    },
+    {
+      "id": "aa-fixture-gpt-oss-120b",
+      "name": "gpt-oss-120B (high)",
+      "slug": "gpt-oss-120b",
+      "release_date": "2025-08-05",
+      "model_creator": {
+        "id": "aa-creator-openai",
+        "name": "OpenAI"
+      },
+      "evaluations": {
+        "artificial_analysis_intelligence_index": 52.8,
+        "artificial_analysis_coding_index": 49.0,
+        "artificial_analysis_agentic_index": 51.2,
+        "artificial_analysis_finance_and_accounting_index": 38.4,
+        "artificial_analysis_strategy_and_ops_index": 35.1,
+        "artificial_analysis_legal_index": 40.0,
+        "artificial_analysis_healthcare_and_medical_index": 42.3,
+        "artificial_analysis_engineering_index": 46.8,
+        "artificial_analysis_economics_index": 39.5
+      },
+      "artificial_analysis_intelligence_index_cost": {
+        "total_cost": 55.2,
+        "cost_per_task": {
+          "total_cost": 0.06
+        }
+      },
+      "pricing": {
+        "price_1m_input_tokens": 0.15,
+        "price_1m_output_tokens": 0.6,
+        "price_1m_cache_hit_tokens": null,
+        "price_1m_cache_write_tokens": null
+      },
+      "performance": {
+        "median_output_tokens_per_second": 280.0,
+        "median_time_to_first_token_seconds": 0.45,
+        "median_time_to_first_answer_token_seconds": 2.1,
+        "median_end_to_end_response_time_seconds": 3.9
+      }
+    },
+    {
+      "id": "aa-fixture-unmapped-model",
+      "name": "Unmapped Fixture 32B",
+      "slug": "unmapped-fixture-32b",
+      "release_date": "2026-01-15",
+      "model_creator": {
+        "id": "aa-creator-other",
+        "name": "Other"
+      },
+      "evaluations": {
+        "artificial_analysis_intelligence_index": 44.0,
+        "artificial_analysis_coding_index": 39.0,
+        "artificial_analysis_agentic_index": 41.0,
+        "artificial_analysis_finance_and_accounting_index": null,
+        "artificial_analysis_strategy_and_ops_index": null,
+        "artificial_analysis_legal_index": null,
+        "artificial_analysis_healthcare_and_medical_index": null,
+        "artificial_analysis_engineering_index": null,
+        "artificial_analysis_economics_index": null
+      },
+      "artificial_analysis_intelligence_index_cost": null,
+      "pricing": {
+        "price_1m_input_tokens": 0.2,
+        "price_1m_output_tokens": 0.8,
+        "price_1m_cache_hit_tokens": null,
+        "price_1m_cache_write_tokens": null
+      },
+      "performance": {
+        "median_output_tokens_per_second": 150.0,
+        "median_time_to_first_token_seconds": 0.55,
+        "median_time_to_first_answer_token_seconds": 1.4,
+        "median_end_to_end_response_time_seconds": 4.2
+      }
+    }
+  ]
+}

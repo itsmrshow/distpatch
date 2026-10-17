@@ -75,6 +75,13 @@ export type {
 export { createAuditRepository } from "./repositories/audit-repository"
 export type { BackgroundAccountSubject } from "./repositories/background-account-eligibility"
 export type {
+  CapabilityIntelligenceRepository,
+  CapabilityObservationInsert,
+  CapabilityObservationInsertResult,
+  CapabilitySnapshotInsert,
+} from "./repositories/capability-intelligence-repository"
+export { createCapabilityIntelligenceRepository } from "./repositories/capability-intelligence-repository"
+export type {
   CatalogSnapshotRepository,
   CatalogSnapshotRows,
 } from "./repositories/catalog-snapshot-repository"
@@ -211,6 +218,20 @@ export type { ApiKeyRow, NewApiKeyRow } from "./schema/api-keys"
 export { apiKeys } from "./schema/api-keys"
 export type { AuditDetail, AuditEventRow, NewAuditEventRow } from "./schema/audit-events"
 export { auditEvents } from "./schema/audit-events"
+export type {
+  CapabilityObservationRow,
+  CapabilitySnapshotPublicationState,
+  CapabilitySnapshotRow,
+  NewCapabilityObservationRow,
+  NewCapabilitySnapshotRow,
+  RouteModelInventoryRow,
+  RouteModelInventoryStatus,
+} from "./schema/capability-intelligence"
+export {
+  capabilityObservations,
+  capabilitySnapshots,
+  routeModelInventory,
+} from "./schema/capability-intelligence"
 export type { CostBasis, UsageOutcome } from "./schema/enums"
 // --- enums ------------------------------------------------------------------
 export {

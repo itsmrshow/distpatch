@@ -56,27 +56,237 @@ hard feature is `false`.
 
 `null` = unknown, everywhere: omitted and explicit `null` both load as `null`, overrides keep it,
 lookup returns it, JSON serializes it. `false` on a hard feature means known unsupported. No
-default of `0`, `0.5`, `1` or `false` is ever substituted. The shipped profiles carry **no
-preference scores** — none has been measured; #8 decides how unknown affects eligibility.
+default of `0`, `0.5`, `1` or `false` is ever substituted. #8 decides how unknown affects
+eligibility: an unknown score earns no credit in ranking.
 
 ## Tags
 
-Semantic model tags, pattern `^[a-z][a-z0-9-]{0,31}$`, e.g. `local`, `free`, `dockerlm`,
-`premium`, `subscription`, `coding`. They describe the model, not a route. Account tags (M1)
-describe a route and stay on the Account; #8 combines both without either owning the other.
+Semantic model tags, pattern `^[a-z][a-z0-9-]{0,31}$`, e.g. `local`, `embedding`, `premium`,
+`subscription`, `coding`. They describe the model, not a route. Route traits such as `free` or the
+serving host belong on the Account (M1 account tags), which describe a route; #8 combines both
+without either owning the other.
 
-## Shipped profiles
+## Shipped bootstrap profiles
 
 `shipped.ts`, TypeScript constants validated by Zod at build — the same shape of decision as the
 shipped price and context-window tables. Schema version `1`, revision `YYYY-MM-DD.N` (bump with
-any edit). Seeds, sparse on purpose:
+any edit); current `2026-10-17.4`. Sparse on purpose, carrying verified hard facts and **no**
+hardcoded preference scores (`scores` all `null`):
 
-| Id | Case | Known |
+| Id | Case | Known hard facts | Bootstrap scores |
+|---|---|---|---|
+| `anthropic/claude-sonnet-4-6` | hosted first-party | window/output from `models/windows`, text, tools | none (`null`) |
+| `openai/gpt-5.5` | hosted first-party | window/output from `models/windows`, text, tools | none (`null`) |
+| `openai/gpt-oss-120b` | many OpenAI-compatible hosts, differing wire ids | 131 072 context (model card), text, tools (live) | none (`null`) |
+
+Local and self-hosted models are **not** in this table: they arrive by route-model discovery (below)
+as `discovered` profiles, so adding or removing a local model needs no source change.
+
+## Capability Intelligence Pipeline
+
+Preference scores enter through the off-request-path **Capability Intelligence Pipeline**
+(`apps/api/src/services/capabilities/intelligence/`, CLI `bin/capabilities`):
+
+```text
+Artificial Analysis (implemented) ──┐
+Distpatch Local Eval (supplemental)─┤
+OpenEvals / HF (planned) ───────────┤
+OpenRouter metadata (planned) ──────┘
+                  │
+                  ▼
+     Evidence ingestion (bin/capabilities sync)
+                  │
+                  ▼
+     Postgres: capability_observations (fingerprint-deduplicated observation log)
+                  │
+                  ▼
+     Capability compiler (distpatch-cap-compiler-v1 / distpatch-cap-norm-v1)
+                  │
+                  ▼
+     Candidate snapshot -> validation -> atomic publication (capability_snapshots)
+                  │
+                  ▼
+     Immutable in-memory runtime catalog (zero request-path DB or HTTP calls)
+```
+
+### Evidence sources
+
+- **Implemented — Artificial Analysis (`artificial-analysis`)**: fetches `/api/v2/language/models`
+  (falling back to `/api/v2/language/models/free` on Free-tier 403) with `x-api-key: $AA_API_KEY`.
+  Provides primary external evidence for hosted models on `general` (`intelligence_index / 100`),
+  `coding` (`coding_index / 100`), `agentic` (`agentic_index / 100`), and `speed` (normalized from
+  `median_output_tokens_per_second` and `median_time_to_first_token_seconds`). Pricing fields are
+  stored as observations in Postgres for provenance but are **not** converted into a
+  provider-independent semantic `cost` score.
+- **Implemented — Distpatch Local Evaluation Framework (`distpatch-local-eval`)**: versioned deterministic
+  suite (`apps/api/bench/calibration/`, `bin/calibrate`, code execution isolated inside a `bwrap`
+  sandbox with `--unshare-all`, scrubbed environment, isolated temporary filesystem, no network,
+  and resource/timeout limits). **Supplemental, stored evidence**: not cross-source comparable with
+  Artificial Analysis, so it does not write shared preference scores (see Cross-source
+  comparability). Saturated dimensions (> 0.90 across all measured models) stay withheld (`null`).
+- **Planned future sources**:
+  - **Hugging Face / OpenEvals**: reasoning, coding, and benchmark-specific capability evidence to
+    fill dimensions external headline indexes omit.
+  - **OpenRouter metadata**: model identity, context length, modalities, and supported parameters
+    (keeping provider availability and pricing distinct from semantic capability).
+  - **LMArena / human preference datasets**: corroborating evidence for general preference, vision,
+    and coding/webdev.
+
+### Explicit external identity mapping
+
+`intelligence/identity.ts` maps `(source, externalId) → CanonicalModelId` (`vendor/model`) by exact
+lowercased match only. No fuzzy matching, Levenshtein distance, or substring guessing is permitted.
+Unmapped external records are persisted in `capability_observations` with
+`canonical_model_id = NULL` and never enter compiled snapshots.
+
+### Source precedence & catalog layering
+
+Effective runtime catalog layering (`applyPublishedSnapshotToBootstrap`):
+
+```text
+1. Static bootstrap catalog (SHIPPED_CAPABILITY_CATALOG — hard facts, tags, aliases, null scores)
+        ↓
+2. Published capability-intelligence snapshot (Postgres capability_snapshots, state = 'published'):
+   evidence-backed scores plus `discovered` profiles from route-model discovery
+        ↓
+3. Operator override file (MODEL_CAPABILITY_OVERRIDES_PATH — highest authority)
+```
+
+- Within the compiler, sources are **never automatically averaged**:
+  - For hosted models, maintained external evidence (`artificial-analysis`) is primary for
+    headline dimensions (`general`, `coding`, `agentic`, `speed`).
+  - For local models (`local` tag), a quantized artifact of a public model uses that public
+    model's Artificial Analysis evidence (`general`, `coding`, `agentic`); `speed` is never compiled
+    (AA speed describes hosted serving, not a local route). A derivative is unscored unless a source
+    measures *that* model: lineage (`baseModel`) is provenance, never score inheritance.
+  - A source writes shared scores only if marked **comparable** (below).
+- Every compiled score records its exact source, benchmark, benchmark version, observation
+  timestamp, staleness flag (> 90 days), and `sha256` provenance digest.
+
+### Cross-source comparability
+
+All sources feeding a preference dimension must be calibrated onto one scale; fitting inside `[0, 1]`
+is not comparability. `intelligence/comparability.ts` holds an explicit registry:
+
+```text
+evidence exists → valid? → cross-source comparable?
+                             ├─ yes → production score candidate
+                             └─ no  → stored evidence/provenance only
+```
+
+`artificial-analysis` is comparable (`artificial-analysis-index-100-v1`). `distpatch-local-eval` is
+**not**: its pass fractions are uncalibrated against AA indexes and there is no multiplier, offset
+or fitted conversion. Its observations stay in Postgres as evidence (and in the evidence digest) but
+never score. A source becomes comparable only through a versioned registry entry naming its
+calibration (future anchor-model calibration). Any new evidence provider follows the same rule; an
+unlisted source is not comparable.
+
+### Local Evaluation trust boundary
+
+The normalized artifact must carry `suite`, `graderVersion` and `normalization`
+(`intelligence/local-eval-versions.ts`, shared by the harness and the reader). The source accepts
+only the current values; anything else (missing stamp, the pre-sandbox grader, another normalization)
+is rejected as production evidence and retained as `historical_*` observations — never as zero
+scores. The committed `evidence/capability-calibration-v1/scores.json` is stamped
+`distpatch-grader-v1-pre-sandbox`, so it is historical until models are re-run under the sandboxed
+grader.
+
+### Local model identity layers
+
+```text
+base model → derivative semantic model → quant artifact → runtime → route alias
+```
+
+| Layer | Example | Lives in |
 |---|---|---|
-| `anthropic/claude-sonnet-4-6` | hosted first-party | window/output from `models/windows`, text, tools |
-| `openai/gpt-5.5` | hosted first-party | window/output from `models/windows`, text, tools |
-| `openai/gpt-oss-120b` | many OpenAI-compatible hosts, differing wire ids | identity only |
-| `mimo/mimo-v2.6-distill-9b` | DockerLM, tags `local free dockerlm` | text, tools, JSON schema (M1 live) |
+| Semantic model | `qwen/qwen3.8-flash-next` | capability catalog |
+| Derivative lineage | `0bserverx/qwen3.8-27b-heretic-abliterated-uncensored` → `baseModel: qwen/qwen3.8-27b` | catalog (`baseModel`) |
+| Artifact | `ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF`, `GSQ-RCO IQ2_XS` | route/artifact inventory |
+| Runtime | `strata 0.1.44.1` | route/artifact inventory |
+| Route alias | `strata-qwen38-flash-next` | catalog alias / provider |
+
+Quantizing or changing runtime does not create a semantic model; a fine-tune or abliteration does.
+Canonical ids are the lowercased HF repository id; exact casing lives in `sources` (provenance).
+
+### Route-model discovery (live, off the request path)
+
+```text
+DockerLM  GET {DOCKERLM_BASE_URL}/models        (OpenAI-compatible list, `meta.llamaswap` per entry)
+        ↓  intelligence/llamaswap-discovery.ts   validate; semantic id only if valid + verified
+        ↓  RouteModelDescriptor                  provider-neutral (route, semantic, base, artifact,
+        ↓                                        runtime, capabilities, routing, provenance)
+        ↓  reconcileRouteModels                  new / changed / absent; outage ⇒ nothing changes
+        ↓  route_model_inventory (Postgres)      history kept, never deleted
+        ↓  compileCapabilitySnapshot             present routes → `discovered` profiles in the snapshot
+        ↓  capability_snapshots → in-memory catalog   the only thing inference reads
+```
+
+Run with `bin/capabilities sync` (a manual sync fetches Artificial Analysis, Local Evaluation and
+every configured route source; `--route-fixture <file>` replays a saved `/v1/models` body,
+`--no-route-discovery` skips it). There is no scheduler yet; a future one calls the same
+`syncCapabilityIntelligence`. **Inference never calls `/v1/models`**: discovery runs only in the sync,
+and a test proves selection touches neither the network, the repository nor the discovery client.
+
+`RouteModelSource` (`route-discovery.ts`) is the provider-neutral contract (`id`, contributed `tags`,
+`discover()`); the llama-swap/DockerLM adapter is one implementation, and Ollama, MLX, another
+OpenAI-compatible host or NVIDIA need only a new adapter mapping their listing into
+`RouteModelDescriptor`. Nothing in the core types is DockerLM-specific.
+
+Mapping and trust rules for `meta.llamaswap`:
+
+| `meta.llamaswap` | `RouteModelDescriptor` |
+|---|---|
+| `model_identity.semantic_model` | `semanticModelId` — lowercased `vendor/model`, used only when valid **and** `provenance.confidence` is `verified` |
+| `model_identity.base_model` / `derivative_model` | `baseModelId` / `derivativeModelId` (a `(via …)` annotation is dropped); a profile gets `baseModel` only when base ≠ semantic |
+| `artifact`, `runtime` | stored route evidence (repository, files, format, quantization; name, version) — never the profile |
+| `model_capabilities` | `capabilities` (text/image in, text out, embedding, context) → profile hard facts; a route lacking an image projector is *unknown*, not unsupported; route context windows stay route-level |
+| `routing` (`model_type`, `endpoint`) | `routing`; `embedding`, `model_type=embedding` or a `/embeddings` endpoint marks an embedding model |
+| `provenance` | `provenance`; the semantic source URL becomes a profile source |
+
+The adapter was validated against a live DockerLM `GET /v1/models` (2026-10-17, six routes): every
+group above matched, and the host's extra fields (`role`, `kv_cache`, `mtp`, OpenAI-style
+`architecture`, …) are ignored. The test fixture is that capture.
+
+An entry **without** `meta.llamaswap` is kept as an unresolved route (no profile). An entry whose
+metadata is present but malformed is rejected: skipped, and its previous row is kept (an untrusted
+entry is not evidence of removal). An unreadable or empty listing rejects the whole discovery.
+
+Reconciliation: a new verified model appears in the next published snapshot; a quant/runtime/artifact
+change updates the route evidence without changing semantic identity (only a changed
+`semanticModelId` does); a model that disappears turns `absent` (excluded from compilation, row
+retained); a route alias already claimed by a bootstrap or earlier profile is dropped rather than
+failing the build. **Last-known-good**: a down host, timeout, HTTP error or unreadable answer leaves
+stored routes and the published snapshot untouched and is reported in the sync result; Distpatch
+never needs the host to boot, and tags (`local`) come from the source, not from model names.
+
+`capabilities/inventory.ts` only holds the schema of the flat inventory document
+`evidence/model-inventory/dockerlm.json` and the canonical-id normalization. That file is a
+**fixture / evidence example**; it is not an operational source and nobody copies it from DockerLM.
+A test keeps it consistent with the discovery fixture.
+
+Embedding-only models (`qwen/qwen3-embedding-0.6b`: `textOutput: false`, tag `embedding`) are real
+profiles with truthful hard facts. They never reach a generative virtual model because the request
+path (`dataplane/semantic-candidates.ts`) drops any profile that knows it cannot take or give text
+before selection; unknown (`null`) text support stays a candidate, as before.
+
+### Snapshot lifecycle & last-known-good retention
+
+`syncCapabilityIntelligence` executes:
+`fetch → validate source payload → store observations → resolve identities → compile candidate → validate candidate → publish atomically → adopt immutable snapshot`.
+
+If any stage fails (API outage, rate limit, schema drift, DB failure, or catalog contradiction),
+publication aborts and the previously published snapshot (or static bootstrap catalog before the
+first sync) remains active. Inference never queries Postgres or external HTTP endpoints on the
+request path.
+
+### Observation history semantics
+
+`capability_observations` is a **fingerprint-deduplicated observation log**, not an immutable
+append-only ledger. New values insert new rows; an unchanged latest value is deduplicated. If an
+older value *reappears* after an intermediate one, its existing row is re-stamped (`observed_at`,
+`ingested_at`, `source_ref`, provenance) so the compiler sees it as current, which means the
+intermediate period is not recorded as a row. `canonical_model_id` is also rewritten when identity
+mappings change. The published snapshots (`capability_snapshots`) are the immutable audit trail.
 
 ## Operator overrides
 
@@ -92,7 +302,7 @@ ever needed.
   "profiles": [{ "id": "local/qwen-coder", "aliases": ["qwen-coder"], "tags": ["local", "free"] }],
   "overrides": [
     { "id": "openai/gpt-5.5", "enabled": false },
-    { "id": "mimo/mimo-v2.6-distill-9b", "hard": { "contextTokens": 32768 }, "scores": { "coding": null } },
+    { "id": "xiaomimimo/mimo-v2.6-distill-qwen-9b", "hard": { "contextTokens": 32768 }, "scores": { "coding": null } },
     { "id": "anthropic/claude-sonnet-4-6", "tags": { "add": ["premium"] } }
   ]
 }
@@ -141,4 +351,5 @@ eligible for semantic selection is #8's decision.
 
 Model selection, demand vectors, weights, ranking (#8); `auto-*` resolution and `/v1/models`
 virtual entries (#9); live quota/latency scoring (#11); classifiers (#13); context management
-(#14); Auto-MoE (#15); learned score updates; benchmark data.
+(#14); Auto-MoE (#15); learned or live score updates. Benchmark *data* lives in `evidence/`, the
+harness in `apps/api/bench/calibration/`; neither is on the request path.
