@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Distpatch M2A (#7): static, versioned, provider-independent model capability catalog (`services/capabilities/`) — canonical `vendor/model` ids with explicit one-hop aliases and families, hard facts separate from `[0,1]` preference scores, `null` = unknown throughout, semantic tags (`local`, `free`, `dockerlm`, …), operator overrides via `MODEL_CAPABILITY_OVERRIDES_PATH` validated at boot, and a deterministic `sha256` effective revision. Not consulted by routing yet.
+
 ## [2.40.0] — 2026-10-16
 
 ### Added

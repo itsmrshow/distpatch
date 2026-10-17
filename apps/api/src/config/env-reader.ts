@@ -121,6 +121,7 @@ export function readParsedEnv(raw: ParsedEnv, ctx: z.RefinementCtx): Env {
     publicUrl: raw.PUBLIC_URL ?? null,
     revision: raw.ROUTER_REVISION ?? UNKNOWN_REVISION,
     webRoot: raw.WEB_ROOT ?? null,
+    modelCapabilityOverridesPath: raw.MODEL_CAPABILITY_OVERRIDES_PATH ?? null,
     claudeConfigRoot: raw.CLAUDE_CONFIG_ROOT ?? "/data/claude",
     claudeCliPath: raw.CLAUDE_CLI_PATH ?? null,
     claudeFastMode: raw.CLAUDE_FAST_MODE ?? false,
