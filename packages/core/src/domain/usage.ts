@@ -148,10 +148,13 @@ const OUTCOME_BY_ERROR_CODE: Readonly<Record<RouterErrorCode, UsageOutcome>> = {
   unsupported_content_encoding: "client_error",
   admin_auth_failed: "router_error",
   csrf_token_invalid: "router_error",
-  // `GET /v1/models/:id` never runs an attempt and never writes a `UsageRecord` — this only
-  // satisfies the total-over-`RouterErrorCode` mapping. If it ever did report, "the id this key
-  // asked about doesn't exist for it" is a caller-fixable condition, same family as scope.
+  // `GET /v1/models/:id` never writes a `UsageRecord`. A data-plane request naming a reserved but
+  // inactive virtual model (`auto-moe`) does, before any account is selected: "the model this key
+  // asked for doesn't exist" is a caller-fixable condition, same family as scope.
   model_not_found: "client_error",
+  // An active virtual model, and nothing in scope its policy can select: capacity the operator
+  // configures (accounts, supported models, capability profiles), not a malformed request.
+  no_eligible_model: "no_healthy_account",
 }
 
 export function usageOutcomeForErrorCode(code: RouterErrorCode): UsageOutcome {

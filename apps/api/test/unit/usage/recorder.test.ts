@@ -32,6 +32,7 @@ function record(overrides: Partial<UsageRecord> = {}): UsageRecord {
     provider: "anthropic-api",
     sessionKey: "session-1",
     model: "sonnet",
+    selectedModel: null,
     upstreamModel: "glm-4.7",
     ingressDialect: "anthropic",
     egressMode: "passthrough",
@@ -357,6 +358,18 @@ describe("persistence shape", () => {
     const row = toUsageRecordRow(record())
     expect(row.model).toBe("sonnet")
     expect(row.upstreamModel).toBe("glm-4.7")
+  })
+
+  test("a virtual request keeps requested, selected and upstream as three columns", () => {
+    const row = toUsageRecordRow(
+      record({ model: "auto-task", selectedModel: "sonnet", upstreamModel: "glm-4.7" }),
+    )
+    expect([row.model, row.selectedModel, row.upstreamModel]).toEqual([
+      "auto-task",
+      "sonnet",
+      "glm-4.7",
+    ])
+    expect(toUsageRecordRow(record()).selectedModel).toBeNull()
   })
 
   test("an unmeasured ttfb is null, never zero", () => {

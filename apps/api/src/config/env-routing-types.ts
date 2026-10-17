@@ -41,8 +41,8 @@ export interface DataPlaneConfig {
   /** Usage records held in memory before the writer sheds the oldest. Reporting degrades; traffic does not. */
   readonly usageQueueMax: number
   /**
-   * Rows per insert. Validated into `1..USAGE_RECORD_MAX_BATCH_ROWS` at boot — outside that
-   * range every flush loses its whole batch and reporting goes silently empty.
+   * Records per usage flush. Validated into `1..USAGE_BATCH_SIZE_MAX` (2340) at boot; the writer
+   * splits a flush into bind-safe INSERT statements inside one transaction.
    */
   readonly usageBatchSize: number
   readonly usageFlushIntervalMs: number

@@ -11,6 +11,7 @@ import {
   repositoryScopeLoader,
   sessionStoreFromEnv,
   stampLastUsed,
+  type VirtualModelRouting,
 } from "../services/dataplane"
 import { createActiveRequestRegistry } from "../services/dataplane/active-requests"
 import {
@@ -181,8 +182,14 @@ export function createRequestServices(
   })
 
   const activeRequests = createActiveRequestRegistry(env.relayLifetimes)
+  // The boot-loaded capability snapshot plus warm discovery: resolving `auto-*` reads nothing else.
+  const virtualModels: VirtualModelRouting = {
+    capabilities: deps.capabilities,
+    models: modelCatalogStore,
+  }
   const dispatcher = createDispatcher({
     modelMetadata: modelCatalogStore,
+    virtualModels,
     activeRequests,
     recovery: recoveryComponents.access,
     catalog,
@@ -215,6 +222,7 @@ export function createRequestServices(
     refreshSubscriptionModels,
     activeRequests,
     dispatcher,
+    virtualModels,
     closeBackgroundAdmission: () => {
       backgroundAdmissionOpen = false
     },

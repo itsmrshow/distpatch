@@ -6,6 +6,7 @@ import { createRuntime, type Runtime } from "../../src/composition"
 import { type Env, parseEnv } from "../../src/config/env"
 import { createLogger } from "../../src/logging/logger"
 import type { RateLimitSignal } from "../../src/providers"
+import { buildCapabilityCatalog, SHIPPED_CAPABILITY_CATALOG } from "../../src/services/capabilities"
 import type { VerifiedKey } from "../../src/services/dataplane"
 import { JITTER_FRACTION } from "../../src/services/routing"
 
@@ -43,6 +44,7 @@ afterEach(async () => {
 })
 
 const logger = createLogger({ level: "error", write: () => undefined })
+const capabilities = buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG, null)
 
 /** The composition root under the environment an operator would have set. */
 function composed(overrides: Record<string, string>): { env: Env; runtime: Runtime } {
@@ -56,6 +58,7 @@ function composed(overrides: Record<string, string>): { env: Env; runtime: Runti
       sql: handle.sql,
       dbPoolStats: handle.poolStats,
       logger,
+      capabilities,
     }),
   }
 }
@@ -371,6 +374,44 @@ describe("the body ceiling reaches the reader", () => {
     // The catalog is empty because nothing loaded it, so selection is what refuses. The point is
     // that the read succeeded and the request got as far as selection at all.
     expect(response).toMatchObject({ code: "scope_violation" })
+  })
+})
+
+/**
+ * The capability catalog `main.ts` loads once is the one virtual-model resolution reads — no second
+ * load, no file read on the request path. A dispatcher that never received it would answer an
+ * active virtual model as not found (`404`); one that did judges it against the injected snapshot,
+ * and with no account loaded there is nothing eligible (`422`) — before any session read, so
+ * nothing below dials the unreachable database.
+ */
+describe("the boot-loaded capability catalog reaches virtual-model resolution", () => {
+  test("the runtime resolves `auto-*` against the very snapshot it was given", async () => {
+    const runtime = runtimeWith({})
+    expect(runtime.virtualModels.capabilities).toBe(capabilities)
+
+    const response = await runtime.dispatcher
+      .dispatch({
+        ingress: "anthropic",
+        request: new Request("http://router.test/v1/messages", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model: "auto", max_tokens: 1, messages: [] }),
+        }),
+        key: {
+          id: "11111111-1111-4111-8111-111111111111",
+          name: "test",
+          prefix: "mar_test",
+          scope: { kind: "all" },
+          rateLimitRequests: null,
+          rateLimitWindowSeconds: null,
+          expiresAt: null,
+        },
+        requestId: "req-virtual",
+      })
+      .catch((error: unknown) => error)
+
+    expect(response).toMatchObject({ status: 422, code: "no_eligible_model" })
+    expect((response as Error).message).toContain(capabilities.revision().effective)
   })
 })
 

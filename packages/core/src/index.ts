@@ -66,6 +66,7 @@ export {
   KeyRevokedError,
   KeyVerificationUnavailableError,
   ModelNotFoundError,
+  NoEligibleModelError,
   NoHealthyAccountError,
   QuotaExhaustedError,
   RequestTooLargeError,

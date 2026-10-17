@@ -134,6 +134,7 @@ export function createRequestAccounting(
             provider: null,
             sessionKey: null,
             model: progress.model,
+            selectedModel: progress.selectedModel ?? null,
             upstreamModel: null,
             ingressDialect: ingress,
             egressMode: null,

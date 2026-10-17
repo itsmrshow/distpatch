@@ -70,7 +70,7 @@ And the second exception to "one admin", stated properly because it is the one t
 | Pillar | What it means |
 |---|---|
 | 🏊 **Pooling is the product** | Several accounts of the same kind behind one endpoint, with load balancing, failover, and quota awareness across them. |
-| 🎯 **The client picks the model, the router picks the account** | Model names pass through unchanged. No semantic routing, no "cheapest model for this prompt" logic. |
+| 🎯 **The client picks the model, the router picks the account** | Concrete model names pass through unchanged — no "cheapest model for this prompt" substitution. Only when the client explicitly asks for a Distpatch policy (`auto`, `auto-*`) does the router resolve it to one concrete model, before choosing the account. |
 | 🔐 **Upstream credentials never leave the router** | Encrypted at rest with AES-256-GCM. No endpoint returns an upstream credential, a refresh token, or an OAuth code. |
 | 🔑 **One named, revocable key per human or agent** | Every key has a name, a scope (all accounts, some pools, or an explicit account list), its own rate limit and expiry — and its own usage and cost line. |
 

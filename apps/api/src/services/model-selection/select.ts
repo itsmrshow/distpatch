@@ -14,8 +14,8 @@ import { type ModelRequirements, SELECTOR_VERSION, type SelectionPolicy } from "
  *
  * Pure and synchronous. The same candidates (in any order), requirements, policy and catalog
  * revision always produce the same decision and the same `digest`. No clock, no randomness, no
- * account/provider state, no classifier — and no wiring: nothing on the request path calls this
- * yet (`auto-*` resolution is #9).
+ * account/provider state, no classifier. Its one request-path caller is virtual-model resolution
+ * (`services/virtual-models/`), ahead of `selectAccounts()`; fixed-model requests never reach it.
  *
  * The selected `model` is the candidate name exactly as the caller supplied it, never the
  * canonical id: the catalog identifies, it does not rename what goes upstream.

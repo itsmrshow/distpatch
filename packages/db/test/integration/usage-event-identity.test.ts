@@ -4,7 +4,7 @@ import type { DatabaseHandle } from "../../src/client"
 import { createUsageRecentRepository } from "../../src/repositories/usage-recent-repository"
 import {
   createUsageRecordRepository,
-  USAGE_RECORD_MAX_BATCH_ROWS,
+  USAGE_RECORD_MAX_STATEMENT_ROWS,
   type UsageRecordInsert,
 } from "../../src/repositories/usage-repository"
 import { apiKeys } from "../../src/schema/api-keys"
@@ -69,8 +69,11 @@ describe.skipIf(!url)("stable usage event identity", () => {
       ),
     ).toBe(true)
   })
-  test("a fully populated maximum batch fits PostgreSQL's actual bind protocol", async () => {
-    const rows = Array.from({ length: USAGE_RECORD_MAX_BATCH_ROWS }, () => ({
+  test("a fully populated 2340-row flush persists through PostgreSQL's real bind protocol", async () => {
+    // 2340 is the largest accepted USAGE_BATCH_SIZE; it needs a full 2259-row statement and a
+    // second one, both inside one transaction.
+    expect(2340).toBeGreaterThan(USAGE_RECORD_MAX_STATEMENT_ROWS)
+    const rows = Array.from({ length: 2340 }, () => ({
       ...event(),
       clientRequestId: null,
       attempt: 1,
@@ -79,6 +82,7 @@ describe.skipIf(!url)("stable usage event identity", () => {
       poolId: null,
       provider: null,
       sessionKey: null,
+      selectedModel: null,
       ingressDialect: null,
       egressMode: null,
       tokensIn: 0,
@@ -93,9 +97,20 @@ describe.skipIf(!url)("stable usage event identity", () => {
       streamed: false,
       errorClass: null,
     }))
-    expect(await createUsageRecordRepository(handle.db).insertMany(rows)).toBe(
-      USAGE_RECORD_MAX_BATCH_ROWS,
-    )
+    const repo = createUsageRecordRepository(handle.db)
+    expect(await repo.insertMany(rows)).toBe(2340)
+    const persisted = await handle.db
+      .select({ id: usageRecords.id })
+      .from(usageRecords)
+      .where(
+        inArray(
+          usageRecords.id,
+          rows.map((row) => row.id),
+        ),
+      )
+    expect(persisted).toHaveLength(2340)
+    // Replaying the whole flush (acknowledgment lost) admits nothing twice.
+    expect(await repo.insertMany(rows)).toBe(0)
   })
   test("duplicate identity never replaces the original facts", async () => {
     const repo = createUsageRecordRepository(handle.db)
@@ -175,6 +190,73 @@ describe.skipIf(!url)("stable usage event identity", () => {
         `SELECT count(*)::integer AS count FROM "${schema}".usage_records`,
       )
       expect(count?.count).toBe(2)
+    } finally {
+      await handle.sql.unsafe(`DROP SCHEMA "${schema}" CASCADE`)
+    }
+  })
+  test("selected_model persists for virtual requests and stays NULL for fixed ones", async () => {
+    const repo = createUsageRecordRepository(handle.db)
+    const virtual = event({
+      model: "auto-task",
+      selectedModel: "alpha",
+      upstreamModel: "alpha-wire",
+    })
+    const fixed = event({ model: "claude-opus-5", upstreamModel: "claude-opus-5" })
+    expect(await repo.insertMany([virtual, fixed])).toBe(2)
+    const persisted = await handle.db
+      .select({
+        id: usageRecords.id,
+        model: usageRecords.model,
+        selectedModel: usageRecords.selectedModel,
+        upstreamModel: usageRecords.upstreamModel,
+      })
+      .from(usageRecords)
+      .where(inArray(usageRecords.id, [virtual.id, fixed.id]))
+    expect(new Map(persisted.map((row) => [row.id, row]))).toEqual(
+      new Map([
+        [
+          virtual.id,
+          {
+            id: virtual.id,
+            model: "auto-task",
+            selectedModel: "alpha",
+            upstreamModel: "alpha-wire",
+          },
+        ],
+        [
+          fixed.id,
+          {
+            id: fixed.id,
+            model: "claude-opus-5",
+            selectedModel: null,
+            upstreamModel: "claude-opus-5",
+          },
+        ],
+      ]),
+    )
+  })
+  test("0039 adds selected_model without touching or back-filling existing rows", async () => {
+    const schema = `usage_selected_${crypto.randomUUID().replaceAll("-", "")}`
+    await handle.sql.unsafe(`CREATE SCHEMA "${schema}"`)
+    try {
+      await handle.sql.unsafe(
+        `CREATE TABLE "${schema}".usage_records (id uuid PRIMARY KEY, model text, upstream_model text)`,
+      )
+      const id = crypto.randomUUID()
+      await handle.sql.unsafe(
+        `INSERT INTO "${schema}".usage_records VALUES ($1, 'sonnet', 'glm-4.7')`,
+        [id],
+      )
+      const migration = await Bun.file(
+        new URL("../../migrations/0039_selected_model.sql", import.meta.url),
+      ).text()
+      await handle.sql.unsafe(
+        migration.replaceAll('"usage_records"', `"${schema}"."usage_records"`),
+      )
+      const rows = await handle.sql.unsafe<
+        { model: string; upstream_model: string; selected_model: string | null }[]
+      >(`SELECT model, upstream_model, selected_model FROM "${schema}".usage_records`)
+      expect(rows).toEqual([{ model: "sonnet", upstream_model: "glm-4.7", selected_model: null }])
     } finally {
       await handle.sql.unsafe(`DROP SCHEMA "${schema}" CASCADE`)
     }

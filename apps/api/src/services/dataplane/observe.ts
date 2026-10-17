@@ -26,6 +26,8 @@ export interface RequestProgress {
   bodyReadMs: number
   bodyReadWaitingSince?: number | undefined
   model: string | null
+  /** The concrete model a virtual request resolved to, once it has; null for a fixed request. */
+  selectedModel?: string | null
 }
 
 export function sampleOf(

@@ -76,6 +76,7 @@ const RANK: Readonly<Record<RouterErrorCode, number>> = {
   admin_auth_failed: 90,
   csrf_token_invalid: 90,
   model_not_found: 90,
+  no_eligible_model: 90,
   // A spent window refills on a clock.
   quota_exhausted: 70,
   key_rate_limited: 70,

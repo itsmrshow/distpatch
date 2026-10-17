@@ -12,8 +12,11 @@ It does not choose a model (#8), resolve `auto-*` names (#9), or know anything a
 task classification -> model selection (#8 reads catalog) -> selectAccounts() -> context -> execution
 ```
 
-Nothing in routing, `/v1/models`, translation or the orchestrator consults the catalog in M2A.
-At boot it is built and validated (`main.ts::checkCapabilityCatalog`) and its revision is logged.
+Loaded and validated **once at boot** (`main.ts::loadBootCapabilityCatalog`), its revision logged,
+and that same immutable snapshot injected through composition into virtual-model resolution
+([virtual-models.md](virtual-models.md), #9) — the only consumer. Fixed-model routing,
+translation and the real `/v1/models` entries never consult it; nothing re-reads the override
+file after boot.
 
 ## Identity
 

@@ -24,16 +24,18 @@ export const PG_MAX_BIND_PARAMETERS = 65_535
  * builds the real statement and fails when this drifts, so the number cannot go
  * stale quietly.
  */
-export const USAGE_RECORD_BIND_PARAMETERS_PER_ROW = 28
+export const USAGE_RECORD_BIND_PARAMETERS_PER_ROW = 29
 
 /**
- * Maximum raw INSERT rows when all 28 writable cells are bound.
+ * Rows per raw `usage_records` INSERT **statement**: the most that fit Postgres' bind ceiling when
+ * all 29 writable cells are bound (65535 / 29 = 2259).
  *
- * This bounds configured recorder batches at boot. The repository additionally chunks each
- * table's statements using its conservative schema column count, preserving one transaction
- * for a larger direct-call batch. It may split before this limit when defaults spend no binds.
+ * A statement size, not a flush size. `insertBatch` splits however many attempts it is handed into
+ * statements of at most this many rows, inside one transaction, so a configured recorder batch
+ * (`USAGE_BATCH_SIZE`, bounded separately in `apps/api/src/config/fields.ts`) may exceed it and
+ * still commits or rolls back whole.
  */
-export const USAGE_RECORD_MAX_BATCH_ROWS = Math.floor(
+export const USAGE_RECORD_MAX_STATEMENT_ROWS = Math.floor(
   PG_MAX_BIND_PARAMETERS / USAGE_RECORD_BIND_PARAMETERS_PER_ROW,
 )
 
@@ -60,8 +62,9 @@ export interface UsageRecordRepository {
    * An empty batch is a no-op rather than an error: the flush timer fires on a
    * schedule, not on demand, so it routinely has nothing to do.
    *
-   * Recorder batches are bounded at {@link USAGE_RECORD_MAX_BATCH_ROWS}; direct larger batches
-   * are split within the same transaction, including rollback of earlier chunks on failure.
+   * Any batch size: each table's rows are split into statements inside Postgres' bind ceiling
+   * (raw attempts at {@link USAGE_RECORD_MAX_STATEMENT_ROWS} rows), all within the same transaction,
+   * including rollback of earlier statements on failure.
    */
   insertBatch(input: UsageBatchInsert): Promise<UsageBatchResult>
   insertMany(rows: readonly UsageRecordInsert[]): Promise<number>

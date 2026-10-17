@@ -22,7 +22,8 @@ client request that hits a rate-limited account, fails over, and succeeds on the
 | `attempt` | int | 1-based position in the failover chain |
 | `apiKeyId` / `accountId` / `poolId` / `sessionKey` | refs | Attribution: which key presented, which Account served or failed, which Pool it was selected from, which conversation it belonged to. `poolId` is null when no pool was in play: the key's scope was `all` or an explicit account list, or no account was selected (a pre-selection failure is null even for a pool-scoped key) |
 | `provider` | enum? | Denormalized so the row survives the Account it names |
-| `model` | string? | Exactly what the client sent; null when authenticated refusal occurs before a model is identified. No fabricated model sentinel |
+| `model` | string? | Exactly what the client sent — a concrete name, or a Distpatch virtual one (`auto-task`); null when authenticated refusal occurs before a model is identified. No fabricated model sentinel |
+| `selectedModel` | string? | The concrete model Distpatch's virtual-model resolution selected for a virtual request ([docs/distpatch/virtual-models.md](../distpatch/virtual-models.md)), before any alias. Null for a fixed request — no semantic selection happened — for a request refused before selection, and for every row written before the column existed. Identical on every attempt of one request |
 | `upstreamModel` | string? | The name actually put on the wire, after the Account's alias map. A separate **fact**, not a derivation: the alias map is mutable, so re-deriving it later answers "what would we send now", never "what did we send then" |
 | `ingressDialect` | enum? | The API surface the client called |
 | `egressMode` | enum? | `passthrough` \| `translate` \| `agent-sdk` — the per-row twin of the `path` label on `router_overhead_seconds`. Carried instead of an egress *dialect*: the fact worth storing is the relationship between the two, and the SDK path has no egress dialect at all |

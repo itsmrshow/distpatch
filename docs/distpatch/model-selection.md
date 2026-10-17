@@ -16,10 +16,10 @@ candidates + requirements + policy + catalog
 ```
 
 `selectModel(catalog, input)` is pure and synchronous: no clock, randomness, I/O, account,
-provider, quota or health state, and no classifier. **Nothing calls it yet.** Wiring it ahead of
-`selectAccounts()` for `auto-*` names, producing the candidate list from reachable models, and
-recording decisions is #9 (see [insertion-seam.md](insertion-seam.md)). Fixed-model requests are
-untouched: they never enter the selector, now or after #9.
+provider, quota or health state, and no classifier. Its one caller is virtual-model resolution
+(#9, [virtual-models.md](virtual-models.md)), which runs it for `auto` / `auto-*` names ahead of
+`selectAccounts()`, over the key's static candidate set. Fixed-model requests never enter the
+selector.
 
 ## Inputs
 
@@ -35,8 +35,8 @@ nothing is inferred.
 
 **`SelectionPolicy`** (Zod, strict) — `id`, `version`, `weights` (per dimension, `0..100`, at least
 one positive), optional `floors` (per-dimension minimum score), `unknownHardFacts`
-(`reject` default | `accept`), and `preference` (canonical ids, most preferred first). Concrete
-policies (`auto-fast`, …) belong to #9.
+(`reject` default | `accept`), and `preference` (canonical ids, most preferred first). The
+concrete policies (`auto`, `auto-fast`, …) live in the virtual-model registry (#9).
 
 ## Hard eligibility
 
@@ -90,7 +90,7 @@ interface ModelSelectionDecision {
 
 Same candidates (any order), requirements, policy and catalog revision → identical decision and
 digest. A policy edit without a version bump still changes `policy.digest`. `no-eligible-model`
-is an outcome, not an exception; how it maps to an HTTP response is #9's decision.
+is an outcome, not an exception; the request path maps it to `422 no_eligible_model` (#9).
 
 ## Classifier
 
@@ -99,6 +99,6 @@ and its failure would leave them explicit-only, never change selection semantics
 
 ## Non-goals
 
-`auto-*` resolution, request wiring, candidate enumeration, request-body rewrite, usage
-attribution, `/v1/models` entries (#9); live quota/latency pressure (#11); classifiers (#13);
-session/model affinity; account selection, which stays in `selectAccounts()`.
+Request wiring, candidate enumeration, body rewrite, usage attribution and `/v1/models` entries
+are #9's ([virtual-models.md](virtual-models.md)); live quota/latency pressure (#11); classifiers
+(#13); session/model affinity; account selection, which stays in `selectAccounts()`.

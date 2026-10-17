@@ -54,6 +54,8 @@ never from a path inside `src/`.
 | `TranslationError` | `translation_failed` | 400 | A cross-dialect conversion would be unfaithful — raised *before* the upstream call |
 | `InvalidRequestError` | `invalid_request` | 400 | Refused at the edge before routing: empty body, no `model`, or a model name past the ceiling. Nothing was translated |
 | `UnsupportedContentEncodingError` | `unsupported_content_encoding` | 415 | The body arrived under a `Content-Encoding`; the router does not decode request bodies |
+| `ModelNotFoundError` | `model_not_found` | 404 | `GET /v1/models/:id` cannot reach the id for this key, or a request named a reserved Distpatch virtual model (`auto`, `auto-*`) that is not active |
+| `NoEligibleModelError` | `no_eligible_model` | 422 | An active virtual model's policy found no eligible concrete model in the key's scope. Raised before account selection |
 
 Plus `RouterError` (abstract base), `ROUTER_ERROR_CODES`, `RouterErrorCode`, `isRouterError`,
 `QuotaExhaustedInit`.

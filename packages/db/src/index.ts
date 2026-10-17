@@ -177,7 +177,7 @@ export {
   createUsageRecordRepository,
   PG_MAX_BIND_PARAMETERS,
   USAGE_RECORD_BIND_PARAMETERS_PER_ROW,
-  USAGE_RECORD_MAX_BATCH_ROWS,
+  USAGE_RECORD_MAX_STATEMENT_ROWS,
 } from "./repositories/usage-repository"
 export type { UsageWeekRead, UsageWeekRow } from "./repositories/usage-week-read"
 export { UsageWeekRowCeilingError } from "./repositories/usage-week-read"
