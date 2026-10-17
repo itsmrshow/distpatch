@@ -434,7 +434,23 @@ describe.skipIf(!runnable)("migrations against a live database", () => {
     expect(published2.publicationState).toBe("published")
     expect((await repository.getPublishedSnapshot())?.revision).toBe("sha256:test-rev-2")
 
+    await repository.saveSnapshot({
+      revision: "sha256:test-rev-3",
+      generatedAt: t2,
+      compilerVersion: "distpatch-cap-compiler-v1",
+      normalizerVersion: "distpatch-cap-norm-v1",
+      evidenceDigest: "sha256:ev-3",
+      publicationState: "candidate",
+      payload: { schemaVersion: 1, profiles: [] },
+      summary: { models: 3 },
+    })
+    await Promise.all([
+      repository.publishSnapshot("sha256:test-rev-2", t2),
+      repository.publishSnapshot("sha256:test-rev-3", t2),
+    ])
     const allSnapshots = await repository.listSnapshots(10)
+    const publishedRows = allSnapshots.filter((s) => s.publicationState === "published")
+    expect(publishedRows.length).toBe(1)
     expect(allSnapshots.find((s) => s.revision === "sha256:test-rev-1")?.publicationState).toBe(
       "superseded",
     )

@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm"
+import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm"
+import { advisoryLockKey } from "../advisory-lock"
 import type { Database } from "../client"
 import {
   type CapabilityObservationRow,
@@ -106,6 +107,8 @@ export interface CapabilityIntelligenceRepository {
 export type { CapabilityObservationRow, CapabilitySnapshotPublicationState, CapabilitySnapshotRow }
 
 const BATCH_SIZE = 200
+const SNAPSHOT_PUBLISH_LOCK_CLASS = 0x726f_7574
+const SNAPSHOT_PUBLISH_LOCK_KEY = advisoryLockKey("capability_snapshot_publish")
 
 export function createCapabilityIntelligenceRepository(
   db: Database,
@@ -244,6 +247,9 @@ export function createCapabilityIntelligenceRepository(
 
     publishSnapshot: (revision, publishedAt) =>
       db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
+        )
         const [target] = await tx
           .select()
           .from(capabilitySnapshots)

@@ -32,4 +32,5 @@ CREATE TABLE "capability_snapshots" (
 --> statement-breakpoint
 CREATE INDEX "capability_observations_canonical_metric_idx" ON "capability_observations" USING btree ("canonical_model_id","metric","observed_at");--> statement-breakpoint
 CREATE INDEX "capability_observations_source_model_idx" ON "capability_observations" USING btree ("source","source_model_id","observed_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "capability_snapshots_single_published_idx" ON "capability_snapshots" USING btree ("publication_state") WHERE "capability_snapshots"."publication_state" = 'published';--> statement-breakpoint
 CREATE INDEX "capability_snapshots_state_published_idx" ON "capability_snapshots" USING btree ("publication_state","published_at","generated_at");

@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test"
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { CASES, runBun, type TextCase } from "../../../bench/calibration/cases"
+import {
+  CASES,
+  CalibrationSandboxUnavailableError,
+  runBun,
+  type TextCase,
+} from "../../../bench/calibration/cases"
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url))
 const README_PATH = join(REPO_ROOT, "README.md")
@@ -130,15 +135,22 @@ describe("local evaluation code-grading sandbox (Codex P2)", () => {
     })
   })
 
-  test("7. cannot run past the execution timeout and fails closed when bwrap is missing", async () => {
+  test("7. cannot run past the execution timeout, caps stdout before buffering, and aborts when bwrap is missing", async () => {
     const started = performance.now()
     const timedOut = await runBun('console.log("BEFORE"); while (true) {}', { timeoutMs: 300 })
     const elapsed = performance.now() - started
     expect(timedOut).toBe("")
     expect(elapsed).toBeLessThan(5_000)
 
-    const closed = await runBun('console.log("SHOULD_NOT_RUN")', { bwrapPath: null })
-    expect(closed).toBe("")
+    const floodOut = await runBun('while (true) { process.stdout.write("A".repeat(16384)) }', {
+      maxStdoutBytes: 4096,
+      timeoutMs: 5_000,
+    })
+    expect(floodOut).toBe("")
+
+    await expect(runBun('console.log("SHOULD_NOT_RUN")', { bwrapPath: null })).rejects.toThrow(
+      CalibrationSandboxUnavailableError,
+    )
   })
 
   test("deterministic coding graders still pass inside the sandbox", async () => {

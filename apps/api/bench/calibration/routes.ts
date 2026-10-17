@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { ToolCase, ToolTranscript } from "./cases"
+import { CalibrationSandboxUnavailableError, type ToolCase, type ToolTranscript } from "./cases"
 
 /**
  * How the calibration harness reaches a model. A route is *evaluation plumbing only*: it never
@@ -120,7 +120,8 @@ export function openAiChatRoute(name: string, baseUrl: string, model: string, ke
           try {
             args = JSON.parse(call.function.arguments || "{}") as Record<string, unknown>
             result = await env.call(call.function.name, args)
-          } catch {
+          } catch (error) {
+            if (error instanceof CalibrationSandboxUnavailableError) throw error
             result = "error: arguments are not valid JSON"
           }
           calls.push({ name: call.function.name, args })

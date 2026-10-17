@@ -87,24 +87,72 @@ function jsonOf(answer: string): unknown {
   }
 }
 
+export class CalibrationSandboxUnavailableError extends Error {
+  constructor(message = "bubblewrap (`bwrap`) is required to run coding calibration cases safely") {
+    super(message)
+    this.name = "CalibrationSandboxUnavailableError"
+  }
+}
+
 export interface RunBunOptions {
   readonly timeoutMs?: number
+  readonly maxStdoutBytes?: number
   readonly bwrapPath?: string | null
 }
 
 const DEFAULT_SANDBOX_TIMEOUT_MS = 10_000
 const MAX_STDOUT_BYTES = 64 * 1024
 
+async function readBoundedStream(
+  stream: ReadableStream<Uint8Array> | null,
+  maxBytes: number,
+  onExceed: () => void,
+): Promise<Uint8Array> {
+  if (!stream) return new Uint8Array(0)
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value || value.byteLength === 0) continue
+      const remaining = maxBytes - total
+      if (value.byteLength >= remaining) {
+        if (remaining > 0) chunks.push(value.subarray(0, remaining))
+        total = maxBytes
+        onExceed()
+        await reader.cancel().catch(() => undefined)
+        break
+      }
+      chunks.push(value)
+      total += value.byteLength
+    }
+  } catch {
+    // Stream closed early after kill/cancel.
+  } finally {
+    reader.releaseLock()
+  }
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    out.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return out
+}
+
 /**
  * Runs `source` in a bubblewrap (`bwrap`) sandbox with a scrubbed environment, isolated temporary
- * filesystem, no repository access, no outbound network (`--unshare-all`), resource limits and a
- * strict deadline; returns its stdout. Fails closed (returns `""`) when `bwrap` is unavailable or
- * the sandbox cannot be constructed.
+ * filesystem, no repository access, no outbound network (`--unshare-all`), bounded stdout, resource
+ * limits and a strict deadline; returns its stdout. Throws {@link CalibrationSandboxUnavailableError}
+ * when `bwrap` is unavailable so the harness aborts rather than recording bogus model failures.
  */
 export async function runBun(source: string, options: RunBunOptions = {}): Promise<string> {
   const bwrap = options.bwrapPath === undefined ? Bun.which("bwrap") : options.bwrapPath
-  if (!bwrap) return ""
+  if (!bwrap) throw new CalibrationSandboxUnavailableError()
   const timeoutMs = options.timeoutMs ?? DEFAULT_SANDBOX_TIMEOUT_MS
+  const maxStdoutBytes = options.maxStdoutBytes ?? MAX_STDOUT_BYTES
   const cpuSeconds = Math.max(1, Math.ceil(timeoutMs / 1_000))
   const dir = await mkdtemp(join(tmpdir(), "distpatch-cal-"))
   try {
@@ -161,20 +209,30 @@ export async function runBun(source: string, options: RunBunOptions = {}): Promi
         env: {},
         stdin: "ignore",
         stdout: "pipe",
-        stderr: "pipe",
+        stderr: "ignore",
       },
     )
     let timedOut = false
-    const timer = setTimeout(() => {
-      timedOut = true
+    let overflowed = false
+    const killProc = () => {
       try {
         proc.kill("SIGKILL")
       } catch {}
+    }
+    const timer = setTimeout(() => {
+      timedOut = true
+      killProc()
     }, timeoutMs)
     try {
-      const [bytes] = await Promise.all([new Response(proc.stdout).bytes(), proc.exited])
-      if (timedOut) return ""
-      return new TextDecoder().decode(bytes.subarray(0, MAX_STDOUT_BYTES))
+      const [bytes] = await Promise.all([
+        readBoundedStream(proc.stdout, maxStdoutBytes, () => {
+          overflowed = true
+          killProc()
+        }),
+        proc.exited,
+      ])
+      if (timedOut || overflowed) return ""
+      return new TextDecoder().decode(bytes)
     } finally {
       clearTimeout(timer)
     }

@@ -138,6 +138,9 @@ describe("the indexes the access patterns actually need", () => {
     expect(
       indexShape(capabilityObservations, "capability_observations_source_model_idx").columns,
     ).toEqual(["source", "source_model_id", "observed_at"])
+    const singlePub = indexShape(capabilitySnapshots, "capability_snapshots_single_published_idx")
+    expect(singlePub.unique).toBe(true)
+    expect(singlePub.columns).toEqual(["publication_state"])
     expect(
       indexShape(capabilitySnapshots, "capability_snapshots_state_published_idx").columns,
     ).toEqual(["publication_state", "published_at", "generated_at"])

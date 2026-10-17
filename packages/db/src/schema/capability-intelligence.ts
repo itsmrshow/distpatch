@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm"
 import {
   doublePrecision,
   index,
@@ -6,6 +7,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core"
 
@@ -127,6 +129,9 @@ export const capabilitySnapshots = pgTable(
   },
   (table) => [
     unique("capability_snapshots_revision_key").on(table.revision),
+    uniqueIndex("capability_snapshots_single_published_idx")
+      .on(table.publicationState)
+      .where(sql`${table.publicationState} = 'published'`),
     index("capability_snapshots_state_published_idx").on(
       table.publicationState,
       table.publishedAt,

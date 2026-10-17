@@ -1,6 +1,13 @@
 import { mkdir, readdir } from "node:fs/promises"
 import { join } from "node:path"
-import { CASES, type Check, GRADER_VERSION, SPEED_PROMPT, SUITE_VERSION } from "./cases"
+import {
+  CASES,
+  CalibrationSandboxUnavailableError,
+  type Check,
+  GRADER_VERSION,
+  SPEED_PROMPT,
+  SUITE_VERSION,
+} from "./cases"
 import { type ModelRun, NORMALIZATION_VERSION, normalize } from "./normalize"
 import { claudeCliRoute, openAiChatRoute, type Route, type SpeedSample } from "./routes"
 
@@ -81,6 +88,7 @@ async function run(
           })
         }
       } catch (error) {
+        if (error instanceof CalibrationSandboxUnavailableError) throw error
         // A transport failure is a failed case: an endpoint that cannot answer has not shown skill.
         cases.push({ ...base, grade: 0, error: (error as Error).message.slice(0, 200) })
       }
