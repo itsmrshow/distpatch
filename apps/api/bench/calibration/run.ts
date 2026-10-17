@@ -1,18 +1,19 @@
 import { mkdir, readdir } from "node:fs/promises"
 import { join } from "node:path"
-import { CASES, type Check, SPEED_PROMPT, SUITE_VERSION } from "./cases"
+import { CASES, type Check, GRADER_VERSION, SPEED_PROMPT, SUITE_VERSION } from "./cases"
 import { type ModelRun, NORMALIZATION_VERSION, normalize } from "./normalize"
 import { claudeCliRoute, openAiChatRoute, type Route, type SpeedSample } from "./routes"
 
 /**
- * `bin/calibrate` — the capability calibration harness (evidence/capability-calibration-v1.md).
+ * `bin/calibrate` — the Distpatch Local Evaluation Framework (evidence/capability-calibration-v1.md).
  *
  *   bin/calibrate run <route> <wire-model> <canonical-id> [--only <case-prefix>] [--speed-runs N]
  *   bin/calibrate score
  *
- * Routes: `dockerlm` (DOCKERLM_BASE_URL), `ollama-cloud` (OLLAMA_CLOUD_API_KEY), `claude-cli`.
- * Results land in `evidence/capability-calibration-v1/results/<canonical-id>@<route>.json`; no
- * endpoint URL, header or credential is written. Never part of bin/check: it calls live models.
+ * Supplemental evidence source for DockerLM/local models, custom quantizations, and Distpatch-
+ * specific dimensions. Routes: `dockerlm` (DOCKERLM_BASE_URL), `ollama-cloud` (OLLAMA_CLOUD_API_KEY),
+ * `claude-cli`. Results land in `evidence/capability-calibration-v1/results/<canonical-id>@<route>.json`;
+ * no endpoint URL, header or credential is written. Never part of bin/check: it calls live models.
  */
 
 const RESULTS = join(import.meta.dir, "../../../../evidence/capability-calibration-v1/results")
@@ -103,8 +104,13 @@ async function run(
     `${JSON.stringify(
       {
         suite: SUITE_VERSION,
+        graderVersion: GRADER_VERSION,
         profileId,
+        semanticModelId: profileId,
         route: routeName,
+        routeId: routeName,
+        runtime: r.runtime,
+        settings: r.settings,
         wireModel: model,
         recordedAt: new Date().toISOString(),
         cases,

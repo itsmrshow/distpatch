@@ -25,6 +25,10 @@ export interface SpeedSample {
 
 export interface Route {
   readonly name: string
+  /** Transport/runtime description (never a credential or secret URL). */
+  readonly runtime: string
+  /** Route evaluation settings (temperature, maxTokens, tool delivery). */
+  readonly settings: Record<string, unknown>
   /** `false` when the transport cannot pass caller-defined tools (tool_use/agentic unmeasured). */
   readonly tools: boolean
   text(prompt: string): Promise<TextReply>
@@ -77,6 +81,8 @@ export function openAiChatRoute(name: string, baseUrl: string, model: string, ke
 
   return {
     name,
+    runtime: "openai-chat",
+    settings: { temperature: 0, maxTokens: MAX_TOKENS },
     tools: true,
     async text(prompt) {
       const started = performance.now()
@@ -212,6 +218,8 @@ export function claudeCliRoute(model: string): Route {
   }
   return {
     name: "claude-cli",
+    runtime: "claude-code-cli",
+    settings: { temperature: "cli-default", builtInTools: false, mcpTools: true },
     tools: true,
     async text(prompt) {
       const started = performance.now()

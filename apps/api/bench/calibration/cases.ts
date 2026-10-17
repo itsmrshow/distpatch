@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -15,6 +16,7 @@ import type { CapabilityDimension } from "../../src/services/capabilities"
  * and re-run every model rather than mixing results across versions.
  */
 export const SUITE_VERSION = "distpatch-calibration-v1"
+export const GRADER_VERSION = "distpatch-grader-v1-bwrap"
 
 export interface Check {
   readonly name: string
@@ -85,18 +87,100 @@ function jsonOf(answer: string): unknown {
   }
 }
 
-/** Runs `source` in a fresh Bun subprocess with a 10 s deadline; returns its stdout. */
-async function runBun(source: string): Promise<string> {
+export interface RunBunOptions {
+  readonly timeoutMs?: number
+  readonly bwrapPath?: string | null
+}
+
+const DEFAULT_SANDBOX_TIMEOUT_MS = 10_000
+const MAX_STDOUT_BYTES = 64 * 1024
+
+/**
+ * Runs `source` in a bubblewrap (`bwrap`) sandbox with a scrubbed environment, isolated temporary
+ * filesystem, no repository access, no outbound network (`--unshare-all`), resource limits and a
+ * strict deadline; returns its stdout. Fails closed (returns `""`) when `bwrap` is unavailable or
+ * the sandbox cannot be constructed.
+ */
+export async function runBun(source: string, options: RunBunOptions = {}): Promise<string> {
+  const bwrap = options.bwrapPath === undefined ? Bun.which("bwrap") : options.bwrapPath
+  if (!bwrap) return ""
+  const timeoutMs = options.timeoutMs ?? DEFAULT_SANDBOX_TIMEOUT_MS
+  const cpuSeconds = Math.max(1, Math.ceil(timeoutMs / 1_000))
   const dir = await mkdtemp(join(tmpdir(), "distpatch-cal-"))
-  const file = `${dir}/case.ts`
-  await Bun.write(file, source)
-  const proc = Bun.spawn(["bun", file], { stdout: "pipe", stderr: "pipe", cwd: dir })
-  const timer = setTimeout(() => proc.kill(), 10_000)
-  const out = await new Response(proc.stdout).text()
-  await proc.exited
-  clearTimeout(timer)
-  await rm(dir, { recursive: true, force: true })
-  return out
+  try {
+    const file = join(dir, "case.ts")
+    await Bun.write(file, source)
+    const mounts = ["/usr", "/lib", "/lib64", "/bin", "/sbin"].flatMap((p) =>
+      existsSync(p) ? ["--ro-bind", p, p] : [],
+    )
+    const proc = Bun.spawn(
+      [
+        bwrap,
+        "--unshare-all",
+        "--die-with-parent",
+        "--new-session",
+        "--clearenv",
+        "--setenv",
+        "PATH",
+        "/opt/bin:/usr/bin:/bin",
+        "--setenv",
+        "HOME",
+        "/work",
+        "--setenv",
+        "TMPDIR",
+        "/tmp",
+        "--setenv",
+        "BUN_INSTALL",
+        "/tmp/bun",
+        "--setenv",
+        "DO_NOT_TRACK",
+        "1",
+        ...mounts,
+        "--dir",
+        "/opt/bin",
+        "--ro-bind",
+        process.execPath,
+        "/opt/bin/bun",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",
+        "--bind",
+        dir,
+        "/work",
+        "--chdir",
+        "/work",
+        "/bin/sh",
+        "-c",
+        `ulimit -t ${cpuSeconds} -f 8192 -c 0 2>/dev/null || true; exec /opt/bin/bun /work/case.ts`,
+      ],
+      {
+        cwd: dir,
+        env: {},
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    )
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      try {
+        proc.kill("SIGKILL")
+      } catch {}
+    }, timeoutMs)
+    try {
+      const [bytes] = await Promise.all([new Response(proc.stdout).bytes(), proc.exited])
+      if (timedOut) return ""
+      return new TextDecoder().decode(bytes.subarray(0, MAX_STDOUT_BYTES))
+    } finally {
+      clearTimeout(timer)
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 }
 
 /** Runs `code` + `harness`; the harness prints one line `RESULT <passed> <total>`. */
