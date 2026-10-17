@@ -3,6 +3,10 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { CapabilityDimension } from "../../src/services/capabilities"
+import {
+  LOCAL_EVAL_GRADER_VERSION,
+  LOCAL_EVAL_SUITE_VERSION,
+} from "../../src/services/capabilities/intelligence/local-eval-versions"
 
 /**
  * The Distpatch capability calibration suite, `SUITE_VERSION`.
@@ -15,8 +19,8 @@ import type { CapabilityDimension } from "../../src/services/capabilities"
  * Editing a prompt, a check or the case list changes what the numbers mean: bump `SUITE_VERSION`
  * and re-run every model rather than mixing results across versions.
  */
-export const SUITE_VERSION = "distpatch-calibration-v1"
-export const GRADER_VERSION = "distpatch-grader-v1-bwrap"
+export const SUITE_VERSION = LOCAL_EVAL_SUITE_VERSION
+export const GRADER_VERSION = LOCAL_EVAL_GRADER_VERSION
 
 export interface Check {
   readonly name: string

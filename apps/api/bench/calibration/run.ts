@@ -189,7 +189,14 @@ async function score() {
       }
     })
   const body = `${JSON.stringify(
-    { suite: SUITE_VERSION, normalization: NORMALIZATION_VERSION, ...normalized, cases, speed },
+    {
+      suite: SUITE_VERSION,
+      graderVersion: GRADER_VERSION,
+      normalization: NORMALIZATION_VERSION,
+      ...normalized,
+      cases,
+      speed,
+    },
     null,
     2,
   )}\n`

@@ -1,5 +1,12 @@
 export { buildCapabilityCatalog, CapabilityCatalogError } from "./build"
 export * from "./intelligence"
+export {
+  canonicalIdFromRepo,
+  type ResolvedRouteInventoryEntry,
+  RouteInventory,
+  RouteInventoryEntry,
+  resolveRouteInventoryEntry,
+} from "./inventory"
 export { loadCapabilityCatalog, readCapabilityOverridesFile } from "./load"
 export {
   CAPABILITY_DIMENSIONS,

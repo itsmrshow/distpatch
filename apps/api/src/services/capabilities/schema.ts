@@ -113,6 +113,12 @@ const uniqueList = <T extends z.ZodType<string>>(item: T, max: number) =>
 export const ProfileInput = z.strictObject({
   id: CanonicalModelId,
   family: ModelFamilyName.nullable().optional(),
+  /**
+   * Semantic lineage: the canonical id of the model this one is fine-tuned, distilled or
+   * abliterated from. Absent for base/first-party models. Lineage is provenance, never score
+   * inheritance: a derivative's scores come from evidence about that derivative only.
+   */
+  baseModel: CanonicalModelId.nullable().optional(),
   aliases: uniqueList(CatalogAlias, 32).optional(),
   tags: uniqueList(ModelTag, 16).optional(),
   enabled: z.boolean().optional(),

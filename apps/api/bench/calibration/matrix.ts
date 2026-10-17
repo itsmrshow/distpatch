@@ -64,6 +64,7 @@ const effectiveInput: ShippedCatalogInput = {
   profiles: base.list().map((p) => ({
     id: p.id,
     family: p.family,
+    baseModel: p.baseModel,
     aliases: [...p.aliases],
     tags: [...p.tags],
     enabled: p.enabled,
@@ -72,7 +73,12 @@ const effectiveInput: ShippedCatalogInput = {
     sources: [...p.sources],
   })),
 }
-const candidates = effectiveInput.profiles.map((p) => p.id).sort()
+// The request path never offers a virtual model a profile that knows it cannot take or give text
+// (`dataplane/semantic-candidates.ts`); mirror it so the matrix describes what can actually win.
+const candidates = effectiveInput.profiles
+  .filter((p) => p.hard?.textInput !== false && p.hard?.textOutput !== false)
+  .map((p) => p.id)
+  .sort()
 
 type Scores = Partial<Record<CapabilityDimension, number | null>>
 function withScore(id: string, dimension: CapabilityDimension, value: number) {

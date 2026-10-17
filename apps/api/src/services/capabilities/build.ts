@@ -108,6 +108,7 @@ function addProfiles(
     drafts.set(input.id, {
       id: input.id,
       family: input.family ?? null,
+      baseModel: input.baseModel ?? null,
       aliases: input.aliases ?? [],
       tags: input.tags ?? [],
       enabled: input.enabled ?? true,
@@ -197,6 +198,7 @@ function finish(draft: Draft): ModelCapabilityProfile {
   return Object.freeze({
     id: draft.id,
     family: draft.family,
+    baseModel: draft.baseModel,
     aliases: Object.freeze([...draft.aliases].sort()),
     tags: Object.freeze([...draft.tags].sort()),
     enabled: draft.enabled,

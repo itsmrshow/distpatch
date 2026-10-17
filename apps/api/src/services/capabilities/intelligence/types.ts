@@ -33,6 +33,8 @@ export interface EvidenceFetchMetadata {
   readonly observationsEmitted: number
   readonly matchedModels: readonly string[]
   readonly unresolvedSourceModelIds: readonly string[]
+  /** Why a fetched payload was kept as historical evidence only (not production-eligible). */
+  readonly rejections?: readonly string[]
   readonly rateLimit: {
     readonly limit: number | null
     readonly remaining: number | null

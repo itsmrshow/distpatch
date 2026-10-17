@@ -9,6 +9,7 @@ import {
 import { SHIPPED_CAPABILITY_CATALOG } from "../shipped"
 import type { ModelCapabilityCatalog } from "../types"
 import { ARTIFICIAL_ANALYSIS_SOURCE_ID } from "./artificial-analysis"
+import { isProductionComparable, type SourceComparability } from "./comparability"
 import { LOCAL_EVAL_SOURCE_ID } from "./local-eval"
 import type {
   CompiledCapabilitySnapshotPayload,
@@ -37,12 +38,20 @@ import type {
  *      it wins over local calibration; local evaluation fills only dimensions where external evidence
  *      is absent (`null`), never averaging the two sources.
  * 2. Local / DockerLM models (`tags.includes("local")`):
- *    - `distpatch-local-eval` is primary evidence where external sources have no entry.
- * 3. Dimensions never inferred or fabricated:
+ *    - Semantic evidence only: a quantized artifact of a public model uses that public model's
+ *      Artificial Analysis evidence; a derivative has its own profile and is unscored unless a source
+ *      measures *that* model. Lineage (`baseModel`) is provenance, never score inheritance.
+ *    - `speed` is never compiled for local models (AA speed is hosted-API serving, not the local
+ *      route's).
+ * 3. Cross-source comparability (`comparability.ts`): a source writes shared preference scores
+ *    only when explicitly marked comparable. `distpatch-local-eval` is not (uncalibrated against
+ *    AA), so its observations stay stored evidence and never enter a production snapshot. Unknown
+ *    stays unknown; rejected or incomparable evidence is never converted to a zero.
+ * 4. Dimensions never inferred or fabricated:
  *    - `cost` stays `null` (pricing observations are retained in Postgres as evidence, not turned
  *      into a provider-independent semantic score).
  *    - `reasoning`, `review`, `structured_output`, `tool_use`, `long_context`, `vision` stay `null`
- *      unless a source measures them without saturation or mismatch.
+ *      unless a comparable source measures them without saturation or mismatch.
  *    - Hard facts (`contextTokens`, `toolUse`, `structuredOutput`, etc.) are never converted into
  *      preference scores (`long_context`, `tool_use`, `structured_output`).
  */
@@ -211,6 +220,7 @@ function compileDimension(
   canonicalModelId: string,
   dimension: CapabilityDimension,
   isLocalModel: boolean,
+  promoteLocalEval: boolean,
   observations: readonly SourceObservation[],
   now: Date,
   staleDays: number,
@@ -220,8 +230,11 @@ function compileDimension(
     return emptyDimensionEvidence(dimension)
   }
 
-  // Speed from Artificial Analysis performance observations (throughput + TTFT).
+  // Speed from Artificial Analysis performance observations (throughput + TTFT). Those measure
+  // hosted API serving, not a local quant on a local runtime, so a local model's speed stays
+  // unknown until a route-aware local measurement exists.
   if (dimension === "speed") {
+    if (isLocalModel) return emptyDimensionEvidence(dimension)
     const tpsObs = selectNewestObservation(
       observations,
       canonicalModelId,
@@ -286,12 +299,16 @@ function compileDimension(
         )
       : null
 
-  const localObs = selectNewestObservation(
-    observations,
-    canonicalModelId,
-    LOCAL_EVAL_SOURCE_ID,
-    `local_eval_${dimension}`,
-  )
+  // Local evaluation reaches the shared scale only when its source is explicitly marked
+  // comparable (`comparability.ts`); otherwise it stays stored evidence and never scores.
+  const localObs = promoteLocalEval
+    ? selectNewestObservation(
+        observations,
+        canonicalModelId,
+        LOCAL_EVAL_SOURCE_ID,
+        `local_eval_${dimension}`,
+      )
+    : null
 
   if (isLocalModel) {
     // Local/DockerLM models prefer Distpatch Local Evaluation first, falling back to external if present.
@@ -348,6 +365,8 @@ export interface CompileCapabilitySnapshotOptions {
   readonly bootstrap?: ShippedCatalogInput
   readonly generatedAt?: Date
   readonly staleDays?: number
+  /** Source scale comparability registry; defaults to the shipped one. */
+  readonly comparability?: SourceComparability
 }
 
 export interface CompiledCapabilitySnapshotResult {
@@ -372,6 +391,7 @@ export function compileCapabilitySnapshot(
   const bootstrap = options.bootstrap ?? SHIPPED_CAPABILITY_CATALOG
   const now = options.generatedAt ?? new Date()
   const staleDays = options.staleDays ?? DEFAULT_OBSERVATION_STALE_DAYS
+  const promoteLocalEval = isProductionComparable(LOCAL_EVAL_SOURCE_ID, options.comparability)
 
   const resolvedObs = observations
     .filter((o) => o.canonicalModelId !== null)
@@ -409,7 +429,15 @@ export function compileCapabilitySnapshot(
 
       const compiled = unsupported
         ? emptyDimensionEvidence(dim)
-        : compileDimension(profile.id, dim, isLocalModel, resolvedObs, now, staleDays)
+        : compileDimension(
+            profile.id,
+            dim,
+            isLocalModel,
+            promoteLocalEval,
+            resolvedObs,
+            now,
+            staleDays,
+          )
 
       dimensions[dim] = compiled
       scores[dim] = compiled.score

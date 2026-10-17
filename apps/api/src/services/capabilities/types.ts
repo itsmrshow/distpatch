@@ -23,6 +23,8 @@ export type CapabilityScores = { readonly [D in CapabilityDimension]: number | n
 export interface ModelCapabilityProfile {
   readonly id: CanonicalModelId
   readonly family: string | null
+  /** Canonical id of the base model for a true derivative, else `null`. Never inherits scores. */
+  readonly baseModel: CanonicalModelId | null
   /** Catalog aliases: names that *identify* this profile. Never a wire rewrite. */
   readonly aliases: readonly string[]
   /** Semantic model tags, sorted. Not Account tags. */

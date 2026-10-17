@@ -44,11 +44,10 @@ describe("shipped catalog", () => {
     expect(catalog.revision().shipped).toBe(SHIPPED_CAPABILITY_CATALOG.revision)
   })
 
-  test("represents the local/free/dockerlm tags on the DockerLM model", () => {
-    const profile = buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG).resolve(
-      "mimo-v2.6-distill-9b",
-    )
-    expect(profile?.tags).toEqual(["dockerlm", "free", "local"])
+  test("local models carry only the semantic `local` tag; route traits stay off the profile", () => {
+    const catalog = buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG)
+    expect(catalog.resolve("mimo-v2.6-distill-9b")?.tags).toEqual(["local"])
+    expect(catalog.resolve("mimo-v2.6-distill-9b")?.id).toBe("xiaomimimo/mimo-v2.6-distill-qwen-9b")
   })
 
   test("ships no preference scores in the static bootstrap table; scores enter via published snapshot or override", () => {

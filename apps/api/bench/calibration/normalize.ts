@@ -1,4 +1,5 @@
 import { CAPABILITY_DIMENSIONS, type CapabilityDimension } from "../../src/services/capabilities"
+import { LOCAL_EVAL_NORMALIZATION_VERSION } from "../../src/services/capabilities/intelligence/local-eval-versions"
 
 /**
  * Normalization `distpatch-norm-v1`: raw case grades → catalog `[0, 1]` preference scores.
@@ -23,7 +24,7 @@ import { CAPABILITY_DIMENSIONS, type CapabilityDimension } from "../../src/servi
  *
  * `speed` and `cost` are never produced here (see the evidence artifact for why).
  */
-export const NORMALIZATION_VERSION = "distpatch-norm-v1"
+export const NORMALIZATION_VERSION = LOCAL_EVAL_NORMALIZATION_VERSION
 export const SATURATION_CEILING = 0.9
 
 export interface GradedCase {

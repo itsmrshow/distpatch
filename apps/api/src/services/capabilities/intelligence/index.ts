@@ -14,6 +14,12 @@ export {
   resolveArtificialAnalysisApiKey,
 } from "./artificial-analysis"
 export {
+  isProductionComparable,
+  SOURCE_SCALE_COMPARABILITY,
+  type SourceComparability,
+  type SourceScaleComparability,
+} from "./comparability"
+export {
   applyPublishedSnapshotToBootstrap,
   CAPABILITY_COMPILER_VERSION,
   CAPABILITY_NORMALIZER_VERSION,
@@ -48,6 +54,11 @@ export {
   type LocalEvaluationSourceOptions,
   parseLocalEvaluationArtifact,
 } from "./local-eval"
+export {
+  LOCAL_EVAL_GRADER_VERSION,
+  LOCAL_EVAL_NORMALIZATION_VERSION,
+  LOCAL_EVAL_SUITE_VERSION,
+} from "./local-eval-versions"
 export {
   type CapabilityEvidenceSource,
   type CompiledCapabilitySnapshotPayload,

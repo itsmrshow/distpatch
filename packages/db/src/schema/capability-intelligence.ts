@@ -66,7 +66,8 @@ export const capabilityObservations = pgTable(
     /**
      * Deterministic content hash over the upstream observation identity and value so repeated syncs
      * against unchanged upstream data are idempotent (`ON CONFLICT DO NOTHING`) while genuine newer
-     * measurements append as new historical rows rather than overwriting prior history.
+     * measurements insert new rows; a reappearing older value re-stamps its existing row, so this is
+     * a deduplicated log, not an immutable ledger.
      */
     fingerprint: text("fingerprint").notNull(),
 

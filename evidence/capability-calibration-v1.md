@@ -16,6 +16,10 @@ evidence for local/DockerLM models and custom builds.
 | Bootstrap Catalog | `2026-10-17.2` (hard facts only; static bootstrap preference scores all `null`) |
 | Published Snapshot | `sha256:f09cce926e0203b67d9db36ca83ccc4a2ced2e04ddbb56071ecae6927ccd53e7` (effective catalog `sha256:90aa4da5246fb9b7ae05f1d9f455dcb222eccaf954e18b212257906aa4a7cc08`) |
 | Reproduce | `bin/capabilities sync` · `bin/capabilities status` · `bin/capabilities show` · `bin/calibrate matrix` |
+
+> **Status:** sections 1–10 are historical (pre-inventory). Section 11 records the current local
+> fleet identity model, the Local Evaluation trust boundary and the re-derived policy results.
+
 ## 1. Model inventory
 
 ### Shipped profiles (before this gate)
@@ -227,8 +231,9 @@ From `bin/calibrate matrix` over catalog `sha256:90aa4da5246fb9b7ae05f1d9f455dcb
 > **Grader version gate (v1-bwrap):** `bin/calibrate score` now refuses any result file whose
 > `graderVersion` differs from the current grader (`distpatch-grader-v1-bwrap`, sandboxed). The
 > committed raw results predate the sandbox and carry no `graderVersion`, so re-normalizing them
-> via `bin/calibrate score` fails closed until every model is re-run; `scores.json` remains the
-> frozen v1 record that `distpatch-local-eval` evidence ingestion reads. Never mix grader versions.
+> via `bin/calibrate score` fails closed until every model is re-run; `scores.json` remains as a
+> stamped historical record that the evidence adapter now rejects as production evidence (§11).
+> Never mix grader versions.
 
 - **`auto-fast` — READY**: 100% coverage (`speed` + `general`) across all hosted models from
   Artificial Analysis, 0.2118 margin (`openai/gpt-oss-120b` over `openai/gpt-5.5`), zero flips at
@@ -242,3 +247,45 @@ From `bin/calibrate matrix` over catalog `sha256:90aa4da5246fb9b7ae05f1d9f455dcb
 - **`auto-plan`, `auto-research`, `auto-review` — INSUFFICIENT EVIDENCE**: coverage is only
   0.20–0.40 because their primary weighted dimensions (`reasoning` 25–40%, `long_context` 20–30%,
   `review` 40%) remain `null` on the AA Free tier and saturated in `distpatch-calibration-v1`.
+
+## 11. Update: local fleet identity, comparability and re-derived results (bootstrap `2026-10-17.3`)
+
+Sections 1–10 are the historical record from before the local fleet inventory and are **superseded**
+for local models and policy results:
+
+- **Local fleet.** `evidence/model-inventory/dockerlm.json` (normalized, sanitized-by-inspection)
+  shows six routes, not one: five generative and one embedding. The catalog now holds a semantic
+  profile for each (see `docs/distpatch/capability-catalog.md`). The earlier id
+  `mimo/mimo-v2.6-distill-9b` became `xiaomimimo/mimo-v2.6-distill-qwen-9b` (a derivative of
+  `qwen/qwen3.5-9b`); the committed `scores.json` still keys it by the old id, which the local-eval
+  identity table maps explicitly.
+- **Stale-evidence trust boundary.** `scores.json` and the raw results were produced by the
+  pre-sandbox grader and are now stamped `graderVersion: distpatch-grader-v1-pre-sandbox`. The
+  Local Evaluation source accepts only artifacts matching the current suite, grader and normalization
+  versions; this one is retained as `historical_*` observations and cannot enter a snapshot.
+- **Scale comparability.** Section 8 found local pass fractions and AA indexes are not on one scale.
+  Local Evaluation is therefore registered not cross-source comparable (`comparability.ts`) and never
+  writes shared preference scores, even from a current-grader artifact, until a versioned calibration
+  says otherwise. The section 7 MiMo scores (0.82/0.72/1.00) no longer exist in any snapshot.
+- **Re-derived policy results** (`bin/calibrate matrix` after `bin/capabilities sync` against the
+  live AA Free tier; catalog `shipped=2026-10-17.3`, snapshot
+  `sha256:e8863f8977f901a323ad615dc2a47ec7ba9e4e988b3c1163ca61611b948f830a`):
+
+| Policy | Winner | Score | Cov. | Runner-up | Margin | Readiness |
+|---|---|---|---|---|---|---|
+| `auto` | `qwen/qwen3.8-flash-next` | 0.2396 | 0.55 | `openai/gpt-5.5` | 0.0314 | EXPERIMENTAL |
+| `auto-fast` | `openai/gpt-oss-120b` | 0.5033 | 1.00 | `openai/gpt-5.5` | 0.2145 | READY (hosted); local models have no speed evidence |
+| `auto-local` | `qwen/qwen3.8-flash-next` | 0.2396 | 0.55 | `qwen/qwen3.8-27b` | 0.0361 | EXPERIMENTAL (flips at ±0.1 `general`) |
+| `auto-max` | `qwen/qwen3.8-flash-next` | 0.2895 | 0.55 | `openai/gpt-5.5` | 0.0266 | EXPERIMENTAL |
+| `auto-plan` | `qwen/qwen3.8-flash-next` | 0.1937 | 0.40 | `qwen/qwen3.8-27b` | 0.0287 | INSUFFICIENT EVIDENCE |
+| `auto-research` | `qwen/qwen3.8-flash-next` | 0.0796 | 0.20 | `openai/gpt-5.5` | 0.0028 | INSUFFICIENT EVIDENCE (flips at ±0.05) |
+| `auto-review` | `openai/gpt-5.5` | 0.2074 | 0.35 | `qwen/qwen3.8-flash-next` | 0.0015 | INSUFFICIENT EVIDENCE (flips at ±0.05) |
+| `auto-task` | `openai/gpt-5.5` | 0.2042 | 0.55 | `anthropic/claude-sonnet-4-6` | 0.0327 | EXPERIMENTAL (tool use filter excludes models with unknown `toolUse`) |
+
+  Every policy ranks the three derivative/local profiles without evidence (`xiaomimimo/...`,
+  `0bserverx/...`, `isvalorum/...`) at coverage 0.00, and the embedding model never appears: the
+  non-text candidate filter drops it before selection. Contributing evidence is
+  `artificial-analysis` only (`general`, `coding`,
+  `agentic`, `speed`). Caveat: AA scores describe the public full-precision model; the local
+  `qwen/qwen3.8-flash-next` route is a 2-bit IQ2_XS quant, and quant quality loss is **not modeled**,
+  so its lead is an artifact of that identity decision, not a measured local result.

@@ -61,15 +61,16 @@ eligibility: an unknown score earns no credit in ranking.
 
 ## Tags
 
-Semantic model tags, pattern `^[a-z][a-z0-9-]{0,31}$`, e.g. `local`, `free`, `dockerlm`,
-`premium`, `subscription`, `coding`. They describe the model, not a route. Account tags (M1)
-describe a route and stay on the Account; #8 combines both without either owning the other.
+Semantic model tags, pattern `^[a-z][a-z0-9-]{0,31}$`, e.g. `local`, `embedding`, `premium`,
+`subscription`, `coding`. They describe the model, not a route. Route traits such as `free` or the
+serving host belong on the Account (M1 account tags), which describe a route; #8 combines both
+without either owning the other.
 
 ## Shipped bootstrap profiles
 
 `shipped.ts`, TypeScript constants validated by Zod at build — the same shape of decision as the
 shipped price and context-window tables. Schema version `1`, revision `YYYY-MM-DD.N` (bump with
-any edit); current `2026-10-17.2`. Sparse on purpose, carrying verified hard facts and **no**
+any edit); current `2026-10-17.3`. Sparse on purpose, carrying verified hard facts and **no**
 hardcoded preference scores (`scores` all `null`):
 
 | Id | Case | Known hard facts | Bootstrap scores |
@@ -77,7 +78,16 @@ hardcoded preference scores (`scores` all `null`):
 | `anthropic/claude-sonnet-4-6` | hosted first-party | window/output from `models/windows`, text, tools | none (`null`) |
 | `openai/gpt-5.5` | hosted first-party | window/output from `models/windows`, text, tools | none (`null`) |
 | `openai/gpt-oss-120b` | many OpenAI-compatible hosts, differing wire ids | 131 072 context (model card), text, tools (live) | none (`null`) |
-| `mimo/mimo-v2.6-distill-9b` | DockerLM, tags `local free dockerlm` | text, tools, JSON schema (M1 live) | none (`null`) |
+| `qwen/qwen3.8-27b` | local (ATX quant route `qwen3.8-27b`) | text, image | none (`null`) |
+| `qwen/qwen3.8-flash-next` | local (Strata route `strata-qwen38-flash-next`) | text, image | none (`null`) |
+| `xiaomimimo/mimo-v2.6-distill-qwen-9b` | local derivative of `qwen/qwen3.5-9b` (route `mimo-v2.6-distill-9b`) | text, image, tools, JSON schema (M1 live) | none (`null`) |
+| `0bserverx/qwen3.8-27b-heretic-abliterated-uncensored` | local derivative of `qwen/qwen3.8-27b` (route `qwen3.8-27b-rvn`) | text | none (`null`) |
+| `isvalorum/qwen3.6-35b-a3b-mtp-apex-i-miniplus-v2.1-abliterated` | local derivative of `qwen/qwen3.6-35b-a3b` (route `qwen36-35b-apex-v21`) | text | none (`null`) |
+| `qwen/qwen3-embedding-0.6b` | local embedding-only (route `qwen3-embedding-0.6b`) | text in, **no** text out | none (`null`) |
+
+Route context windows are route configuration (inventory), not model facts, so the local profiles
+leave `contextTokens` unknown. `imageInput` is stated only where the public model documents it,
+even if a given route lacks the multimodal projector.
 
 ## Capability Intelligence Pipeline
 
@@ -94,7 +104,7 @@ OpenRouter metadata (planned) ──────┘
      Evidence ingestion (bin/capabilities sync)
                   │
                   ▼
-     Postgres: capability_observations (append-only, fingerprinted)
+     Postgres: capability_observations (fingerprint-deduplicated observation log)
                   │
                   ▼
      Capability compiler (distpatch-cap-compiler-v1 / distpatch-cap-norm-v1)
@@ -118,10 +128,9 @@ OpenRouter metadata (planned) ──────┘
 - **Implemented — Distpatch Local Evaluation Framework (`distpatch-local-eval`)**: versioned deterministic
   suite (`apps/api/bench/calibration/`, `bin/calibrate`, code execution isolated inside a `bwrap`
   sandbox with `--unshare-all`, scrubbed environment, isolated temporary filesystem, no network,
-  and resource/timeout limits). Acts as primary evidence for local/DockerLM models
-  (`mimo/mimo-v2.6-distill-9b`), custom quantizations, and models absent from external indexes, and
-  as supplemental evidence for Distpatch-specific dimensions. Saturated dimensions (> 0.90 across
-  all measured models) stay withheld (`null`).
+  and resource/timeout limits). **Supplemental, stored evidence**: not cross-source comparable with
+  Artificial Analysis, so it does not write shared preference scores (see Cross-source
+  comparability). Saturated dimensions (> 0.90 across all measured models) stay withheld (`null`).
 - **Planned future sources**:
   - **Hugging Face / OpenEvals**: reasoning, coding, and benchmark-specific capability evidence to
     fill dimensions external headline indexes omit.
@@ -151,12 +160,72 @@ Effective runtime catalog layering (`applyPublishedSnapshotToBootstrap`):
 
 - Within the compiler, sources are **never automatically averaged**:
   - For hosted models, maintained external evidence (`artificial-analysis`) is primary for
-    headline dimensions (`general`, `coding`, `agentic`, `speed`); local evaluation supplements
-    only dimensions external sources do not measure or models completely absent from external feeds.
-  - For local models (`local` tag), `distpatch-local-eval` is primary where external sources have
-    no entry.
+    headline dimensions (`general`, `coding`, `agentic`, `speed`).
+  - For local models (`local` tag), a quantized artifact of a public model uses that public
+    model's Artificial Analysis evidence (`general`, `coding`, `agentic`); `speed` is never compiled
+    (AA speed describes hosted serving, not a local route). A derivative is unscored unless a source
+    measures *that* model: lineage (`baseModel`) is provenance, never score inheritance.
+  - A source writes shared scores only if marked **comparable** (below).
 - Every compiled score records its exact source, benchmark, benchmark version, observation
   timestamp, staleness flag (> 90 days), and `sha256` provenance digest.
+
+### Cross-source comparability
+
+All sources feeding a preference dimension must be calibrated onto one scale; fitting inside `[0, 1]`
+is not comparability. `intelligence/comparability.ts` holds an explicit registry:
+
+```text
+evidence exists → valid? → cross-source comparable?
+                             ├─ yes → production score candidate
+                             └─ no  → stored evidence/provenance only
+```
+
+`artificial-analysis` is comparable (`artificial-analysis-index-100-v1`). `distpatch-local-eval` is
+**not**: its pass fractions are uncalibrated against AA indexes and there is no multiplier, offset
+or fitted conversion. Its observations stay in Postgres as evidence (and in the evidence digest) but
+never score. A source becomes comparable only through a versioned registry entry naming its
+calibration (future anchor-model calibration). Any new evidence provider follows the same rule; an
+unlisted source is not comparable.
+
+### Local Evaluation trust boundary
+
+The normalized artifact must carry `suite`, `graderVersion` and `normalization`
+(`intelligence/local-eval-versions.ts`, shared by the harness and the reader). The source accepts
+only the current values; anything else (missing stamp, the pre-sandbox grader, another normalization)
+is rejected as production evidence and retained as `historical_*` observations — never as zero
+scores. The committed `evidence/capability-calibration-v1/scores.json` is stamped
+`distpatch-grader-v1-pre-sandbox`, so it is historical until models are re-run under the sandboxed
+grader.
+
+### Local model identity layers
+
+```text
+base model → derivative semantic model → quant artifact → runtime → route alias
+```
+
+| Layer | Example | Lives in |
+|---|---|---|
+| Semantic model | `qwen/qwen3.8-flash-next` | capability catalog |
+| Derivative lineage | `0bserverx/qwen3.8-27b-heretic-abliterated-uncensored` → `baseModel: qwen/qwen3.8-27b` | catalog (`baseModel`) |
+| Artifact | `ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF`, `GSQ-RCO IQ2_XS` | route/artifact inventory |
+| Runtime | `strata 0.1.44.1` | route/artifact inventory |
+| Route alias | `strata-qwen38-flash-next` | catalog alias / provider |
+
+Quantizing or changing runtime does not create a semantic model; a fine-tune or abliteration does.
+Canonical ids are the lowercased HF repository id; exact casing lives in `sources` (provenance).
+
+`inventory.ts` defines the provider-neutral normalized route-inventory contract (semantic identity,
+base/derivative lineage, artifact identity, runtime identity, route identity, capabilities,
+provenance), so MLX, llama.cpp, Ollama, OpenRouter, NVIDIA or another OpenAI-compatible provider can
+describe routes without a DockerLM-specific core type. `evidence/model-inventory/dockerlm.json` is
+the DockerLM instance (inspected: no host paths, addresses or credentials; committed as-is, moved
+from the repository root). It is development/catalog evidence only: nothing reads it at inference,
+and `local-fleet.test.ts` keeps the shipped catalog consistent with it.
+
+Embedding-only models (`qwen/qwen3-embedding-0.6b`: `textOutput: false`, tag `embedding`) are real
+profiles with truthful hard facts. They never reach a generative virtual model because the request
+path (`dataplane/semantic-candidates.ts`) drops any profile that knows it cannot take or give text
+before selection; unknown (`null`) text support stays a candidate, as before.
 
 ### Snapshot lifecycle & last-known-good retention
 
@@ -167,6 +236,16 @@ If any stage fails (API outage, rate limit, schema drift, DB failure, or catalog
 publication aborts and the previously published snapshot (or static bootstrap catalog before the
 first sync) remains active. Inference never queries Postgres or external HTTP endpoints on the
 request path.
+
+### Observation history semantics
+
+`capability_observations` is a **fingerprint-deduplicated observation log**, not an immutable
+append-only ledger. New values insert new rows; an unchanged latest value is deduplicated. If an
+older value *reappears* after an intermediate one, its existing row is re-stamped (`observed_at`,
+`ingested_at`, `source_ref`, provenance) so the compiler sees it as current, which means the
+intermediate period is not recorded as a row. `canonical_model_id` is also rewritten when identity
+mappings change. The published snapshots (`capability_snapshots`) are the immutable audit trail.
+
 ## Operator overrides
 
 `MODEL_CAPABILITY_OVERRIDES_PATH` names a JSON file read **once at boot**. Missing, unreadable,
@@ -181,7 +260,7 @@ ever needed.
   "profiles": [{ "id": "local/qwen-coder", "aliases": ["qwen-coder"], "tags": ["local", "free"] }],
   "overrides": [
     { "id": "openai/gpt-5.5", "enabled": false },
-    { "id": "mimo/mimo-v2.6-distill-9b", "hard": { "contextTokens": 32768 }, "scores": { "coding": null } },
+    { "id": "xiaomimimo/mimo-v2.6-distill-qwen-9b", "hard": { "contextTokens": 32768 }, "scores": { "coding": null } },
     { "id": "anthropic/claude-sonnet-4-6", "tags": { "add": ["premium"] } }
   ]
 }

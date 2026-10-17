@@ -4,7 +4,7 @@
 #
 # Calls real models, so it is never part of bin/check or CI.
 #
-#   DOCKERLM_BASE_URL=http://host:8000/v1 bin/calibrate run dockerlm mimo-v2.6-distill-9b mimo/mimo-v2.6-distill-9b
+#   DOCKERLM_BASE_URL=http://host:8000/v1 bin/calibrate run dockerlm mimo-v2.6-distill-9b xiaomimimo/mimo-v2.6-distill-qwen-9b
 #   bin/calibrate run ollama-cloud gpt-oss:120b openai/gpt-oss-120b
 #   bin/calibrate run claude-cli claude-sonnet-4-6 anthropic/claude-sonnet-4-6
 #   bin/calibrate score
@@ -14,7 +14,8 @@ set -eu
 cd "$(dirname "$0")/.."
 
 if [ "${1:-}" = matrix ]; then
-  exec bun apps/api/bench/calibration/matrix.ts
+  shift
+  exec bun apps/api/bench/calibration/matrix.ts "$@"
 fi
 bun apps/api/bench/calibration/run.ts "$@"
 # Result files are committed evidence; keep them in the repository's formatter shape.

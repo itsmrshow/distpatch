@@ -16,10 +16,13 @@ import {
  * `bin/capabilities` (or an off-path admin/background job); the data plane reads only an
  * in-memory `ModelCapabilityCatalog`.
  *
- * Observations are append-only history deduplicated by `fingerprint`:
+ * Observations are a fingerprint-deduplicated log (not an immutable ledger):
  * - Repeating a sync over identical upstream records inserts 0 new rows.
- * - A changed upstream score or new benchmark version produces a new `fingerprint` and appends a
- *   new row without overwriting earlier observations.
+ * - A changed upstream score or new benchmark version produces a new `fingerprint` and inserts a
+ *   new row, leaving earlier rows untouched.
+ * - A value that *reappears* after an intermediate value re-stamps its existing row's timestamps,
+ *   source ref and provenance (so it is current again); the intermediate span is not recorded.
+ * - Identity resolution rewrites `canonical_model_id` in place.
  *
  * Snapshot publication is atomic: promoting a candidate snapshot demotes any previously
  * `published` row to `superseded` and marks the target row `published` inside one database

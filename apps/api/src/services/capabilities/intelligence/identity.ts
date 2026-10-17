@@ -105,25 +105,30 @@ export const EXPLICIT_EXTERNAL_MODEL_MAPPINGS: readonly ExternalModelIdentityEnt
     note: "OpenAI gpt-oss-120b canonical/OpenRouter identifier",
   },
 
-  // Xiaomi MiMo V2.6 Distill 9B
+  // Alibaba Qwen3.8 27B. AA publishes reasoning-effort variants as separate models
+  // (`qwen3-8-27b` = xhigh, `qwen3-8-27b-medium`, ...); only the flagship xhigh entry is mapped,
+  // matching the Claude convention above. Verified against the AA model pages (HF weights link
+  // `Qwen/Qwen3.8-27B`). Quantized local artifacts of this model share the public evidence; the
+  // fine-tunes (`0bserverx/...-heretic-...`) deliberately do not.
   {
     source: "artificial-analysis",
-    externalId: "mimo-v2-6-distill-9b",
-    canonicalId: "mimo/mimo-v2.6-distill-9b",
-    note: "MiMo V2.6 Distill 9B AA slug",
+    externalId: "qwen3-8-27b",
+    canonicalId: "qwen/qwen3.8-27b",
+    note: "Qwen3.8 27B (xhigh) AA slug",
   },
+
+  // Alibaba Qwen3.8-Flash-Next (HF weights link `Qwen/Qwen3.8-Flash-Next`).
   {
     source: "artificial-analysis",
-    externalId: "mimo-v2.6-distill-9b",
-    canonicalId: "mimo/mimo-v2.6-distill-9b",
-    note: "MiMo V2.6 Distill 9B dotted slug",
+    externalId: "qwen3-8-flash-next",
+    canonicalId: "qwen/qwen3.8-flash-next",
+    note: "Qwen3.8-Flash-Next AA slug",
   },
-  {
-    source: "artificial-analysis",
-    externalId: "mimo/mimo-v2.6-distill-9b",
-    canonicalId: "mimo/mimo-v2.6-distill-9b",
-    note: "MiMo V2.6 Distill 9B canonical identifier",
-  },
+
+  // Not mapped, by design: `xiaomimimo/mimo-v2.6-distill-qwen-9b` (no AA model page found), and
+  // the derivatives `0bserverx/qwen3.8-27b-heretic-abliterated-uncensored` and
+  // `isvalorum/qwen3.6-35b-a3b-mtp-apex-i-miniplus-v2.1-abliterated` (AA benchmarks the bases,
+  // not these fine-tunes; a base score is never a derivative's score).
 
   // Distpatch Local Evaluation Framework (already emits canonical model IDs)
   {
@@ -142,9 +147,10 @@ export const EXPLICIT_EXTERNAL_MODEL_MAPPINGS: readonly ExternalModelIdentityEnt
     canonicalId: "openai/gpt-oss-120b",
   },
   {
+    // The committed v1 artifact keyed this model by its earlier, pre-inventory profile id.
     source: "distpatch-local-eval",
     externalId: "mimo/mimo-v2.6-distill-9b",
-    canonicalId: "mimo/mimo-v2.6-distill-9b",
+    canonicalId: "xiaomimimo/mimo-v2.6-distill-qwen-9b",
   },
 ] as const
 

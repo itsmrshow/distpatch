@@ -1,5 +1,6 @@
 {
   "suite": "distpatch-calibration-v1",
+  "graderVersion": "distpatch-grader-v1-pre-sandbox",
   "normalization": "distpatch-norm-v1",
   "raw": {
     "anthropic/claude-sonnet-4-6": {

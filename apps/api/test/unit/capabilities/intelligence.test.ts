@@ -342,8 +342,9 @@ describe("external identity mapping", () => {
     )
     expect(resolver.resolve("artificial-analysis", "gpt-oss-120b")).toBe("openai/gpt-oss-120b")
     expect(resolver.resolve("artificial-analysis", "gpt-5-5")).toBe("openai/gpt-5.5")
-    expect(resolver.resolve("artificial-analysis", "mimo-v2-6-distill-9b")).toBe(
-      "mimo/mimo-v2.6-distill-9b",
+    expect(resolver.resolve("artificial-analysis", "qwen3-8-27b")).toBe("qwen/qwen3.8-27b")
+    expect(resolver.resolve("artificial-analysis", "qwen3-8-flash-next")).toBe(
+      "qwen/qwen3.8-flash-next",
     )
   })
 
@@ -599,10 +600,11 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     const localParsed = parseLocalEvaluationArtifact(
       {
         suite: "distpatch-calibration-v1",
+        graderVersion: "distpatch-grader-v1-bwrap",
         normalization: "distpatch-norm-v1",
         scores: {
           "anthropic/claude-sonnet-4-6": { general: 1, coding: 0.95, agentic: 1 },
-          "mimo/mimo-v2.6-distill-9b": { general: 0.82, coding: 0.72, agentic: 1 },
+          "xiaomimimo/mimo-v2.6-distill-qwen-9b": { general: 0.82, coding: 0.72, agentic: 1 },
         },
       },
       {
@@ -618,7 +620,7 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
 
     const sonnet = compiled.catalog.get("anthropic/claude-sonnet-4-6")
     const gptOss = compiled.catalog.get("openai/gpt-oss-120b")
-    const mimo = compiled.catalog.get("mimo/mimo-v2.6-distill-9b")
+    const mimo = compiled.catalog.get("xiaomimimo/mimo-v2.6-distill-qwen-9b")
     const gpt55 = compiled.catalog.get("openai/gpt-5.5")
 
     // Hosted model uses AA primary evidence, not local ceiling scores
@@ -633,10 +635,10 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     expect(sonnet?.scores.tool_use).toBeNull()
     expect(sonnet?.scores.long_context).toBeNull()
 
-    // Local model (`local` tag) uses Distpatch Local Evaluation primary evidence
-    expect(mimo?.scores.general).toBe(0.82)
-    expect(mimo?.scores.coding).toBe(0.72)
-    expect(mimo?.scores.agentic).toBe(1)
+    // Local evaluation is stored evidence but not cross-source comparable: it never scores.
+    expect(mimo?.scores.general).toBeNull()
+    expect(mimo?.scores.coding).toBeNull()
+    expect(mimo?.scores.agentic).toBeNull()
     expect(mimo?.scores.speed).toBeNull()
 
     // gpt-oss-120b uses AA primary evidence
@@ -860,13 +862,15 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     const customBootstrap = {
       ...SHIPPED_CAPABILITY_CATALOG,
       profiles: SHIPPED_CAPABILITY_CATALOG.profiles.map((p) =>
-        p.id === "mimo/mimo-v2.6-distill-9b" ? { ...p, hard: { ...p.hard, toolUse: false } } : p,
+        p.id === "xiaomimimo/mimo-v2.6-distill-qwen-9b"
+          ? { ...p, hard: { ...p.hard, toolUse: false } }
+          : p,
       ),
     }
     const fakeToolObs: SourceObservation = {
       source: LOCAL_EVAL_SOURCE_ID,
-      sourceModelId: "mimo/mimo-v2.6-distill-9b",
-      canonicalModelId: "mimo/mimo-v2.6-distill-9b",
+      sourceModelId: "xiaomimimo/mimo-v2.6-distill-qwen-9b",
+      canonicalModelId: "xiaomimimo/mimo-v2.6-distill-qwen-9b",
       metric: "local_eval_tool_use",
       rawValue: 0.9,
       unit: "score_0_1",
@@ -881,7 +885,14 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     const compiled = compileCapabilitySnapshot([fakeToolObs], {
       bootstrap: customBootstrap,
       generatedAt: NOW,
+      comparability: {
+        [LOCAL_EVAL_SOURCE_ID]: {
+          comparable: true,
+          calibration: "test-calibration",
+          reason: "test",
+        },
+      },
     })
-    expect(compiled.catalog.get("mimo/mimo-v2.6-distill-9b")?.scores.tool_use).toBeNull()
+    expect(compiled.catalog.get("xiaomimimo/mimo-v2.6-distill-qwen-9b")?.scores.tool_use).toBeNull()
   })
 })
