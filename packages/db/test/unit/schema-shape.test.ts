@@ -181,6 +181,40 @@ const TABLE_COLUMNS: ReadonlyArray<{ table: Table; columns: readonly string[] }>
       "createdAt",
     ],
   },
+  {
+    table: schema.capabilityObservations,
+    columns: [
+      "id",
+      "source",
+      "sourceModelId",
+      "canonicalModelId",
+      "metric",
+      "rawValue",
+      "unit",
+      "benchmark",
+      "benchmarkVersion",
+      "fingerprint",
+      "observedAt",
+      "ingestedAt",
+      "sourceRef",
+      "provenance",
+    ],
+  },
+  {
+    table: schema.capabilitySnapshots,
+    columns: [
+      "id",
+      "revision",
+      "generatedAt",
+      "publishedAt",
+      "compilerVersion",
+      "normalizerVersion",
+      "evidenceDigest",
+      "publicationState",
+      "payload",
+      "summary",
+    ],
+  },
 ]
 
 describe("table columns", () => {

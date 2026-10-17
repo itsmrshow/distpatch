@@ -3,6 +3,7 @@ import type { Database, DatabaseHandle } from "../../src/client"
 import { defaultMigrationsFolder, runMigrations } from "../../src/migrate"
 import { createAccountRepository } from "../../src/repositories/account-repository"
 import { createApiKeyRepository } from "../../src/repositories/api-key-repository"
+import { createCapabilityIntelligenceRepository } from "../../src/repositories/capability-intelligence-repository"
 import { createOauthStateRepository } from "../../src/repositories/oauth-state-repository"
 import { createPriceOverrideRepository } from "../../src/repositories/price-override-repository"
 import { createScheduledTaskRepository } from "../../src/repositories/scheduled-task-repository"
@@ -50,6 +51,8 @@ const EXPECTED_TABLES = [
   "scheduled_task_runs",
   "oauth_states",
   "price_overrides",
+  "capability_observations",
+  "capability_snapshots",
 ] as const
 
 describe.skipIf(!runnable)("migrations against a live database", () => {
@@ -337,5 +340,103 @@ describe.skipIf(!runnable)("migrations against a live database", () => {
     })
     await daily.rollupDay(createdAt)
     expect(await daily.totals({ fromDay: "2026-07-24", toDay: "2026-07-25" })).toEqual(before)
+  })
+
+  test("capability observations and snapshots round-trip with history retention and atomic publication", async () => {
+    db = (handle as DatabaseHandle).db
+    const repository = createCapabilityIntelligenceRepository(db)
+    const t1 = new Date("2026-10-17T10:00:00.000Z")
+    const t2 = new Date("2026-10-17T11:00:00.000Z")
+
+    const obs1 = {
+      source: "artificial-analysis",
+      sourceModelId: "claude-sonnet-4-6",
+      canonicalModelId: "anthropic/claude-sonnet-4-6",
+      metric: "intelligence_index",
+      rawValue: 61.2,
+      unit: "index_100",
+      benchmark: "artificial_analysis_intelligence_index",
+      benchmarkVersion: "4.1",
+      fingerprint: "fp-test-obs-1",
+      observedAt: t1,
+      ingestedAt: t1,
+      sourceRef: "https://artificialanalysis.ai/models/claude-sonnet-4-6",
+      provenance: { slug: "claude-sonnet-4-6", tier: "free" },
+    }
+    const obsUnresolved = {
+      ...obs1,
+      sourceModelId: "mystery-model-99b",
+      canonicalModelId: null,
+      rawValue: 40.5,
+      fingerprint: "fp-test-obs-unresolved",
+      sourceRef: "https://artificialanalysis.ai/models/mystery-model-99b",
+    }
+
+    const firstInsert = await repository.recordObservations([obs1, obsUnresolved])
+    expect(firstInsert).toEqual({ inserted: 2, deduplicated: 0 })
+
+    // Idempotent repeat: identical fingerprint does not duplicate rows.
+    const repeatInsert = await repository.recordObservations([obs1, obsUnresolved])
+    expect(repeatInsert).toEqual({ inserted: 0, deduplicated: 2 })
+
+    // Newer measurement with a new fingerprint appends without overwriting prior history.
+    const obs2 = {
+      ...obs1,
+      rawValue: 63.0,
+      benchmarkVersion: "4.2",
+      fingerprint: "fp-test-obs-2",
+      observedAt: t2,
+      ingestedAt: t2,
+    }
+    const secondInsert = await repository.recordObservations([obs2])
+    expect(secondInsert).toEqual({ inserted: 1, deduplicated: 0 })
+
+    const resolved = await repository.listResolvedObservations()
+    expect(
+      resolved
+        .filter((r) => r.fingerprint.startsWith("fp-test-obs-"))
+        .map((r) => [r.fingerprint, r.rawValue]),
+    ).toEqual([
+      ["fp-test-obs-1", 61.2],
+      ["fp-test-obs-2", 63],
+    ])
+
+    const unresolved = await repository.listUnresolvedObservations()
+    expect(unresolved.some((r) => r.fingerprint === "fp-test-obs-unresolved")).toBe(true)
+
+    const snap1 = await repository.saveSnapshot({
+      revision: "sha256:test-rev-1",
+      generatedAt: t1,
+      compilerVersion: "distpatch-cap-compiler-v1",
+      normalizerVersion: "distpatch-cap-norm-v1",
+      evidenceDigest: "sha256:ev-1",
+      publicationState: "candidate",
+      payload: { schemaVersion: 1, profiles: [] },
+      summary: { models: 1 },
+    })
+    expect(snap1.publicationState).toBe("candidate")
+
+    const published1 = await repository.publishSnapshot("sha256:test-rev-1", t1)
+    expect(published1.publicationState).toBe("published")
+    expect((await repository.getPublishedSnapshot())?.revision).toBe("sha256:test-rev-1")
+
+    await repository.saveSnapshot({
+      revision: "sha256:test-rev-2",
+      generatedAt: t2,
+      compilerVersion: "distpatch-cap-compiler-v1",
+      normalizerVersion: "distpatch-cap-norm-v1",
+      evidenceDigest: "sha256:ev-2",
+      publicationState: "candidate",
+      payload: { schemaVersion: 1, profiles: [] },
+      summary: { models: 2 },
+    })
+    const published2 = await repository.publishSnapshot("sha256:test-rev-2", t2)
+    expect(published2.publicationState).toBe("published")
+    expect((await repository.getPublishedSnapshot())?.revision).toBe("sha256:test-rev-2")
+
+    const allSnapshots = await repository.listSnapshots(10)
+    expect(allSnapshots.find((s) => s.revision === "sha256:test-rev-1")?.publicationState).toBe(
+      "superseded",
+    )
   })
 })
