@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Distpatch M2A (#7): static, versioned, provider-independent model capability catalog (`services/capabilities/`) — canonical `vendor/model` ids with explicit one-hop aliases and families, hard facts separate from `[0,1]` preference scores, `null` = unknown throughout, semantic tags (`local`, `free`, `dockerlm`, …), operator overrides via `MODEL_CAPABILITY_OVERRIDES_PATH` validated at boot, and a deterministic `sha256` effective revision. Not consulted by routing yet.
+- Distpatch M2B (#8): deterministic model selection (`services/model-selection/`) — explicit request requirements and versioned policies (Zod), hard eligibility over catalog facts with every failed rule recorded (unknown never read as support), weighted ranking where unknown scores earn no credit, a total-order tie-break, and a decision record carrying selector version, policy digest, catalog revision and a `sha256` digest. Not wired into requests; `auto-*` resolution is #9.
 
 ## [2.40.0] — 2026-10-16
 
