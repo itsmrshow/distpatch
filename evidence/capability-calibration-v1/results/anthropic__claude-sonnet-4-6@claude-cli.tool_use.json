@@ -1,5 +1,6 @@
 {
   "suite": "distpatch-calibration-v1",
+  "graderVersion": "distpatch-grader-v1-pre-sandbox",
   "profileId": "anthropic/claude-sonnet-4-6",
   "route": "claude-cli",
   "wireModel": "claude-sonnet-4-6",
@@ -20,7 +21,7 @@
           "pass": true
         },
         {
-          "name": "EUR→JPY",
+          "name": "EUR\u2192JPY",
           "pass": true
         },
         {
@@ -40,7 +41,7 @@
             }
           }
         ],
-        "final": "**250 euros = ¥40,712.50 Japanese yen** at today's rate (October 17, 2026).",
+        "final": "**250 euros = \u00a540,712.50 Japanese yen** at today's rate (October 17, 2026).",
         "turns": 2
       },
       "state": null
@@ -84,7 +85,7 @@
             }
           }
         ],
-        "final": "Here are the current temperatures:\n\n| City | Temperature |\n|------|------------|\n| 🇳🇴 Oslo | **-3°C (27°F)** |\n| 🇵🇪 Lima | **19°C (66°F)** |\n\n**Lima is warmer** — by a significant 22°C! Oslo is currently below freezing, while Lima is enjoying a mild, pleasant temperature.",
+        "final": "Here are the current temperatures:\n\n| City | Temperature |\n|------|------------|\n| \ud83c\uddf3\ud83c\uddf4 Oslo | **-3\u00b0C (27\u00b0F)** |\n| \ud83c\uddf5\ud83c\uddea Lima | **19\u00b0C (66\u00b0F)** |\n\n**Lima is warmer** \u2014 by a significant 22\u00b0C! Oslo is currently below freezing, while Lima is enjoying a mild, pleasant temperature.",
         "turns": 3
       },
       "state": null
@@ -124,7 +125,7 @@
             }
           }
         ],
-        "final": "Here are the results for **Lisbon (LIS) → Berlin (BER)** on **July 9th, 2026**:\n\n| Flight ID | Price (EUR) |\n|-----------|-------------|\n| XY123     | €89         |\n| QZ808     | €142        |\n\n✅ **Cheapest Flight:**\n- **Flight ID:** `XY123`\n- **Price:** **€89**\n\nThat's a saving of €53 compared to the next available option!",
+        "final": "Here are the results for **Lisbon (LIS) \u2192 Berlin (BER)** on **July 9th, 2026**:\n\n| Flight ID | Price (EUR) |\n|-----------|-------------|\n| XY123     | \u20ac89         |\n| QZ808     | \u20ac142        |\n\n\u2705 **Cheapest Flight:**\n- **Flight ID:** `XY123`\n- **Price:** **\u20ac89**\n\nThat's a saving of \u20ac53 compared to the next available option!",
         "turns": 2
       },
       "state": null
@@ -167,7 +168,7 @@
           "pass": true
         },
         {
-          "name": "EUR→USD",
+          "name": "EUR\u2192USD",
           "pass": true
         },
         {
@@ -195,7 +196,7 @@
             }
           }
         ],
-        "final": "Here's the summary:\n\n| Flight | Price (EUR) | Price (USD) |\n|--------|------------|------------|\n| **XY123** ✈️ *(cheapest)* | €89 | **$96.12** |\n| QZ808 | €142 | — |\n\nThe cheapest flight from **LIS → BER on July 9, 2026** is flight **XY123**, costing **€89 (~$96.12 USD)** at today's exchange rate.",
+        "final": "Here's the summary:\n\n| Flight | Price (EUR) | Price (USD) |\n|--------|------------|------------|\n| **XY123** \u2708\ufe0f *(cheapest)* | \u20ac89 | **$96.12** |\n| QZ808 | \u20ac142 | \u2014 |\n\nThe cheapest flight from **LIS \u2192 BER on July 9, 2026** is flight **XY123**, costing **\u20ac89 (~$96.12 USD)** at today's exchange rate.",
         "turns": 3
       },
       "state": null
@@ -240,7 +241,7 @@
             }
           }
         ],
-        "final": "Done! Here's a summary of what was booked:\n\n- 📅 **Date:** Tuesday, 3 November 2026\n- 🕞 **Time:** 3:30 PM – 5:00 PM UTC\n- ⏱️ **Duration:** 1.5 hours\n- 👥 **Attendees:** Ana & Ben\n- 📌 **Event:** Design review",
+        "final": "Done! Here's a summary of what was booked:\n\n- \ud83d\udcc5 **Date:** Tuesday, 3 November 2026\n- \ud83d\udd5e **Time:** 3:30 PM \u2013 5:00 PM UTC\n- \u23f1\ufe0f **Duration:** 1.5 hours\n- \ud83d\udc65 **Attendees:** Ana & Ben\n- \ud83d\udccc **Event:** Design review",
         "turns": 2
       },
       "state": null
@@ -260,7 +261,7 @@
           "pass": true
         },
         {
-          "name": "EUR→JPY",
+          "name": "EUR\u2192JPY",
           "pass": true
         },
         {
@@ -280,7 +281,7 @@
             }
           }
         ],
-        "final": "**250 euros (EUR) = ¥40,712.50 Japanese yen (JPY)** today (October 17, 2026).\n\nThat works out to an exchange rate of approximately **¥162.85 per euro**.",
+        "final": "**250 euros (EUR) = \u00a540,712.50 Japanese yen (JPY)** today (October 17, 2026).\n\nThat works out to an exchange rate of approximately **\u00a5162.85 per euro**.",
         "turns": 2
       },
       "state": null
@@ -324,7 +325,7 @@
             }
           }
         ],
-        "final": "Here are the current temperatures:\n\n| City | Temperature |\n|------|------------|\n| 🇳🇴 Oslo | -3°C (27°F) |\n| 🇵🇪 Lima | 19°C (66°F) |\n\n**Lima is warmer** — by a significant margin of **22°C (40°F)**! Oslo is currently below freezing, while Lima is enjoying a mild and pleasant day.",
+        "final": "Here are the current temperatures:\n\n| City | Temperature |\n|------|------------|\n| \ud83c\uddf3\ud83c\uddf4 Oslo | -3\u00b0C (27\u00b0F) |\n| \ud83c\uddf5\ud83c\uddea Lima | 19\u00b0C (66\u00b0F) |\n\n**Lima is warmer** \u2014 by a significant margin of **22\u00b0C (40\u00b0F)**! Oslo is currently below freezing, while Lima is enjoying a mild and pleasant day.",
         "turns": 3
       },
       "state": null
@@ -364,7 +365,7 @@
             }
           }
         ],
-        "final": "Here are the results for **Lisbon (LIS) → Berlin (BER)** on **July 9th, 2026**:\n\n| Flight ID | Price (EUR) |\n|-----------|-------------|\n| XY123     | €89         |\n| QZ808     | €142        |\n\n✅ **The cheapest flight is `XY123` at just €89!** That's €53 cheaper than the next available option. Grab it while you can! 🛫",
+        "final": "Here are the results for **Lisbon (LIS) \u2192 Berlin (BER)** on **July 9th, 2026**:\n\n| Flight ID | Price (EUR) |\n|-----------|-------------|\n| XY123     | \u20ac89         |\n| QZ808     | \u20ac142        |\n\n\u2705 **The cheapest flight is `XY123` at just \u20ac89!** That's \u20ac53 cheaper than the next available option. Grab it while you can! \ud83d\udeeb",
         "turns": 2
       },
       "state": null
@@ -407,7 +408,7 @@
           "pass": true
         },
         {
-          "name": "EUR→USD",
+          "name": "EUR\u2192USD",
           "pass": true
         },
         {
@@ -435,7 +436,7 @@
             }
           }
         ],
-        "final": "Here's the summary:\n\n| Flight | Price (EUR) | Price (USD) |\n|--------|-------------|-------------|\n| **XY123** ✈️ | €89.00 | **$96.12** |\n| QZ808 | €142.00 | — |\n\nThe **cheapest flight from Lisbon (LIS) to Berlin (BER) on July 9, 2026** is flight **XY123**, costing **€89 (~$96.12 USD)** at today's exchange rate.",
+        "final": "Here's the summary:\n\n| Flight | Price (EUR) | Price (USD) |\n|--------|-------------|-------------|\n| **XY123** \u2708\ufe0f | \u20ac89.00 | **$96.12** |\n| QZ808 | \u20ac142.00 | \u2014 |\n\nThe **cheapest flight from Lisbon (LIS) to Berlin (BER) on July 9, 2026** is flight **XY123**, costing **\u20ac89 (~$96.12 USD)** at today's exchange rate.",
         "turns": 3
       },
       "state": null
@@ -480,7 +481,7 @@
             }
           }
         ],
-        "final": "Done! Here's a summary of what was booked:\n\n- 📅 **Date:** Tuesday, 3 November 2026\n- 🕞 **Time:** 3:30 PM – 5:00 PM UTC\n- ⏱️ **Duration:** 1.5 hours\n- 👥 **Attendees:** Ana & Ben",
+        "final": "Done! Here's a summary of what was booked:\n\n- \ud83d\udcc5 **Date:** Tuesday, 3 November 2026\n- \ud83d\udd5e **Time:** 3:30 PM \u2013 5:00 PM UTC\n- \u23f1\ufe0f **Duration:** 1.5 hours\n- \ud83d\udc65 **Attendees:** Ana & Ben",
         "turns": 2
       },
       "state": null

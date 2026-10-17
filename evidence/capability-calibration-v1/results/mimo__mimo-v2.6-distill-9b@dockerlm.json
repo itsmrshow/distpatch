@@ -1,5 +1,6 @@
 {
   "suite": "distpatch-calibration-v1",
+  "graderVersion": "distpatch-grader-v1-pre-sandbox",
   "profileId": "mimo/mimo-v2.6-distill-9b",
   "route": "dockerlm",
   "wireModel": "mimo-v2.6-distill-9b",
@@ -491,7 +492,7 @@
         }
       ],
       "latencyMs": 7181,
-      "answer": "Let's work through the constraints:\n\n- Ben is not at either end → Ben is in position 2 or 3.\n- Cal stands immediately to the right of Ann.\n- Dee is at an end (position 1 or 4).\n- Ann is not in position 1.\n\nAnn must be in position 2, 3, or 4 (since Cal is to her right).\n\n- If Ann is in position 2, Cal is in 3. Then positions 1 and 4 remain for Ben and Dee. But Ben must be in 2 or 3, and both are taken — contradiction.\n- If Ann is in position 3, Cal is in 4. Positions 1 and 2 remain. Dee must be at an end, so Dee is in position 1, and Ben takes position 2 (which is not an end ✓).\n\nOrder: Dee (1), Ben (2), Ann (3), Cal (4).\n\nANSWER: Dee, Ben, Ann, Cal"
+      "answer": "Let's work through the constraints:\n\n- Ben is not at either end \u2192 Ben is in position 2 or 3.\n- Cal stands immediately to the right of Ann.\n- Dee is at an end (position 1 or 4).\n- Ann is not in position 1.\n\nAnn must be in position 2, 3, or 4 (since Cal is to her right).\n\n- If Ann is in position 2, Cal is in 3. Then positions 1 and 4 remain for Ben and Dee. But Ben must be in 2 or 3, and both are taken \u2014 contradiction.\n- If Ann is in position 3, Cal is in 4. Positions 1 and 2 remain. Dee must be at an end, so Dee is in position 1, and Ben takes position 2 (which is not an end \u2713).\n\nOrder: Dee (1), Ben (2), Ann (3), Cal (4).\n\nANSWER: Dee, Ben, Ann, Cal"
     },
     {
       "id": "reasoning.tank",
@@ -505,7 +506,7 @@
         }
       ],
       "latencyMs": 1655,
-      "answer": "1200 × 0.85 = 1020. 1020 + 90 = 1110. 1110 − 1110/3 = 740.\n\nANSWER: 740"
+      "answer": "1200 \u00d7 0.85 = 1020. 1020 + 90 = 1110. 1110 \u2212 1110/3 = 740.\n\nANSWER: 740"
     },
     {
       "id": "reasoning.timeouts",
@@ -523,7 +524,7 @@
         }
       ],
       "latencyMs": 4903,
-      "answer": "B's worst-case total wait is 3 attempts × 0.8s = 2.4s before it returns an error to A. A's client timeout is 2.0s, so A's timeout fires first. B gives up 2.4 seconds after receiving the request.\n\nANSWER: YES, 2.4"
+      "answer": "B's worst-case total wait is 3 attempts \u00d7 0.8s = 2.4s before it returns an error to A. A's client timeout is 2.0s, so A's timeout fires first. B gives up 2.4 seconds after receiving the request.\n\nANSWER: YES, 2.4"
     },
     {
       "id": "reasoning.dice",
@@ -537,7 +538,7 @@
         }
       ],
       "latencyMs": 7249,
-      "answer": "We consider the 36 equally likely outcomes of rolling two fair six-sided dice.\n\nOutcomes with at least one 6:\n- (1,6), (2,6), (3,6), (4,6), (5,6)\n- (6,1), (6,2), (6,3), (6,4), (6,5)\n- (6,6)\n\nThat's 11 outcomes, so the conditional sample space has 11 outcomes.\n\nAmong these, the sums are:\n- (1,6): 7\n- (2,6): 8\n- (3,6): 9\n- (4,6): 10 ✓\n- (5,6): 11 ✓\n- (6,1): 7\n- (6,2): 8\n- (6,3): 9\n- (6,4): 10 ✓\n- (6,5): 11 ✓\n- (6,6): 12 ✓\n\nFavorable outcomes: (4,6), (5,6), (6,4), (6,5), (6,6) — 5 outcomes.\n\nProbability = 5/11, which is already in lowest terms.\n\nANSWER: 5/11"
+      "answer": "We consider the 36 equally likely outcomes of rolling two fair six-sided dice.\n\nOutcomes with at least one 6:\n- (1,6), (2,6), (3,6), (4,6), (5,6)\n- (6,1), (6,2), (6,3), (6,4), (6,5)\n- (6,6)\n\nThat's 11 outcomes, so the conditional sample space has 11 outcomes.\n\nAmong these, the sums are:\n- (1,6): 7\n- (2,6): 8\n- (3,6): 9\n- (4,6): 10 \u2713\n- (5,6): 11 \u2713\n- (6,1): 7\n- (6,2): 8\n- (6,3): 9\n- (6,4): 10 \u2713\n- (6,5): 11 \u2713\n- (6,6): 12 \u2713\n\nFavorable outcomes: (4,6), (5,6), (6,4), (6,5), (6,6) \u2014 5 outcomes.\n\nProbability = 5/11, which is already in lowest terms.\n\nANSWER: 5/11"
     },
     {
       "id": "reasoning.critical-path",
@@ -551,7 +552,7 @@
         }
       ],
       "latencyMs": 3447,
-      "answer": "The critical path is A → C → D → F: 3 + 4 + 1 + 2 = 10 hours. E (5 hours) can run in parallel with A, B, C, so it doesn't delay anything.\n\nANSWER: 10"
+      "answer": "The critical path is A \u2192 C \u2192 D \u2192 F: 3 + 4 + 1 + 2 = 10 hours. E (5 hours) can run in parallel with A, B, C, so it doesn't delay anything.\n\nANSWER: 10"
     },
     {
       "id": "reasoning.knaves",
@@ -579,7 +580,7 @@
         }
       ],
       "latencyMs": 6717,
-      "answer": "We want integers in 1..1000 divisible by 6 or 10, but not by 15.\n\n- Divisible by 6: ⌊1000/6⌋ = 166\n- Divisible by 10: ⌊1000/10⌋ = 100\n- Divisible by both 6 and 10 (i.e., by 30): ⌊1000/30⌋ = 33\n- So divisible by 6 or 10: 166 + 100 − 33 = 233\n\nThose divisible by 15 and (6 or 10) are those divisible by 30: 33.\n\n233 − 33 = 200.\n\nANSWER: 200"
+      "answer": "We want integers in 1..1000 divisible by 6 or 10, but not by 15.\n\n- Divisible by 6: \u230a1000/6\u230b = 166\n- Divisible by 10: \u230a1000/10\u230b = 100\n- Divisible by both 6 and 10 (i.e., by 30): \u230a1000/30\u230b = 33\n- So divisible by 6 or 10: 166 + 100 \u2212 33 = 233\n\nThose divisible by 15 and (6 or 10) are those divisible by 30: 33.\n\n233 \u2212 33 = 200.\n\nANSWER: 200"
     },
     {
       "id": "reasoning.calendar",
@@ -611,7 +612,7 @@
         }
       ],
       "latencyMs": 4793,
-      "answer": "DEFECT: SQL injection — the `id` value is interpolated directly into the SQL string without parameterization, allowing an attacker to inject arbitrary SQL.\n\nDEFECT: Missing `await` — `db.query(...)` is likely async, so the DELETE executes after the 204 response has already been sent.\n\nDEFECT: No error handling — if the query throws (invalid ID, DB failure, etc.), the error propagates uncaught instead of returning a 500.\n\nDEFECT: No input validation — an empty or non-numeric `id` is passed to the query without any check.\n\nDEFECT: `new URL(req.url)` throws if `req.url` is not an absolute URL."
+      "answer": "DEFECT: SQL injection \u2014 the `id` value is interpolated directly into the SQL string without parameterization, allowing an attacker to inject arbitrary SQL.\n\nDEFECT: Missing `await` \u2014 `db.query(...)` is likely async, so the DELETE executes after the 204 response has already been sent.\n\nDEFECT: No error handling \u2014 if the query throws (invalid ID, DB failure, etc.), the error propagates uncaught instead of returning a 500.\n\nDEFECT: No input validation \u2014 an empty or non-numeric `id` is passed to the query without any check.\n\nDEFECT: `new URL(req.url)` throws if `req.url` is not an absolute URL."
     },
     {
       "id": "review.pagination",
@@ -629,7 +630,7 @@
         }
       ],
       "latencyMs": 10617,
-      "answer": "DEFECT: Page numbering is off by one — `start = page * perPage` makes page 1 return `items[perPage..2*perPage)`, i.e. the second page of items. The first page should return `items[0..perPage)`, so `start` should be `(page - 1) * perPage`.\n\nDEFECT: `hasMore` uses `<=` instead of `<`, so when `start + perPage === items.length` (the returned rows extend exactly to the end of the list) it reports `true` even though no items follow."
+      "answer": "DEFECT: Page numbering is off by one \u2014 `start = page * perPage` makes page 1 return `items[perPage..2*perPage)`, i.e. the second page of items. The first page should return `items[0..perPage)`, so `start` should be `(page - 1) * perPage`.\n\nDEFECT: `hasMore` uses `<=` instead of `<`, so when `start + perPage === items.length` (the returned rows extend exactly to the end of the list) it reports `true` even though no items follow."
     },
     {
       "id": "review.design-payments",
@@ -918,7 +919,7 @@
           "pass": true
         },
         {
-          "name": "EUR→JPY",
+          "name": "EUR\u2192JPY",
           "pass": true
         },
         {
@@ -982,7 +983,7 @@
             }
           }
         ],
-        "final": "It's warmer in Lima.\n\n- **Oslo:** −3°C\n- **Lima:** 19°C\n\nLima is 22°C warmer than Oslo right now.",
+        "final": "It's warmer in Lima.\n\n- **Oslo:** \u22123\u00b0C\n- **Lima:** 19\u00b0C\n\nLima is 22\u00b0C warmer than Oslo right now.",
         "turns": 2
       },
       "state": null
@@ -1022,7 +1023,7 @@
             }
           }
         ],
-        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on 2026-07-09 is:\n\n- **Flight ID:** XY123\n- **Price:** €89",
+        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on 2026-07-09 is:\n\n- **Flight ID:** XY123\n- **Price:** \u20ac89",
         "turns": 2
       },
       "state": null
@@ -1065,7 +1066,7 @@
           "pass": true
         },
         {
-          "name": "EUR→USD",
+          "name": "EUR\u2192USD",
           "pass": true
         },
         {
@@ -1093,7 +1094,7 @@
             }
           }
         ],
-        "final": "The cheapest flight from LIS to BER on 2026-07-09 costs **$96.12 USD** (flight XY123, originally €89).",
+        "final": "The cheapest flight from LIS to BER on 2026-07-09 costs **$96.12 USD** (flight XY123, originally \u20ac89).",
         "turns": 3
       },
       "state": null
@@ -1138,7 +1139,7 @@
             }
           }
         ],
-        "final": "Done — 'Design review' is on your calendar for **3 November 2026 at 3:30pm UTC**, lasting **90 minutes**, with Ana and Ben invited.",
+        "final": "Done \u2014 'Design review' is on your calendar for **3 November 2026 at 3:30pm UTC**, lasting **90 minutes**, with Ana and Ben invited.",
         "turns": 2
       },
       "state": null
@@ -2045,7 +2046,7 @@
         }
       ],
       "latencyMs": 7242,
-      "answer": "Let's work through the constraints:\n\n- Ben is not at either end → Ben is in position 2 or 3.\n- Cal stands immediately to the right of Ann.\n- Dee is at an end (position 1 or 4).\n- Ann is not in position 1.\n\nAnn must be in position 2, 3, or 4 (since Cal is to her right).\n\n- If Ann is in position 2, Cal is in 3. Then positions 1 and 4 remain for Ben and Dee. But Ben must be in 2 or 3, and both are taken — contradiction.\n- If Ann is in position 3, Cal is in 4. Positions 1 and 2 remain. Dee must be at an end, so Dee is in position 1, and Ben takes position 2 (which is not an end ✓).\n\nOrder: Dee (1), Ben (2), Ann (3), Cal (4).\n\nANSWER: Dee, Ben, Ann, Cal"
+      "answer": "Let's work through the constraints:\n\n- Ben is not at either end \u2192 Ben is in position 2 or 3.\n- Cal stands immediately to the right of Ann.\n- Dee is at an end (position 1 or 4).\n- Ann is not in position 1.\n\nAnn must be in position 2, 3, or 4 (since Cal is to her right).\n\n- If Ann is in position 2, Cal is in 3. Then positions 1 and 4 remain for Ben and Dee. But Ben must be in 2 or 3, and both are taken \u2014 contradiction.\n- If Ann is in position 3, Cal is in 4. Positions 1 and 2 remain. Dee must be at an end, so Dee is in position 1, and Ben takes position 2 (which is not an end \u2713).\n\nOrder: Dee (1), Ben (2), Ann (3), Cal (4).\n\nANSWER: Dee, Ben, Ann, Cal"
     },
     {
       "id": "reasoning.tank",
@@ -2059,7 +2060,7 @@
         }
       ],
       "latencyMs": 1788,
-      "answer": "1200 × 0.85 = 1020. 1020 + 90 = 1110. 1110 − 1110/3 = 740.\n\nANSWER: 740"
+      "answer": "1200 \u00d7 0.85 = 1020. 1020 + 90 = 1110. 1110 \u2212 1110/3 = 740.\n\nANSWER: 740"
     },
     {
       "id": "reasoning.timeouts",
@@ -2077,7 +2078,7 @@
         }
       ],
       "latencyMs": 5050,
-      "answer": "B's worst-case total wait is 3 attempts × 0.8s = 2.4s before it returns an error to A. A's client timeout is 2.0s, so A's timeout fires first. B gives up 2.4 seconds after receiving the request.\n\nANSWER: YES, 2.4"
+      "answer": "B's worst-case total wait is 3 attempts \u00d7 0.8s = 2.4s before it returns an error to A. A's client timeout is 2.0s, so A's timeout fires first. B gives up 2.4 seconds after receiving the request.\n\nANSWER: YES, 2.4"
     },
     {
       "id": "reasoning.dice",
@@ -2091,7 +2092,7 @@
         }
       ],
       "latencyMs": 7329,
-      "answer": "We consider the 36 equally likely outcomes of rolling two fair six-sided dice.\n\nOutcomes with at least one 6:\n- (1,6), (2,6), (3,6), (4,6), (5,6)\n- (6,1), (6,2), (6,3), (6,4), (6,5)\n- (6,6)\n\nThat's 11 outcomes, so the conditional sample space has 11 outcomes.\n\nAmong these, the sums are:\n- (1,6): 7\n- (2,6): 8\n- (3,6): 9\n- (4,6): 10 ✓\n- (5,6): 11 ✓\n- (6,1): 7\n- (6,2): 8\n- (6,3): 9\n- (6,4): 10 ✓\n- (6,5): 11 ✓\n- (6,6): 12 ✓\n\nFavorable outcomes: (4,6), (5,6), (6,4), (6,5), (6,6) — 5 outcomes.\n\nProbability = 5/11, which is already in lowest terms.\n\nANSWER: 5/11"
+      "answer": "We consider the 36 equally likely outcomes of rolling two fair six-sided dice.\n\nOutcomes with at least one 6:\n- (1,6), (2,6), (3,6), (4,6), (5,6)\n- (6,1), (6,2), (6,3), (6,4), (6,5)\n- (6,6)\n\nThat's 11 outcomes, so the conditional sample space has 11 outcomes.\n\nAmong these, the sums are:\n- (1,6): 7\n- (2,6): 8\n- (3,6): 9\n- (4,6): 10 \u2713\n- (5,6): 11 \u2713\n- (6,1): 7\n- (6,2): 8\n- (6,3): 9\n- (6,4): 10 \u2713\n- (6,5): 11 \u2713\n- (6,6): 12 \u2713\n\nFavorable outcomes: (4,6), (5,6), (6,4), (6,5), (6,6) \u2014 5 outcomes.\n\nProbability = 5/11, which is already in lowest terms.\n\nANSWER: 5/11"
     },
     {
       "id": "reasoning.critical-path",
@@ -2105,7 +2106,7 @@
         }
       ],
       "latencyMs": 3628,
-      "answer": "The critical path is A → C → D → F: 3 + 4 + 1 + 2 = 10 hours. E (5 hours) can run in parallel with A, B, C, so it doesn't delay anything.\n\nANSWER: 10"
+      "answer": "The critical path is A \u2192 C \u2192 D \u2192 F: 3 + 4 + 1 + 2 = 10 hours. E (5 hours) can run in parallel with A, B, C, so it doesn't delay anything.\n\nANSWER: 10"
     },
     {
       "id": "reasoning.knaves",
@@ -2133,7 +2134,7 @@
         }
       ],
       "latencyMs": 6798,
-      "answer": "We want integers in 1..1000 divisible by 6 or 10, but not by 15.\n\n- Divisible by 6: ⌊1000/6⌋ = 166\n- Divisible by 10: ⌊1000/10⌋ = 100\n- Divisible by both 6 and 10 (i.e., by 30): ⌊1000/30⌋ = 33\n- So divisible by 6 or 10: 166 + 100 − 33 = 233\n\nThose divisible by 15 and (6 or 10) are those divisible by 30: 33.\n\n233 − 33 = 200.\n\nANSWER: 200"
+      "answer": "We want integers in 1..1000 divisible by 6 or 10, but not by 15.\n\n- Divisible by 6: \u230a1000/6\u230b = 166\n- Divisible by 10: \u230a1000/10\u230b = 100\n- Divisible by both 6 and 10 (i.e., by 30): \u230a1000/30\u230b = 33\n- So divisible by 6 or 10: 166 + 100 \u2212 33 = 233\n\nThose divisible by 15 and (6 or 10) are those divisible by 30: 33.\n\n233 \u2212 33 = 200.\n\nANSWER: 200"
     },
     {
       "id": "reasoning.calendar",
@@ -2165,7 +2166,7 @@
         }
       ],
       "latencyMs": 4871,
-      "answer": "DEFECT: SQL injection — the `id` value is interpolated directly into the SQL string without parameterization, allowing an attacker to inject arbitrary SQL.\n\nDEFECT: Missing `await` — `db.query(...)` is likely async, so the DELETE executes after the 204 response has already been sent.\n\nDEFECT: No error handling — if the query throws (invalid ID, DB failure, etc.), the error propagates uncaught instead of returning a 500.\n\nDEFECT: No input validation — an empty or non-numeric `id` is passed to the query without any check.\n\nDEFECT: `new URL(req.url)` throws if `req.url` is not an absolute URL."
+      "answer": "DEFECT: SQL injection \u2014 the `id` value is interpolated directly into the SQL string without parameterization, allowing an attacker to inject arbitrary SQL.\n\nDEFECT: Missing `await` \u2014 `db.query(...)` is likely async, so the DELETE executes after the 204 response has already been sent.\n\nDEFECT: No error handling \u2014 if the query throws (invalid ID, DB failure, etc.), the error propagates uncaught instead of returning a 500.\n\nDEFECT: No input validation \u2014 an empty or non-numeric `id` is passed to the query without any check.\n\nDEFECT: `new URL(req.url)` throws if `req.url` is not an absolute URL."
     },
     {
       "id": "review.pagination",
@@ -2183,7 +2184,7 @@
         }
       ],
       "latencyMs": 10699,
-      "answer": "DEFECT: Page numbering is off by one — `start = page * perPage` makes page 1 return `items[perPage..2*perPage)`, i.e. the second page of items. The first page should return `items[0..perPage)`, so `start` should be `(page - 1) * perPage`.\n\nDEFECT: `hasMore` uses `<=` instead of `<`, so when `start + perPage === items.length` (the returned rows extend exactly to the end of the list) it reports `true` even though no items follow."
+      "answer": "DEFECT: Page numbering is off by one \u2014 `start = page * perPage` makes page 1 return `items[perPage..2*perPage)`, i.e. the second page of items. The first page should return `items[0..perPage)`, so `start` should be `(page - 1) * perPage`.\n\nDEFECT: `hasMore` uses `<=` instead of `<`, so when `start + perPage === items.length` (the returned rows extend exactly to the end of the list) it reports `true` even though no items follow."
     },
     {
       "id": "review.design-payments",
@@ -2472,7 +2473,7 @@
           "pass": true
         },
         {
-          "name": "EUR→JPY",
+          "name": "EUR\u2192JPY",
           "pass": true
         },
         {
@@ -2536,7 +2537,7 @@
             }
           }
         ],
-        "final": "It's warmer in Lima.\n\n- **Oslo:** −3°C\n- **Lima:** 19°C\n\nLima is 22°C warmer than Oslo right now.",
+        "final": "It's warmer in Lima.\n\n- **Oslo:** \u22123\u00b0C\n- **Lima:** 19\u00b0C\n\nLima is 22\u00b0C warmer than Oslo right now.",
         "turns": 2
       },
       "state": null
@@ -2576,7 +2577,7 @@
             }
           }
         ],
-        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on 2026-07-09 is:\n\n- **Flight ID:** XY123\n- **Price:** €89",
+        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on 2026-07-09 is:\n\n- **Flight ID:** XY123\n- **Price:** \u20ac89",
         "turns": 2
       },
       "state": null
@@ -2619,7 +2620,7 @@
           "pass": true
         },
         {
-          "name": "EUR→USD",
+          "name": "EUR\u2192USD",
           "pass": true
         },
         {
@@ -2647,7 +2648,7 @@
             }
           }
         ],
-        "final": "The cheapest flight from LIS to BER on 2026-07-09 costs **$96.12 USD** (flight XY123, originally €89).",
+        "final": "The cheapest flight from LIS to BER on 2026-07-09 costs **$96.12 USD** (flight XY123, originally \u20ac89).",
         "turns": 3
       },
       "state": null
@@ -2692,7 +2693,7 @@
             }
           }
         ],
-        "final": "Done — 'Design review' is on your calendar for **3 November 2026 at 3:30pm UTC**, lasting **90 minutes**, with Ana and Ben invited.",
+        "final": "Done \u2014 'Design review' is on your calendar for **3 November 2026 at 3:30pm UTC**, lasting **90 minutes**, with Ana and Ben invited.",
         "turns": 2
       },
       "state": null

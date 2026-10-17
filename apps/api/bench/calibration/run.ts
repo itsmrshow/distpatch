@@ -152,7 +152,7 @@ async function score() {
     const run = await Bun.file(join(RESULTS, name)).json()
     if (run.graderVersion !== GRADER_VERSION) {
       throw new Error(
-        `${name}: grader version ${String(run.graderVersion ?? "(missing)")} does not match the current grader ${GRADER_VERSION}; re-run every model rather than mixing grader versions`,
+        `${name}: grader version ${String(run.graderVersion ?? "(missing)")} does not match the current grader ${GRADER_VERSION}; re-run the model with \`bin/calibrate run <route> <wire-model> <canonical-id>\` rather than mixing grader versions`,
       )
     }
     runs.push(run)

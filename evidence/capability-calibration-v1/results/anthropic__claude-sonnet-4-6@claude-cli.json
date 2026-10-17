@@ -1,5 +1,6 @@
 {
   "suite": "distpatch-calibration-v1",
+  "graderVersion": "distpatch-grader-v1-pre-sandbox",
   "profileId": "anthropic/claude-sonnet-4-6",
   "route": "claude-cli",
   "wireModel": "claude-sonnet-4-6",
@@ -491,7 +492,7 @@
         }
       ],
       "latencyMs": 13482,
-      "answer": "**Working through the constraints:**\n\n1. **Cal is immediately right of Ann** → (Ann, Cal) must be a consecutive pair: (1,2), (2,3), or (3,4).\n2. **Ann is not in position 1** → eliminates (1,2), leaving (Ann=2, Cal=3) or (Ann=3, Cal=4).\n3. **Ben is not at either end** → Ben ∉ {1, 4}.\n\n**Test Ann=2, Cal=3:**\nRemaining positions 1 and 4 go to Ben and Dee. But Ben can't be at an end, and both 1 and 4 are ends → **contradiction**.\n\n**Test Ann=3, Cal=4:**\nRemaining positions 1 and 2 go to Ben and Dee.\n- Ben can't be at an end → Ben ≠ 1 → **Ben=2**.\n- Dee must be at an end (constraint 3) → **Dee=1** ✓\n\n**Verification:**\n| Pos | Person |\n|-----|--------|\n| 1 | Dee |\n| 2 | Ben |\n| 3 | Ann |\n| 4 | Cal |\n\n- Ben not at end ✓ (pos 2)\n- Cal immediately right of Ann ✓ (3→4)\n- Dee at an end ✓ (pos 1)\n- Ann not in position 1 ✓ (pos 3)\n\nANSWER: Dee, Ben, Ann, Cal"
+      "answer": "**Working through the constraints:**\n\n1. **Cal is immediately right of Ann** \u2192 (Ann, Cal) must be a consecutive pair: (1,2), (2,3), or (3,4).\n2. **Ann is not in position 1** \u2192 eliminates (1,2), leaving (Ann=2, Cal=3) or (Ann=3, Cal=4).\n3. **Ben is not at either end** \u2192 Ben \u2209 {1, 4}.\n\n**Test Ann=2, Cal=3:**\nRemaining positions 1 and 4 go to Ben and Dee. But Ben can't be at an end, and both 1 and 4 are ends \u2192 **contradiction**.\n\n**Test Ann=3, Cal=4:**\nRemaining positions 1 and 2 go to Ben and Dee.\n- Ben can't be at an end \u2192 Ben \u2260 1 \u2192 **Ben=2**.\n- Dee must be at an end (constraint 3) \u2192 **Dee=1** \u2713\n\n**Verification:**\n| Pos | Person |\n|-----|--------|\n| 1 | Dee |\n| 2 | Ben |\n| 3 | Ann |\n| 4 | Cal |\n\n- Ben not at end \u2713 (pos 2)\n- Cal immediately right of Ann \u2713 (3\u21924)\n- Dee at an end \u2713 (pos 1)\n- Ann not in position 1 \u2713 (pos 3)\n\nANSWER: Dee, Ben, Ann, Cal"
     },
     {
       "id": "reasoning.tank",
@@ -537,7 +538,7 @@
         }
       ],
       "latencyMs": 12312,
-      "answer": "## Setting Up the Conditional Probability\n\nUsing the formula: **P(sum ≥ 10 | at least one 6) = P(sum ≥ 10 AND at least one 6) / P(at least one 6)**\n\n## Finding the Sample Space\n\n**Total outcomes:** 36\n\n**Outcomes with at least one 6** (11 total):\n(6,1), (6,2), (6,3), (6,4), (6,5), (6,6), (1,6), (2,6), (3,6), (4,6), (5,6)\n\n## Identifying Favorable Outcomes\n\nFrom those 11 outcomes, which have a sum ≥ 10?\n\n| Outcome | Sum | Qualifies? |\n|---------|-----|------------|\n| (6,1)   | 7   | ✗ |\n| (6,2)   | 8   | ✗ |\n| (6,3)   | 9   | ✗ |\n| **(6,4)**   | **10**  | **✓** |\n| **(6,5)**   | **11**  | **✓** |\n| **(6,6)**   | **12**  | **✓** |\n| (1,6)   | 7   | ✗ |\n| (2,6)   | 8   | ✗ |\n| (3,6)   | 9   | ✗ |\n| **(4,6)**   | **10**  | **✓** |\n| **(5,6)**   | **11**  | **✓** |\n\n**5 favorable outcomes** out of the 11 restricted sample space.\n\n## Result\n\n$$P(\\text{sum} \\geq 10 \\mid \\text{at least one 6}) = \\frac{5}{11}$$\n\nSince gcd(5, 11) = 1, this is already in lowest terms.\n\nANSWER: 5/11"
+      "answer": "## Setting Up the Conditional Probability\n\nUsing the formula: **P(sum \u2265 10 | at least one 6) = P(sum \u2265 10 AND at least one 6) / P(at least one 6)**\n\n## Finding the Sample Space\n\n**Total outcomes:** 36\n\n**Outcomes with at least one 6** (11 total):\n(6,1), (6,2), (6,3), (6,4), (6,5), (6,6), (1,6), (2,6), (3,6), (4,6), (5,6)\n\n## Identifying Favorable Outcomes\n\nFrom those 11 outcomes, which have a sum \u2265 10?\n\n| Outcome | Sum | Qualifies? |\n|---------|-----|------------|\n| (6,1)   | 7   | \u2717 |\n| (6,2)   | 8   | \u2717 |\n| (6,3)   | 9   | \u2717 |\n| **(6,4)**   | **10**  | **\u2713** |\n| **(6,5)**   | **11**  | **\u2713** |\n| **(6,6)**   | **12**  | **\u2713** |\n| (1,6)   | 7   | \u2717 |\n| (2,6)   | 8   | \u2717 |\n| (3,6)   | 9   | \u2717 |\n| **(4,6)**   | **10**  | **\u2713** |\n| **(5,6)**   | **11**  | **\u2713** |\n\n**5 favorable outcomes** out of the 11 restricted sample space.\n\n## Result\n\n$$P(\\text{sum} \\geq 10 \\mid \\text{at least one 6}) = \\frac{5}{11}$$\n\nSince gcd(5, 11) = 1, this is already in lowest terms.\n\nANSWER: 5/11"
     },
     {
       "id": "reasoning.critical-path",
@@ -551,7 +552,7 @@
         }
       ],
       "latencyMs": 8633,
-      "answer": "**Earliest finish times (unlimited workers):**\n\n- **A**: 0 → 3\n- **B**: 3 → 5 (after A)\n- **C**: 3 → 7 (after A)\n- **E**: 0 → 5 (no deps, runs in parallel)\n- **D**: max(5,7)=7 → 8 (after B and C)\n- **F**: max(8,5)=8 → 10 (after D and E)\n\nCritical path: A → C → D → F = 3+4+1+2 = **10**\n\nANSWER: 10"
+      "answer": "**Earliest finish times (unlimited workers):**\n\n- **A**: 0 \u2192 3\n- **B**: 3 \u2192 5 (after A)\n- **C**: 3 \u2192 7 (after A)\n- **E**: 0 \u2192 5 (no deps, runs in parallel)\n- **D**: max(5,7)=7 \u2192 8 (after B and C)\n- **F**: max(8,5)=8 \u2192 10 (after D and E)\n\nCritical path: A \u2192 C \u2192 D \u2192 F = 3+4+1+2 = **10**\n\nANSWER: 10"
     },
     {
       "id": "reasoning.knaves",
@@ -565,7 +566,7 @@
         }
       ],
       "latencyMs": 11200,
-      "answer": "**Working through the cases:**\n\n**Case 1 — A is a knight:**\nA tells the truth → B is a knave.\nB lies → \"A and C are the same kind\" is false → C ≠ A's kind → C is a knave.\n*(A=knight, B=knave, C=knave — consistent ✓)*\n\n**Case 2 — A is a knave:**\nA lies → B is a knight.\nB tells the truth → \"A and C are the same kind\" is true → C = A's kind → C is a knave.\n*(A=knave, B=knight, C=knave — consistent ✓)*\n\nBoth consistent cases yield C as a knave.\n\nANSWER: Knave"
+      "answer": "**Working through the cases:**\n\n**Case 1 \u2014 A is a knight:**\nA tells the truth \u2192 B is a knave.\nB lies \u2192 \"A and C are the same kind\" is false \u2192 C \u2260 A's kind \u2192 C is a knave.\n*(A=knight, B=knave, C=knave \u2014 consistent \u2713)*\n\n**Case 2 \u2014 A is a knave:**\nA lies \u2192 B is a knight.\nB tells the truth \u2192 \"A and C are the same kind\" is true \u2192 C = A's kind \u2192 C is a knave.\n*(A=knave, B=knight, C=knave \u2014 consistent \u2713)*\n\nBoth consistent cases yield C as a knave.\n\nANSWER: Knave"
     },
     {
       "id": "reasoning.inclusion-exclusion",
@@ -579,7 +580,7 @@
         }
       ],
       "latencyMs": 13785,
-      "answer": "**Setting up with inclusion-exclusion:**\n\nLet:\n- A = {divisible by 6}\n- B = {divisible by 10}\n- C = {divisible by 15}\n\n**Step 1: Find |A ∪ B|**\n\n- |A| = ⌊1000/6⌋ = 166\n- |B| = ⌊1000/10⌋ = 100\n- |A ∩ B| = ⌊1000/lcm(6,10)⌋ = ⌊1000/30⌋ = 33\n\n|A ∪ B| = 166 + 100 − 33 = **233**\n\n**Step 2: Remove those also divisible by 15**\n\nI need |(A ∪ B) ∩ C| = |A ∩ C| + |B ∩ C| − |A ∩ B ∩ C|\n\n- lcm(6, 15) = 30 → |A ∩ C| = ⌊1000/30⌋ = 33\n- lcm(10, 15) = 30 → |B ∩ C| = ⌊1000/30⌋ = 33\n- lcm(6, 10, 15) = 30 → |A ∩ B ∩ C| = ⌊1000/30⌋ = 33\n\n|(A ∪ B) ∩ C| = 33 + 33 − 33 = **33**\n\n**Final answer:**\n\n233 − 33 = **200**\n\nANSWER: 200"
+      "answer": "**Setting up with inclusion-exclusion:**\n\nLet:\n- A = {divisible by 6}\n- B = {divisible by 10}\n- C = {divisible by 15}\n\n**Step 1: Find |A \u222a B|**\n\n- |A| = \u230a1000/6\u230b = 166\n- |B| = \u230a1000/10\u230b = 100\n- |A \u2229 B| = \u230a1000/lcm(6,10)\u230b = \u230a1000/30\u230b = 33\n\n|A \u222a B| = 166 + 100 \u2212 33 = **233**\n\n**Step 2: Remove those also divisible by 15**\n\nI need |(A \u222a B) \u2229 C| = |A \u2229 C| + |B \u2229 C| \u2212 |A \u2229 B \u2229 C|\n\n- lcm(6, 15) = 30 \u2192 |A \u2229 C| = \u230a1000/30\u230b = 33\n- lcm(10, 15) = 30 \u2192 |B \u2229 C| = \u230a1000/30\u230b = 33\n- lcm(6, 10, 15) = 30 \u2192 |A \u2229 B \u2229 C| = \u230a1000/30\u230b = 33\n\n|(A \u222a B) \u2229 C| = 33 + 33 \u2212 33 = **33**\n\n**Final answer:**\n\n233 \u2212 33 = **200**\n\nANSWER: 200"
     },
     {
       "id": "reasoning.calendar",
@@ -593,7 +594,7 @@
         }
       ],
       "latencyMs": 6860,
-      "answer": "From 2026-10-17 (Saturday) to 2027-03-01:\n\n- Oct 17 → Oct 31: 14 days\n- November: 30 days\n- December: 31 days\n- January: 31 days\n- February: 28 days (2027 is not a leap year)\n- Mar 1: 1 day\n\n**Total: 135 days**\n\n135 = 19 × 7 + 2, so 2 days past Saturday = **Monday**\n\nANSWER: Monday"
+      "answer": "From 2026-10-17 (Saturday) to 2027-03-01:\n\n- Oct 17 \u2192 Oct 31: 14 days\n- November: 30 days\n- December: 31 days\n- January: 31 days\n- February: 28 days (2027 is not a leap year)\n- Mar 1: 1 day\n\n**Total: 135 days**\n\n135 = 19 \u00d7 7 + 2, so 2 days past Saturday = **Monday**\n\nANSWER: Monday"
     },
     {
       "id": "review.injection-await",
@@ -611,7 +612,7 @@
         }
       ],
       "latencyMs": 19739,
-      "answer": "DEFECT: SQL injection — `id` is concatenated directly into the query string; any attacker-controlled value (e.g. `' OR '1'='1`) can alter or destroy arbitrary data. The query must use a parameterized/prepared statement.\n\nDEFECT: Missing input validation — when the `id` parameter is absent, `?? \"\"` silently substitutes an empty string, causing the query to execute as `WHERE id = ''` with no error returned to the caller; a missing or blank `id` should return a 4xx response before touching the database.\n\nDEFECT: No error handling — if `db.query(...)` throws (connection failure, constraint error, etc.) the exception propagates as an unhandled promise rejection instead of being caught and returned as a structured error response (e.g. 500)."
+      "answer": "DEFECT: SQL injection \u2014 `id` is concatenated directly into the query string; any attacker-controlled value (e.g. `' OR '1'='1`) can alter or destroy arbitrary data. The query must use a parameterized/prepared statement.\n\nDEFECT: Missing input validation \u2014 when the `id` parameter is absent, `?? \"\"` silently substitutes an empty string, causing the query to execute as `WHERE id = ''` with no error returned to the caller; a missing or blank `id` should return a 4xx response before touching the database.\n\nDEFECT: No error handling \u2014 if `db.query(...)` throws (connection failure, constraint error, etc.) the exception propagates as an unhandled promise rejection instead of being caught and returned as a structured error response (e.g. 500)."
     },
     {
       "id": "review.pagination",
@@ -651,7 +652,7 @@
         }
       ],
       "latencyMs": 16638,
-      "answer": "DEFECT: POST /payments is retried up to 3 times without an idempotency key, creating a real risk of duplicate charges. The stated mitigation — processor-side deduplication of identical amounts within the same second — is unreliable: a retry delayed by even one second (e.g., due to backoff) falls outside the deduplication window, and two legitimate same-amount payments from the same user within the same second would be incorrectly collapsed.\n\nDEFECT: Caching permission sets for 24 hours means a revoked permission (compromised account, terminated employee, fraud flag) remains effective for up to 24 hours. In a payments context this is a critical security window; permission revocation must propagate in near-real-time or the cache must be actively invalidated on revocation events.\n\nDEFECT: Logging full card numbers (PANs) at INFO level is a PCI-DSS violation and exposes sensitive cardholder data to anyone with log access, including log aggregation pipelines, SIEM systems, and backup storage. Card numbers must never appear in logs in any form; at most a masked or truncated representation (e.g., last four digits) is permissible."
+      "answer": "DEFECT: POST /payments is retried up to 3 times without an idempotency key, creating a real risk of duplicate charges. The stated mitigation \u2014 processor-side deduplication of identical amounts within the same second \u2014 is unreliable: a retry delayed by even one second (e.g., due to backoff) falls outside the deduplication window, and two legitimate same-amount payments from the same user within the same second would be incorrectly collapsed.\n\nDEFECT: Caching permission sets for 24 hours means a revoked permission (compromised account, terminated employee, fraud flag) remains effective for up to 24 hours. In a payments context this is a critical security window; permission revocation must propagate in near-real-time or the cache must be actively invalidated on revocation events.\n\nDEFECT: Logging full card numbers (PANs) at INFO level is a PCI-DSS violation and exposes sensitive cardholder data to anyone with log access, including log aggregation pipelines, SIEM systems, and backup storage. Card numbers must never appear in logs in any form; at most a masked or truncated representation (e.g., last four digits) is permissible."
     },
     {
       "id": "review.race",
@@ -665,7 +666,7 @@
         }
       ],
       "latencyMs": 18670,
-      "answer": "DEFECT: No transaction wrapping the SELECT/UPDATE pair — a concurrent withdrawal can read the same balance between these two statements, pass the `balance < amount` check, and both writes will commit, overdrawing the account (classic TOCTOU / lost-update race).\n\nDEFECT: Even inside a transaction at the default READ COMMITTED isolation level the race persists; the SELECT must use `SELECT ... FOR UPDATE` (or the UPDATE must use a server-side expression `balance = balance - $1` with a `WHERE balance >= $1` guard and the affected-row count checked) to make the check-then-act atomic.\n\nDEFECT: `amount` is never validated to be positive; a caller passing a negative value passes the `balance < amount` check unconditionally and effectively credits the account."
+      "answer": "DEFECT: No transaction wrapping the SELECT/UPDATE pair \u2014 a concurrent withdrawal can read the same balance between these two statements, pass the `balance < amount` check, and both writes will commit, overdrawing the account (classic TOCTOU / lost-update race).\n\nDEFECT: Even inside a transaction at the default READ COMMITTED isolation level the race persists; the SELECT must use `SELECT ... FOR UPDATE` (or the UPDATE must use a server-side expression `balance = balance - $1` with a `WHERE balance >= $1` guard and the affected-row count checked) to make the check-then-act atomic.\n\nDEFECT: `amount` is never validated to be positive; a caller passing a negative value passes the `balance < amount` check unconditionally and effectively credits the account."
     },
     {
       "id": "review.clean",
@@ -715,7 +716,7 @@
         }
       ],
       "latencyMs": 18081,
-      "answer": "DEFECT: `setTimeout` receives `ttlSeconds` directly but expects milliseconds — entries expire `ttlSeconds` ms (not seconds) after insertion; fix is `ttlSeconds * 1000`.\n\nDEFECT: Key construction `String(userId) + String(page)` produces collisions — e.g. `userId=1, page=23` and `userId=12, page=3` both yield `\"123\"`; fix is a separator such as `\\`${userId}:${page}\\``.\n\nDEFECT: No in-flight deduplication — concurrent calls for the same key all miss before the first `loadPage` resolves, each independently calling `loadPage` and each scheduling its own independent TTL timer, so the entry is deleted after only the first timer fires rather than after the true TTL of the last set."
+      "answer": "DEFECT: `setTimeout` receives `ttlSeconds` directly but expects milliseconds \u2014 entries expire `ttlSeconds` ms (not seconds) after insertion; fix is `ttlSeconds * 1000`.\n\nDEFECT: Key construction `String(userId) + String(page)` produces collisions \u2014 e.g. `userId=1, page=23` and `userId=12, page=3` both yield `\"123\"`; fix is a separator such as `\\`${userId}:${page}\\``.\n\nDEFECT: No in-flight deduplication \u2014 concurrent calls for the same key all miss before the first `loadPage` resolves, each independently calling `loadPage` and each scheduling its own independent TTL timer, so the entry is deleted after only the first timer fires rather than after the true TTL of the last set."
     },
     {
       "id": "review.clean-tricky",
@@ -1558,7 +1559,7 @@
         }
       ],
       "latencyMs": 12463,
-      "answer": "Working through the constraints:\n\n**Cal is immediately right of Ann**, so Ann-Cal are a consecutive pair:\n- Ann=1, Cal=2 → ruled out (Ann ≠ position 1)\n- Ann=2, Cal=3 → leaves positions 1 & 4 for Ben and Dee; but Ben can't be at either end, so Ben can't be 1 or 4 → **contradiction**\n- Ann=3, Cal=4 → leaves positions 1 & 2 for Ben and Dee\n\n**With Ann=3, Cal=4:**\n- Ben can't be at either end → Ben must be **position 2**\n- Dee must be at an end → Dee takes **position 1**\n\n**Verification:**\n- Ben not at either end → position 2 ✓\n- Cal immediately right of Ann → 3→4 ✓\n- Dee at an end → position 1 ✓\n- Ann not in position 1 → position 3 ✓\n\nANSWER: Dee, Ben, Ann, Cal"
+      "answer": "Working through the constraints:\n\n**Cal is immediately right of Ann**, so Ann-Cal are a consecutive pair:\n- Ann=1, Cal=2 \u2192 ruled out (Ann \u2260 position 1)\n- Ann=2, Cal=3 \u2192 leaves positions 1 & 4 for Ben and Dee; but Ben can't be at either end, so Ben can't be 1 or 4 \u2192 **contradiction**\n- Ann=3, Cal=4 \u2192 leaves positions 1 & 2 for Ben and Dee\n\n**With Ann=3, Cal=4:**\n- Ben can't be at either end \u2192 Ben must be **position 2**\n- Dee must be at an end \u2192 Dee takes **position 1**\n\n**Verification:**\n- Ben not at either end \u2192 position 2 \u2713\n- Cal immediately right of Ann \u2192 3\u21924 \u2713\n- Dee at an end \u2192 position 1 \u2713\n- Ann not in position 1 \u2192 position 3 \u2713\n\nANSWER: Dee, Ben, Ann, Cal"
     },
     {
       "id": "reasoning.tank",
@@ -1590,7 +1591,7 @@
         }
       ],
       "latencyMs": 9118,
-      "answer": "**Step-by-step breakdown:**\n\n**Service B's total processing time:**\n- B calls C three times sequentially, each with a 0.8s timeout, no backoff.\n- C never responds, so each attempt runs to its full timeout.\n- Total time for B: 3 × 0.8s = **2.4 seconds**\n\n**Does A hit its timeout first?**\n- A's timeout: 2.0 seconds\n- B's response comes at: 2.4 seconds\n- 2.4s > 2.0s → A's 2.0s timeout fires **before** B finishes and returns.\n\n→ **YES**, A hits its own timeout first.\n→ B gives up at **2.4 seconds**.\n\nANSWER: YES, 2.4"
+      "answer": "**Step-by-step breakdown:**\n\n**Service B's total processing time:**\n- B calls C three times sequentially, each with a 0.8s timeout, no backoff.\n- C never responds, so each attempt runs to its full timeout.\n- Total time for B: 3 \u00d7 0.8s = **2.4 seconds**\n\n**Does A hit its timeout first?**\n- A's timeout: 2.0 seconds\n- B's response comes at: 2.4 seconds\n- 2.4s > 2.0s \u2192 A's 2.0s timeout fires **before** B finishes and returns.\n\n\u2192 **YES**, A hits its own timeout first.\n\u2192 B gives up at **2.4 seconds**.\n\nANSWER: YES, 2.4"
     },
     {
       "id": "reasoning.dice",
@@ -1604,7 +1605,7 @@
         }
       ],
       "latencyMs": 13539,
-      "answer": "## Setting Up the Conditional Probability\n\nUsing the formula: **P(A | B) = P(A ∩ B) / P(B)**\n\nwhere:\n- **A** = sum is at least 10\n- **B** = at least one die shows a 6\n\n---\n\n## Step 1: Outcomes Where At Least One Die Shows 6\n\nTotal sample space: 36 equally likely outcomes.\n\nOutcomes with at least one 6 (listed as die1, die2):\n\n| Outcome | Sum |\n|---------|-----|\n| (6,1) | 7 |\n| (6,2) | 8 |\n| (6,3) | 9 |\n| **(6,4)** | **10** ✓ |\n| **(6,5)** | **11** ✓ |\n| **(6,6)** | **12** ✓ |\n| (1,6) | 7 |\n| (2,6) | 8 |\n| (3,6) | 9 |\n| **(4,6)** | **10** ✓ |\n| **(5,6)** | **11** ✓ |\n\nThat gives **11 outcomes** with at least one 6.\n\n---\n\n## Step 2: Outcomes in Both A and B\n\nFrom the 11 outcomes above, those with sum ≥ 10:\n\n**(6,4), (6,5), (6,6), (4,6), (5,6)** → **5 outcomes**\n\n---\n\n## Step 3: Compute the Probability\n\n$$P(\\text{sum} \\geq 10 \\mid \\text{at least one 6}) = \\frac{5}{11}$$\n\nSince 5 and 11 share no common factors (11 is prime), this is already in lowest terms.\n\nANSWER: 5/11"
+      "answer": "## Setting Up the Conditional Probability\n\nUsing the formula: **P(A | B) = P(A \u2229 B) / P(B)**\n\nwhere:\n- **A** = sum is at least 10\n- **B** = at least one die shows a 6\n\n---\n\n## Step 1: Outcomes Where At Least One Die Shows 6\n\nTotal sample space: 36 equally likely outcomes.\n\nOutcomes with at least one 6 (listed as die1, die2):\n\n| Outcome | Sum |\n|---------|-----|\n| (6,1) | 7 |\n| (6,2) | 8 |\n| (6,3) | 9 |\n| **(6,4)** | **10** \u2713 |\n| **(6,5)** | **11** \u2713 |\n| **(6,6)** | **12** \u2713 |\n| (1,6) | 7 |\n| (2,6) | 8 |\n| (3,6) | 9 |\n| **(4,6)** | **10** \u2713 |\n| **(5,6)** | **11** \u2713 |\n\nThat gives **11 outcomes** with at least one 6.\n\n---\n\n## Step 2: Outcomes in Both A and B\n\nFrom the 11 outcomes above, those with sum \u2265 10:\n\n**(6,4), (6,5), (6,6), (4,6), (5,6)** \u2192 **5 outcomes**\n\n---\n\n## Step 3: Compute the Probability\n\n$$P(\\text{sum} \\geq 10 \\mid \\text{at least one 6}) = \\frac{5}{11}$$\n\nSince 5 and 11 share no common factors (11 is prime), this is already in lowest terms.\n\nANSWER: 5/11"
     },
     {
       "id": "reasoning.critical-path",
@@ -1618,7 +1619,7 @@
         }
       ],
       "latencyMs": 8723,
-      "answer": "**Critical path analysis:**\n\n- **A**: 0 → 3\n- **B**: 3 → 5 (after A)\n- **C**: 3 → 7 (after A)\n- **E**: 0 → 5 (no deps, runs in parallel)\n- **D**: 7 → 8 (after both B and C; C finishes last at 7)\n- **F**: 8 → 10 (after both D and E; D finishes last at 8)\n\nCritical path: **A → C → D → F** = 3 + 4 + 1 + 2 = **10**\n\nANSWER: 10"
+      "answer": "**Critical path analysis:**\n\n- **A**: 0 \u2192 3\n- **B**: 3 \u2192 5 (after A)\n- **C**: 3 \u2192 7 (after A)\n- **E**: 0 \u2192 5 (no deps, runs in parallel)\n- **D**: 7 \u2192 8 (after both B and C; C finishes last at 7)\n- **F**: 8 \u2192 10 (after both D and E; D finishes last at 8)\n\nCritical path: **A \u2192 C \u2192 D \u2192 F** = 3 + 4 + 1 + 2 = **10**\n\nANSWER: 10"
     },
     {
       "id": "reasoning.knaves",
@@ -1632,7 +1633,7 @@
         }
       ],
       "latencyMs": 8336,
-      "answer": "**Case 1: A is a knight**\n- A tells the truth → B is a knave.\n- B is a knave → B lies → \"A and C are the same kind\" is false → A and C are *different* kinds.\n- A is a knight, so C must be a **knave**.\n\n**Case 2: A is a knave**\n- A lies → B is *not* a knave → B is a knight.\n- B is a knight → B tells the truth → \"A and C are the same kind\" is true.\n- A is a knave, so C is also a **knave**.\n\nBoth cases yield the same result.\n\nANSWER: Knave"
+      "answer": "**Case 1: A is a knight**\n- A tells the truth \u2192 B is a knave.\n- B is a knave \u2192 B lies \u2192 \"A and C are the same kind\" is false \u2192 A and C are *different* kinds.\n- A is a knight, so C must be a **knave**.\n\n**Case 2: A is a knave**\n- A lies \u2192 B is *not* a knave \u2192 B is a knight.\n- B is a knight \u2192 B tells the truth \u2192 \"A and C are the same kind\" is true.\n- A is a knave, so C is also a **knave**.\n\nBoth cases yield the same result.\n\nANSWER: Knave"
     },
     {
       "id": "reasoning.inclusion-exclusion",
@@ -1646,7 +1647,7 @@
         }
       ],
       "latencyMs": 11378,
-      "answer": "**Step 1 — Count divisible by 6 or 10 (inclusion-exclusion)**\n\n- Divisible by 6: ⌊1000/6⌋ = 166\n- Divisible by 10: ⌊1000/10⌋ = 100\n- Divisible by lcm(6,10) = 30: ⌊1000/30⌋ = 33\n\n|div by 6 or 10| = 166 + 100 − 33 = **233**\n\n**Step 2 — Remove those also divisible by 15**\n\nA number in that set divisible by 15 must be divisible by lcm(6,15)=30 or lcm(10,15)=30 — both reduce to multiples of 30.\n\n|div by 30| = 33\n\n**Step 3 — Final count**\n\n233 − 33 = **200**\n\nANSWER: 200"
+      "answer": "**Step 1 \u2014 Count divisible by 6 or 10 (inclusion-exclusion)**\n\n- Divisible by 6: \u230a1000/6\u230b = 166\n- Divisible by 10: \u230a1000/10\u230b = 100\n- Divisible by lcm(6,10) = 30: \u230a1000/30\u230b = 33\n\n|div by 6 or 10| = 166 + 100 \u2212 33 = **233**\n\n**Step 2 \u2014 Remove those also divisible by 15**\n\nA number in that set divisible by 15 must be divisible by lcm(6,15)=30 or lcm(10,15)=30 \u2014 both reduce to multiples of 30.\n\n|div by 30| = 33\n\n**Step 3 \u2014 Final count**\n\n233 \u2212 33 = **200**\n\nANSWER: 200"
     },
     {
       "id": "reasoning.calendar",
@@ -1678,7 +1679,7 @@
         }
       ],
       "latencyMs": 16474,
-      "answer": "DEFECT: SQL injection — `id` is concatenated directly into the query string; a value like `' OR '1'='1` deletes every row. Use a parameterized query (e.g. `db.query(\"DELETE FROM users WHERE id = $1\", [id])`).\n\nDEFECT: `db.query(...)` is not awaited; the Promise is fire-and-forgotten, so the 204 is returned before the deletion completes and any database error is silently swallowed.\n\nDEFECT: A missing `id` parameter falls back to `\"\"` via `?? \"\"` and silently executes `DELETE FROM users WHERE id = ''` instead of returning a 400 error; the handler should reject the request when `id` is absent or empty."
+      "answer": "DEFECT: SQL injection \u2014 `id` is concatenated directly into the query string; a value like `' OR '1'='1` deletes every row. Use a parameterized query (e.g. `db.query(\"DELETE FROM users WHERE id = $1\", [id])`).\n\nDEFECT: `db.query(...)` is not awaited; the Promise is fire-and-forgotten, so the 204 is returned before the deletion completes and any database error is silently swallowed.\n\nDEFECT: A missing `id` parameter falls back to `\"\"` via `?? \"\"` and silently executes `DELETE FROM users WHERE id = ''` instead of returning a 400 error; the handler should reject the request when `id` is absent or empty."
     },
     {
       "id": "review.pagination",
@@ -1696,7 +1697,7 @@
         }
       ],
       "latencyMs": 15937,
-      "answer": "DEFECT: `start` is computed as `page * perPage`, but because `page` is 1-based the first page's start should be `0`. The correct formula is `(page - 1) * perPage`; as written, page 1 skips the first `perPage` items entirely and every subsequent page is offset by one page.\n\nDEFECT: `hasMore` uses `<=` instead of `<`. When the current slice ends exactly at `items.length` (e.g. 10 items, `perPage = 5`, page 2 → `start + perPage = 10`), the condition `10 <= 10` is `true`, falsely signalling a next page that contains no items. The condition should be `start + perPage < items.length`."
+      "answer": "DEFECT: `start` is computed as `page * perPage`, but because `page` is 1-based the first page's start should be `0`. The correct formula is `(page - 1) * perPage`; as written, page 1 skips the first `perPage` items entirely and every subsequent page is offset by one page.\n\nDEFECT: `hasMore` uses `<=` instead of `<`. When the current slice ends exactly at `items.length` (e.g. 10 items, `perPage = 5`, page 2 \u2192 `start + perPage = 10`), the condition `10 <= 10` is `true`, falsely signalling a next page that contains no items. The condition should be `start + perPage < items.length`."
     },
     {
       "id": "review.design-payments",
@@ -1732,7 +1733,7 @@
         }
       ],
       "latencyMs": 29137,
-      "answer": "DEFECT: Race condition (TOCTOU) — two concurrent calls can both read the same balance, both pass the `balance < amount` check, and both write `balance - amount`, allowing the account to go negative. Fix requires either `SELECT ... FOR UPDATE` inside a transaction, or a single atomic `UPDATE accounts SET balance = balance - $1 WHERE id = $2 AND balance >= $1` (checking rows affected).\n\nDEFECT: No transaction — the SELECT and UPDATE execute as separate auto-committed statements; a crash or connection loss between them leaves the account in a permanently inconsistent state with no rollback boundary.\n\nDEFECT: `amount` is not validated to be positive — a negative value passes the `balance < amount` guard (any non-negative balance satisfies `balance < -N` being false) and then `balance - amount` increases the balance, turning a withdraw into a covert deposit."
+      "answer": "DEFECT: Race condition (TOCTOU) \u2014 two concurrent calls can both read the same balance, both pass the `balance < amount` check, and both write `balance - amount`, allowing the account to go negative. Fix requires either `SELECT ... FOR UPDATE` inside a transaction, or a single atomic `UPDATE accounts SET balance = balance - $1 WHERE id = $2 AND balance >= $1` (checking rows affected).\n\nDEFECT: No transaction \u2014 the SELECT and UPDATE execute as separate auto-committed statements; a crash or connection loss between them leaves the account in a permanently inconsistent state with no rollback boundary.\n\nDEFECT: `amount` is not validated to be positive \u2014 a negative value passes the `balance < amount` guard (any non-negative balance satisfies `balance < -N` being false) and then `balance - amount` increases the balance, turning a withdraw into a covert deposit."
     },
     {
       "id": "review.clean",
@@ -1764,7 +1765,7 @@
         }
       ],
       "latencyMs": 19859,
-      "answer": "DEFECT: `Array.prototype.sort()` sorts in place and returns the same array reference, so `s === xs` — the caller's array is mutated, breaking the stated contract that callers reuse it afterwards.\n\nDEFECT: `sort()` called without a comparator uses lexicographic (string) ordering, producing wrong results for numeric data — e.g., `[1, 10, 2].sort()` yields `[1, 10, 2]` (strings: \"1\" < \"10\" < \"2\"), so `median([1, 10, 2])` returns `10` instead of the correct `2`; the comparator `(a, b) => a - b` is required."
+      "answer": "DEFECT: `Array.prototype.sort()` sorts in place and returns the same array reference, so `s === xs` \u2014 the caller's array is mutated, breaking the stated contract that callers reuse it afterwards.\n\nDEFECT: `sort()` called without a comparator uses lexicographic (string) ordering, producing wrong results for numeric data \u2014 e.g., `[1, 10, 2].sort()` yields `[1, 10, 2]` (strings: \"1\" < \"10\" < \"2\"), so `median([1, 10, 2])` returns `10` instead of the correct `2`; the comparator `(a, b) => a - b` is required."
     },
     {
       "id": "review.cache-key",
@@ -1782,7 +1783,7 @@
         }
       ],
       "latencyMs": 29211,
-      "answer": "DEFECT: `setTimeout` receives `ttlSeconds` directly, but its delay parameter is in milliseconds; the cache entries expire 1000× too soon. Fix: `ttlSeconds * 1000`.\n\nDEFECT: Key construction `String(userId) + String(page)` produces collisions — e.g. `userId=1, page=23` and `userId=12, page=3` both yield `\"123\"`. Fix: use a separator such as `` `${userId}:${page}` ``.\n\nDEFECT: No in-flight deduplication — concurrent calls for the same key before any `loadPage` resolves each independently miss the cache, each call `loadPage`, each overwrite the cache entry, and each register a separate expiry timer; the entry may be evicted prematurely when the first timer fires. Fix: store a `Promise<Page>` in the cache (or a pending-promises map) so concurrent callers await the same in-flight request."
+      "answer": "DEFECT: `setTimeout` receives `ttlSeconds` directly, but its delay parameter is in milliseconds; the cache entries expire 1000\u00d7 too soon. Fix: `ttlSeconds * 1000`.\n\nDEFECT: Key construction `String(userId) + String(page)` produces collisions \u2014 e.g. `userId=1, page=23` and `userId=12, page=3` both yield `\"123\"`. Fix: use a separator such as `` `${userId}:${page}` ``.\n\nDEFECT: No in-flight deduplication \u2014 concurrent calls for the same key before any `loadPage` resolves each independently miss the cache, each call `loadPage`, each overwrite the cache entry, and each register a separate expiry timer; the entry may be evicted prematurely when the first timer fires. Fix: store a `Promise<Page>` in the cache (or a pending-promises map) so concurrent callers await the same in-flight request."
     },
     {
       "id": "review.clean-tricky",

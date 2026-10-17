@@ -1,5 +1,6 @@
 {
   "suite": "distpatch-calibration-v1",
+  "graderVersion": "distpatch-grader-v1-pre-sandbox",
   "profileId": "openai/gpt-oss-120b",
   "route": "ollama-cloud",
   "wireModel": "gpt-oss:120b",
@@ -477,7 +478,7 @@
         }
       ],
       "latencyMs": 6682,
-      "answer": "```ts\nfunction parseCsvLine(line: string): string[] {\n  const fields: string[] = [];\n  let field = \"\";\n  let i = 0;\n  const len = line.length;\n  let inQuotes = false;\n\n  while (i < len) {\n    const ch = line[i];\n\n    if (inQuotes) {\n      if (ch === '\"') {\n        // possible escaped quote or closing quote\n        if (i + 1 < len && line[i + 1] === '\"') {\n          field += '\"';\n          i += 2; // skip both quotes\n        } else {\n          // closing quote\n          inQuotes = false;\n          i++; // move past the closing quote\n          // after a closing quote only a comma or end of line is allowed\n          if (i < len && line[i] !== \",\") {\n            throw new Error(\"Invalid character after closing quote\");\n          }\n        }\n      } else {\n        field += ch;\n        i++;\n      }\n    } else {\n      if (ch === \",\") {\n        fields.push(field);\n        field = \"\";\n        i++;\n      } else if (ch === '\"') {\n        // start of a quoted field; only allowed at the beginning of a field\n        if (field.length !== 0) {\n          // quote inside an unquoted field – treat as literal per lenient handling\n          field += ch;\n          i++;\n        } else {\n          inQuotes = true;\n          i++;\n        }\n      } else {\n        field += ch;\n        i++;\n      }\n    }\n  }\n\n  if (inQuotes) {\n    throw new Error(\"Unterminated quoted field\");\n  }\n\n  // push the final field (handles trailing commas as empty fields)\n  fields.push(field);\n  return fields;\n}\n```"
+      "answer": "```ts\nfunction parseCsvLine(line: string): string[] {\n  const fields: string[] = [];\n  let field = \"\";\n  let i = 0;\n  const len = line.length;\n  let inQuotes = false;\n\n  while (i < len) {\n    const ch = line[i];\n\n    if (inQuotes) {\n      if (ch === '\"') {\n        // possible escaped quote or closing quote\n        if (i + 1 < len && line[i + 1] === '\"') {\n          field += '\"';\n          i += 2; // skip both quotes\n        } else {\n          // closing quote\n          inQuotes = false;\n          i++; // move past the closing quote\n          // after a closing quote only a comma or end of line is allowed\n          if (i < len && line[i] !== \",\") {\n            throw new Error(\"Invalid character after closing quote\");\n          }\n        }\n      } else {\n        field += ch;\n        i++;\n      }\n    } else {\n      if (ch === \",\") {\n        fields.push(field);\n        field = \"\";\n        i++;\n      } else if (ch === '\"') {\n        // start of a quoted field; only allowed at the beginning of a field\n        if (field.length !== 0) {\n          // quote inside an unquoted field \u2013 treat as literal per lenient handling\n          field += ch;\n          i++;\n        } else {\n          inQuotes = true;\n          i++;\n        }\n      } else {\n        field += ch;\n        i++;\n      }\n    }\n  }\n\n  if (inQuotes) {\n    throw new Error(\"Unterminated quoted field\");\n  }\n\n  // push the final field (handles trailing commas as empty fields)\n  fields.push(field);\n  return fields;\n}\n```"
     },
     {
       "id": "reasoning.line-up",
@@ -611,7 +612,7 @@
         }
       ],
       "latencyMs": 2537,
-      "answer": "DEFECT: SQL injection vulnerability – the `id` value is concatenated directly into the SQL string without sanitization or parameterization.  \nDEFECT: The asynchronous `db.query` call is not awaited, so the function may return before the deletion completes and any errors are unhandled.  \nDEFECT: No error handling for the database operation; any query failure will result in an unhandled promise rejection and an incorrect HTTP response.  \nDEFECT: The `id` parameter is not validated (e.g., type‑checked or format‑checked), allowing malformed or unexpected values to be used in the query.  \nDEFECT: Missing handling for a missing or empty `id` – the function proceeds with an empty string, which could lead to unintended behavior and should instead return a 400 Bad Request.  \nDEFECT: The handler does not verify that the HTTP method is appropriate (e.g., DELETE), allowing the operation to be invoked with any method.  \nDEFECT: Returns a 204 No Content response even when the deletion fails or when the user does not exist, providing no feedback to the client."
+      "answer": "DEFECT: SQL injection vulnerability \u2013 the `id` value is concatenated directly into the SQL string without sanitization or parameterization.  \nDEFECT: The asynchronous `db.query` call is not awaited, so the function may return before the deletion completes and any errors are unhandled.  \nDEFECT: No error handling for the database operation; any query failure will result in an unhandled promise rejection and an incorrect HTTP response.  \nDEFECT: The `id` parameter is not validated (e.g., type\u2011checked or format\u2011checked), allowing malformed or unexpected values to be used in the query.  \nDEFECT: Missing handling for a missing or empty `id` \u2013 the function proceeds with an empty string, which could lead to unintended behavior and should instead return a 400 Bad Request.  \nDEFECT: The handler does not verify that the HTTP method is appropriate (e.g., DELETE), allowing the operation to be invoked with any method.  \nDEFECT: Returns a 204 No Content response even when the deletion fails or when the user does not exist, providing no feedback to the client."
     },
     {
       "id": "review.pagination",
@@ -629,7 +630,7 @@
         }
       ],
       "latencyMs": 1236,
-      "answer": "DEFECT: The calculation of `start` uses `page * perPage`, which treats `page` as 0‑based. Since `page` is documented as 1‑based, it should be `(page - 1) * perPage` to include the first page correctly.  \nDEFECT: The `hasMore` condition `start + perPage <= items.length` incorrectly reports an additional page when the current page exactly fills the remaining items. It should be `start + perPage < items.length` (or equivalently `items.length > start + perPage`) to indicate that more pages follow only when there are items beyond the current page."
+      "answer": "DEFECT: The calculation of `start` uses `page * perPage`, which treats `page` as 0\u2011based. Since `page` is documented as 1\u2011based, it should be `(page - 1) * perPage` to include the first page correctly.  \nDEFECT: The `hasMore` condition `start + perPage <= items.length` incorrectly reports an additional page when the current page exactly fills the remaining items. It should be `start + perPage < items.length` (or equivalently `items.length > start + perPage`) to indicate that more pages follow only when there are items beyond the current page."
     },
     {
       "id": "review.design-payments",
@@ -651,7 +652,7 @@
         }
       ],
       "latencyMs": 2117,
-      "answer": "DEFECT: No idempotency key is used on POST /payments, so automatic retries on upstream timeouts can cause duplicate charges if the original request was actually processed.  \nDEFECT: Deduplication based only on “identical amounts within the same second” is unreliable; different legitimate transactions can share the same amount and second, leading to false positives, while legitimate retries that occur a second later will not be deduplicated, causing duplicate payments.  \nDEFECT: Caching each user’s permission set for 24 hours delays revocation for up to a day, creating a security risk where a user retains access after their permissions have been removed.  \nDEFECT: Logging full card numbers at INFO level violates PCI‑DSS and data‑privacy regulations, exposing sensitive payment data in logs."
+      "answer": "DEFECT: No idempotency key is used on POST\u202f/payments, so automatic retries on upstream timeouts can cause duplicate charges if the original request was actually processed.  \nDEFECT: Deduplication based only on \u201cidentical amounts within the same second\u201d is unreliable; different legitimate transactions can share the same amount and second, leading to false positives, while legitimate retries that occur a second later will not be deduplicated, causing duplicate payments.  \nDEFECT: Caching each user\u2019s permission set for 24\u202fhours delays revocation for up to a day, creating a security risk where a user retains access after their permissions have been removed.  \nDEFECT: Logging full card numbers at INFO level violates PCI\u2011DSS and data\u2011privacy regulations, exposing sensitive payment data in logs."
     },
     {
       "id": "review.race",
@@ -665,7 +666,7 @@
         }
       ],
       "latencyMs": 1690,
-      "answer": "DEFECT: The function performs a separate SELECT and UPDATE without any locking or transaction, creating a race condition where concurrent withdrawals can read the same balance and both succeed, leading to an overdraft.  \nDEFECT: No transaction is used, so the read‑modify‑write sequence is not atomic and can be interleaved with other operations.  \nDEFECT: The UPDATE statement does not re‑check that the balance is still sufficient (e.g., using `WHERE balance >= $1`), so a concurrent update could cause the balance to become negative.  "
+      "answer": "DEFECT: The function performs a separate SELECT and UPDATE without any locking or transaction, creating a race condition where concurrent withdrawals can read the same balance and both succeed, leading to an overdraft.  \nDEFECT: No transaction is used, so the read\u2011modify\u2011write sequence is not atomic and can be interleaved with other operations.  \nDEFECT: The UPDATE statement does not re\u2011check that the balance is still sufficient (e.g., using `WHERE balance >= $1`), so a concurrent update could cause the balance to become negative.  "
     },
     {
       "id": "review.clean",
@@ -697,7 +698,7 @@
         }
       ],
       "latencyMs": 2287,
-      "answer": "DEFECT: The function mutates the caller’s array by calling `xs.sort()`, which violates the expectation that callers can reuse the original array unchanged.  \nDEFECT: `Array.prototype.sort()` is invoked without a numeric compare function, so numbers are sorted lexicographically (as strings), producing incorrect ordering for many numeric inputs."
+      "answer": "DEFECT: The function mutates the caller\u2019s array by calling `xs.sort()`, which violates the expectation that callers can reuse the original array unchanged.  \nDEFECT: `Array.prototype.sort()` is invoked without a numeric compare function, so numbers are sorted lexicographically (as strings), producing incorrect ordering for many numeric inputs."
     },
     {
       "id": "review.cache-key",
@@ -715,7 +716,7 @@
         }
       ],
       "latencyMs": 3609,
-      "answer": "DEFECT: `setTimeout` receives `ttlSeconds` (seconds) but expects a delay in milliseconds, so the cached entry expires 1000 × faster than intended.  \nDEFECT: The cache key is built by simple concatenation (`String(userId) + String(page)`), which can produce collisions (e.g., userId = 12, page = 34 vs. userId = 1, page = 234 both yield `\"1234\"`).  \nDEFECT: Cache hit detection uses `if (hit)`, treating any falsy cached value (e.g., `null`, `0`, `''`) as a miss; it should check `cache.has(key)` instead.  \nDEFECT: Each call schedules a timeout to delete the key after `ttlSeconds`, but if the same key is refreshed before the timeout fires, the earlier timeout will delete the newer cached value prematurely."
+      "answer": "DEFECT: `setTimeout` receives `ttlSeconds` (seconds) but expects a delay in milliseconds, so the cached entry expires 1000\u202f\u00d7 faster than intended.  \nDEFECT: The cache key is built by simple concatenation (`String(userId) + String(page)`), which can produce collisions (e.g., userId\u202f=\u202f12, page\u202f=\u202f34 vs. userId\u202f=\u202f1, page\u202f=\u202f234 both yield `\"1234\"`).  \nDEFECT: Cache hit detection uses `if (hit)`, treating any falsy cached value (e.g., `null`, `0`, `''`) as a miss; it should check `cache.has(key)` instead.  \nDEFECT: Each call schedules a timeout to delete the key after `ttlSeconds`, but if the same key is refreshed before the timeout fires, the earlier timeout will delete the newer cached value prematurely."
     },
     {
       "id": "review.clean-tricky",
@@ -918,7 +919,7 @@
           "pass": true
         },
         {
-          "name": "EUR→JPY",
+          "name": "EUR\u2192JPY",
           "pass": true
         },
         {
@@ -938,7 +939,7 @@
             }
           }
         ],
-        "final": "250 EUR is equivalent to **40,712.5 JPY** based on today’s exchange rate.",
+        "final": "250\u202fEUR is equivalent to **40,712.5\u202fJPY** based on today\u2019s exchange rate.",
         "turns": 2
       },
       "state": null
@@ -982,7 +983,7 @@
             }
           }
         ],
-        "final": "**Current temperatures**\n\n- **Oslo:** ‑3 °C  \n- **Lima:** 19 °C  \n\nLima is warmer than Oslo right now.",
+        "final": "**Current temperatures**\n\n- **Oslo:**\u202f\u20113\u202f\u00b0C  \n- **Lima:**\u202f19\u202f\u00b0C  \n\nLima is warmer than Oslo right now.",
         "turns": 3
       },
       "state": null
@@ -1022,7 +1023,7 @@
             }
           }
         ],
-        "final": "The cheapest flight on 9 July 2026 from Lisbon (LIS) to Berlin (BER) is:\n\n- **Flight ID:** XY123  \n- **Price:** €89 (Euros)",
+        "final": "The cheapest flight on\u202f9\u202fJuly\u202f2026 from Lisbon (LIS) to Berlin (BER) is:\n\n- **Flight ID:**\u202fXY123  \n- **Price:**\u202f\u20ac89 (Euros)",
         "turns": 2
       },
       "state": null
@@ -1065,7 +1066,7 @@
           "pass": true
         },
         {
-          "name": "EUR→USD",
+          "name": "EUR\u2192USD",
           "pass": true
         },
         {
@@ -1093,7 +1094,7 @@
             }
           }
         ],
-        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on **2026‑07‑09** costs **≈ $96.12 USD**.",
+        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on **2026\u201107\u201109** costs **\u2248\u202f$96.12\u202fUSD**.",
         "turns": 3
       },
       "state": null
@@ -1138,7 +1139,7 @@
             }
           }
         ],
-        "final": "Your calendar event has been created successfully.  \n\n- **Title:** Design review  \n- **Date & Time:** 3 November 2026, 15:30 UTC (ends at 17:00 UTC)  \n- **Duration:** 1 hour 30 minutes  \n- **Attendees:** Ana, Ben  \n\nLet me know if you need anything else!",
+        "final": "Your calendar event has been created successfully.  \n\n- **Title:** Design review  \n- **Date & Time:** 3\u202fNovember\u202f2026, 15:30\u202fUTC (ends at 17:00\u202fUTC)  \n- **Duration:** 1\u202fhour\u202f30\u202fminutes  \n- **Attendees:** Ana, Ben  \n\nLet me know if you need anything else!",
         "turns": 2
       },
       "state": null
@@ -1512,7 +1513,7 @@
         }
       ],
       "latencyMs": 631,
-      "answer": "4.2 million euros"
+      "answer": "4.2\u202fmillion\u202feuros"
     },
     {
       "id": "long_context.aggregate",
@@ -1548,7 +1549,7 @@
         }
       ],
       "latencyMs": 887,
-      "answer": "4.6 million euros"
+      "answer": "4.6\u202fmillion\u202feuros"
     },
     {
       "id": "long_context.three-hop",
@@ -2202,7 +2203,7 @@
         }
       ],
       "latencyMs": 1775,
-      "answer": "DEFECT: The start index is calculated as `page * perPage` but `page` is 1‑based, causing the first page to skip the first `perPage` items; it should be `(page - 1) * perPage`.\n\nDEFECT: The `hasMore` flag uses `start + perPage <= items.length`, which incorrectly reports that another page exists when the current page exactly consumes the remaining items; it should use `<` (or compare against the actual number of rows) to indicate that more items follow."
+      "answer": "DEFECT: The start index is calculated as `page * perPage` but `page` is 1\u2011based, causing the first page to skip the first `perPage` items; it should be `(page - 1) * perPage`.\n\nDEFECT: The `hasMore` flag uses `start + perPage <= items.length`, which incorrectly reports that another page exists when the current page exactly consumes the remaining items; it should use `<` (or compare against the actual number of rows) to indicate that more items follow."
     },
     {
       "id": "review.design-payments",
@@ -2224,7 +2225,7 @@
         }
       ],
       "latencyMs": 1891,
-      "answer": "DEFECT: Retries of POST /payments without an idempotency key can cause duplicate charges if the original request succeeded but the client timed out.  \nDEFECT: Relying on the processor to deduplicate only identical amounts within the same second is unreliable; different transactions can have the same amount and legitimate duplicates can be missed, leading to false positives or false negatives.  \nDEFECT: Caching each user’s permission set for 24 hours means revocations are not enforced until the cache expires, creating a security window where a revoked user can still perform actions.  \nDEFECT: Logging full card numbers at INFO level violates PCI‑DSS requirements and exposes highly sensitive payment data, creating a serious compliance and security risk."
+      "answer": "DEFECT: Retries of POST\u202f/payments without an idempotency key can cause duplicate charges if the original request succeeded but the client timed out.  \nDEFECT: Relying on the processor to deduplicate only identical amounts within the same second is unreliable; different transactions can have the same amount and legitimate duplicates can be missed, leading to false positives or false negatives.  \nDEFECT: Caching each user\u2019s permission set for 24\u202fhours means revocations are not enforced until the cache expires, creating a security window where a revoked user can still perform actions.  \nDEFECT: Logging full card numbers at INFO level violates PCI\u2011DSS requirements and exposes highly sensitive payment data, creating a serious compliance and security risk."
     },
     {
       "id": "review.race",
@@ -2238,7 +2239,7 @@
         }
       ],
       "latencyMs": 1489,
-      "answer": "DEFECT: The function performs a read‑modify‑write sequence without a transaction or row lock, causing a race condition where concurrent withdrawals can both read the same balance and both succeed, potentially resulting in an overdrawn (negative) balance.  \nDEFECT: It does not use `SELECT ... FOR UPDATE` or an atomic `UPDATE ... WHERE balance >= $amount` to ensure the balance check and update happen safely as a single operation."
+      "answer": "DEFECT: The function performs a read\u2011modify\u2011write sequence without a transaction or row lock, causing a race condition where concurrent withdrawals can both read the same balance and both succeed, potentially resulting in an overdrawn (negative) balance.  \nDEFECT: It does not use `SELECT ... FOR UPDATE` or an atomic `UPDATE ... WHERE balance >= $amount` to ensure the balance check and update happen safely as a single operation."
     },
     {
       "id": "review.clean",
@@ -2270,7 +2271,7 @@
         }
       ],
       "latencyMs": 1752,
-      "answer": "DEFECT: Using `Array.prototype.sort()` without a numeric comparator sorts numbers lexicographically (as strings), which yields incorrect ordering for many numeric arrays (e.g., `[10, 2]` becomes `[10, 2]` instead of `[2, 10]`).  \n\nDEFECT: The function sorts the input array in place, mutating the caller‑provided array. Callers expecting to reuse their original array after calling `median` will see it reordered, which is unintended."
+      "answer": "DEFECT: Using `Array.prototype.sort()` without a numeric comparator sorts numbers lexicographically (as strings), which yields incorrect ordering for many numeric arrays (e.g., `[10, 2]` becomes `[10, 2]` instead of `[2, 10]`).  \n\nDEFECT: The function sorts the input array in place, mutating the caller\u2011provided array. Callers expecting to reuse their original array after calling `median` will see it reordered, which is unintended."
     },
     {
       "id": "review.cache-key",
@@ -2288,7 +2289,7 @@
         }
       ],
       "latencyMs": 2117,
-      "answer": "DEFECT: `setTimeout` expects a delay in milliseconds, but `ttlSeconds` is passed directly, causing the cache entry to expire after `ttlSeconds` milliseconds instead of seconds.  \nDEFECT: The cache key is built by simple string concatenation (`String(userId) + String(page)`), which can produce collisions (e.g., userId = 12, page = 34 → \"1234\" collides with userId = 1, page = 234).  \nDEFECT: Each call schedules a separate timeout to delete the key, but earlier timeouts are not cleared when the same key is refreshed, so a stale timeout can delete a newer cached value before its intended TTL."
+      "answer": "DEFECT: `setTimeout` expects a delay in milliseconds, but `ttlSeconds` is passed directly, causing the cache entry to expire after\u202f`ttlSeconds`\u202fmilliseconds instead of seconds.  \nDEFECT: The cache key is built by simple string concatenation (`String(userId) + String(page)`), which can produce collisions (e.g., userId\u202f=\u202f12, page\u202f=\u202f34 \u2192 \"1234\" collides with userId\u202f=\u202f1, page\u202f=\u202f234).  \nDEFECT: Each call schedules a separate timeout to delete the key, but earlier timeouts are not cleared when the same key is refreshed, so a stale timeout can delete a newer cached value before its intended TTL."
     },
     {
       "id": "review.clean-tricky",
@@ -2491,7 +2492,7 @@
           "pass": true
         },
         {
-          "name": "EUR→JPY",
+          "name": "EUR\u2192JPY",
           "pass": true
         },
         {
@@ -2511,7 +2512,7 @@
             }
           }
         ],
-        "final": "250 EUR is equivalent to **40,712.5 JPY** at today’s exchange rate.",
+        "final": "250\u202fEUR is equivalent to **40,712.5\u202fJPY** at today\u2019s exchange rate.",
         "turns": 2
       },
       "state": null
@@ -2555,7 +2556,7 @@
             }
           }
         ],
-        "final": "**Current temperatures**\n\n- **Oslo:** -3 °C  \n- **Lima:** 19 °C  \n\nLima is warmer than Oslo right now.",
+        "final": "**Current temperatures**\n\n- **Oslo:**\u202f-3\u202f\u00b0C  \n- **Lima:**\u202f19\u202f\u00b0C  \n\nLima is warmer than Oslo right now.",
         "turns": 3
       },
       "state": null
@@ -2595,7 +2596,7 @@
             }
           }
         ],
-        "final": "The cheapest flight is **ID XY123** priced at **€ 89**.",
+        "final": "The cheapest flight is **ID\u202fXY123** priced at **\u20ac\u202f89**.",
         "turns": 2
       },
       "state": null
@@ -2638,7 +2639,7 @@
           "pass": true
         },
         {
-          "name": "EUR→USD",
+          "name": "EUR\u2192USD",
           "pass": true
         },
         {
@@ -2666,7 +2667,7 @@
             }
           }
         ],
-        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on **2026‑07‑09** costs **≈ $96.12 USD**.",
+        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on **2026\u201107\u201109** costs **\u2248\u202f$96.12\u202fUSD**.",
         "turns": 3
       },
       "state": null
@@ -2718,7 +2719,7 @@
             }
           }
         ],
-        "final": "Your calendar entry for **“Design review”** on **3 November 2026** from **15:30 UTC to 17:00 UTC** with Ana and Ben has been added successfully.",
+        "final": "Your calendar entry for **\u201cDesign review\u201d** on **3\u202fNovember\u202f2026** from **15:30\u202fUTC to 17:00\u202fUTC** with Ana and Ben has been added successfully.",
         "turns": 2
       },
       "state": null
@@ -2978,7 +2979,7 @@
           {
             "name": "write_file",
             "args": {
-              "content": "export function slugify(s: string): string {\n  // Trim whitespace, normalize Unicode to decompose accents, remove diacritics,\n  // convert to lowercase, replace whitespace with hyphens, remove non‑alphanumeric characters,\n  // collapse multiple hyphens, and trim leading/trailing hyphens.\n  return s\n    .trim()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '') // strip diacritics\n    .toLowerCase()\n    .replace(/\\s+/g, '-') // whitespace to hyphen\n    .replace(/[^a-z0-9-]/g, '') // drop punctuation\n    .replace(/-+/g, '-') // collapse multiple hyphens\n    .replace(/^[-]+|[-]+$/g, ''); // trim hyphens\n}\n",
+              "content": "export function slugify(s: string): string {\n  // Trim whitespace, normalize Unicode to decompose accents, remove diacritics,\n  // convert to lowercase, replace whitespace with hyphens, remove non\u2011alphanumeric characters,\n  // collapse multiple hyphens, and trim leading/trailing hyphens.\n  return s\n    .trim()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '') // strip diacritics\n    .toLowerCase()\n    .replace(/\\s+/g, '-') // whitespace to hyphen\n    .replace(/[^a-z0-9-]/g, '') // drop punctuation\n    .replace(/-+/g, '-') // collapse multiple hyphens\n    .replace(/^[-]+|[-]+$/g, ''); // trim hyphens\n}\n",
               "path": "src/slug.ts"
             }
           },
@@ -3071,7 +3072,7 @@
         }
       ],
       "latencyMs": 587,
-      "answer": "4.2 million euros"
+      "answer": "4.2\u202fmillion\u202feuros"
     },
     {
       "id": "long_context.aggregate",
@@ -3107,7 +3108,7 @@
         }
       ],
       "latencyMs": 871,
-      "answer": "4.6 million euros"
+      "answer": "4.6\u202fmillion\u202feuros"
     },
     {
       "id": "long_context.three-hop",

@@ -205,7 +205,7 @@ export async function runBun(source: string, options: RunBunOptions = {}): Promi
         // `ulimit` accepts only one option set per invocation under some shells (dash fails with
         // exit 2 when combining `-t`, `-f`, `-c`), so each limit is installed separately and a
         // failure aborts rather than launching the generated program unrestricted.
-        `ulimit -t ${cpuSeconds} || exit 97; ulimit -f 8192 || exit 97; ulimit -c 0 || exit 97; exec /opt/bin/bun /work/case.ts`,
+        `ulimit -t ${cpuSeconds} || exit 97; ulimit -v 2097152 || exit 97; ulimit -f 8192 || exit 97; ulimit -c 0 || exit 97; exec /opt/bin/bun /work/case.ts`,
       ],
       {
         cwd: dir,
@@ -251,7 +251,6 @@ const MAX_HARNESS_CHECKS = 64
  * code cannot spoof a `RESULT` line or trigger an unbounded check array allocation.
  */
 async function execute(code: string, harness: string): Promise<Check[]> {
-  const expectedCalls = (harness.match(/\bt\(/g) ?? []).length
   const nonce = `${crypto.randomUUID()}-${crypto.randomUUID()}`
   const prelude = `
 let __p = 0, __n = 0
@@ -266,14 +265,16 @@ function done() { __write(${JSON.stringify(nonce)} + " " + __p + " " + __n + "\\
   if (match === null) return [check("executes", false)]
   const passed = Number(match[1])
   const total = Number(match[2])
+  // Structural bounds only. The result arrives through the unguessable per-run nonce channel, so
+  // the check *count* is not validated against a static source-level guess: loops like
+  // `coding.semver` legitimately report more runtime checks than textual `t(` call sites.
   if (
     !Number.isInteger(passed) ||
     !Number.isInteger(total) ||
     total <= 0 ||
     total > MAX_HARNESS_CHECKS ||
     passed < 0 ||
-    passed > total ||
-    (expectedCalls > 1 && total !== expectedCalls)
+    passed > total
   ) {
     return [check("executes", false)]
   }
