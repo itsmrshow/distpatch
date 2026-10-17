@@ -111,6 +111,8 @@ export interface DataPlaneDeps {
    */
   readonly models?: DataPlaneRoutesDeps["models"]
   readonly prices?: DataPlaneRoutesDeps["prices"]
+  /** Virtual-model resolution, shared with the dispatcher, for `GET /v1/models` and `/:id`. */
+  readonly virtualModels?: DataPlaneRoutesDeps["virtualModels"]
 }
 
 export function createApp(deps: AppDeps): Hono<AppEnv> {

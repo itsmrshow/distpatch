@@ -14,7 +14,7 @@
 
 export { catalogEntry } from "./entries"
 export type { ListedModel } from "./listable"
-export { listableModels, mergeResolution } from "./listable"
+export { listableModelIds, listableModels, mergeResolution } from "./listable"
 export type {
   ListingFailureCode,
   UpstreamListing,

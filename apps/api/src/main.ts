@@ -16,7 +16,11 @@ import { createLogger, type Logger } from "./logging/logger"
 import { initSentry } from "./observability"
 import { ConfigDirError } from "./providers/claude-sdk/config-dir"
 import { adminAuthBootProblem } from "./services/admin-auth"
-import { CapabilityCatalogError, loadCapabilityCatalog } from "./services/capabilities"
+import {
+  CapabilityCatalogError,
+  loadCapabilityCatalog,
+  type ModelCapabilityCatalog,
+} from "./services/capabilities"
 import { createAccountProbe } from "./services/health/accountProbe"
 import { createClaudeCliProbe } from "./services/health/claudeCliProbe"
 import { createDatabaseProbe } from "./services/health/databaseProbe"
@@ -41,9 +45,9 @@ async function main(): Promise<void> {
   warnOnInsecureSessionCookie(env, logger)
 
   // Malformed shipped data or operator overrides exit here, before migrations or the listener.
-  // No request path consumes the catalog yet (model selection, #8, will); validating it now means
-  // a bad override file is found at deploy time, not at the first semantic request.
-  checkCapabilityCatalog(env, logger)
+  // Loaded exactly once: this snapshot — the revision logged here — is the one virtual-model
+  // resolution routes on, injected through composition; nothing re-reads the override file.
+  const capabilities = loadBootCapabilityCatalog(env, logger)
 
   // Migrations run before the listener opens. A failure exits non-zero rather than serving
   // traffic on a half-migrated schema — docs/idea/09-deployment.md#migrations.
@@ -62,6 +66,7 @@ async function main(): Promise<void> {
     sql: database.sql,
     dbPoolStats: database.poolStats,
     logger,
+    capabilities,
   })
 
   // One latch, read by `/readyz` and by the signal handlers, so readiness cannot go on answering
@@ -100,6 +105,8 @@ async function main(): Promise<void> {
       // read synchronously — the listing never touches Postgres.
       models: runtime.models,
       prices: (provider, model) => runtime.prices.lookup(provider, model),
+      // The same resolution the dispatcher routes `auto-*` with, so the listing cannot disagree.
+      virtualModels: runtime.virtualModels,
     },
     trustProxy: env.trustProxy,
     sessionCookieInsecure: env.adminAuth.sessionCookieInsecure,
@@ -240,7 +247,7 @@ function readEnv(): Env {
   }
 }
 
-function checkCapabilityCatalog(env: Env, logger: Logger): void {
+function loadBootCapabilityCatalog(env: Env, logger: Logger): ModelCapabilityCatalog {
   try {
     const catalog = loadCapabilityCatalog(env.modelCapabilityOverridesPath)
     logger.info("model capability catalog loaded", {
@@ -248,6 +255,7 @@ function checkCapabilityCatalog(env: Env, logger: Logger): void {
       profiles: catalog.list().length,
       ...catalog.revision(),
     })
+    return catalog
   } catch (error) {
     if (error instanceof CapabilityCatalogError) {
       process.stderr.write(`${error.message}\n`)

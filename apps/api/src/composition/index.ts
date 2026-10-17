@@ -52,6 +52,7 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
     limiter,
     activeRequests,
     dispatcher,
+    virtualModels,
   } = request
   // --- admin plane ----------------------------------------------------------
   // Assembled next door, in `composition/admin.ts`: this file owns the process, that one owns the
@@ -144,6 +145,7 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
     statusWriter,
     models: modelCatalogStore,
     prices,
+    virtualModels,
     scheduler,
     metrics,
     start: lifecycle.start,

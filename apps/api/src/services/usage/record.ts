@@ -33,9 +33,14 @@ export interface UsageRecord {
   readonly poolId: string | null
   readonly provider: ProviderId | null
   readonly sessionKey: string | null
-  /** Exactly what the client asked for. Never substituted. */
+  /** Exactly what the client asked for — a concrete name, or a Distpatch virtual one (`auto-task`). */
   readonly model: string | null
-  /** After the account's alias map. Equal to {@link model} when no alias applied. */
+  /**
+   * The concrete model Distpatch's virtual-model resolution selected. Null for a fixed request
+   * (no semantic selection happened) and for a request refused before one was made.
+   */
+  readonly selectedModel: string | null
+  /** After the account's alias map: what went on the wire. */
   readonly upstreamModel: string | null
   /** The API surface the client called. Null when the caller never got that far. */
   readonly ingressDialect: Dialect | null
@@ -117,6 +122,7 @@ export function toUsageRecordRow(record: UsageRecord): UsageRecordInsert {
     provider: record.provider,
     sessionKey: record.sessionKey,
     model: record.model,
+    selectedModel: record.selectedModel,
     upstreamModel: record.upstreamModel,
     ingressDialect: record.ingressDialect,
     egressMode: record.egressMode,

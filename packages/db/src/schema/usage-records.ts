@@ -70,11 +70,19 @@ export const usageRecords = pgTable(
 
     sessionKey: text("session_key"),
 
-    /** The model the client asked for. Never substituted, only aliased per account. */
+    /** The model the client asked for — concrete, or a Distpatch virtual name (`auto-task`). */
     model: text("model"),
     /**
+     * The concrete model Distpatch's virtual-model resolution selected for a
+     * virtual request, before any account alias. NULL for a fixed request — no
+     * semantic selection happened — and on every row written before the column
+     * existed. Identical across the attempts of one request; `upstream_model`
+     * may differ per account.
+     */
+    selectedModel: text("selected_model"),
+    /**
      * The name actually put on the wire, after the account's alias map. Equal to
-     * `model` when no alias applied.
+     * `selected_model` (virtual) or `model` (fixed) when no alias applied.
      *
      * A separate fact from `model`, not a derived one: the alias map is mutable
      * operator config, so re-deriving it later answers "what would we send now",

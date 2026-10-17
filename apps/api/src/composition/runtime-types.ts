@@ -4,6 +4,7 @@ import type { Logger } from "../logging/logger"
 import type { RouterMetrics } from "../observability"
 import type { SdkQuotaStore } from "../providers"
 import type { Scheduler } from "../scheduler"
+import type { ModelCapabilityCatalog } from "../services/capabilities"
 import type { RoutingCatalogStore } from "../services/catalog"
 import type { PriceBook } from "../services/cost"
 import type {
@@ -12,6 +13,7 @@ import type {
   HealthStore,
   QuotaWindowWriter,
   RouterKeyVerifier,
+  VirtualModelRouting,
 } from "../services/dataplane"
 import type { ModelCatalogStore } from "../services/models"
 import type { AdminServices } from "../types"
@@ -24,6 +26,11 @@ export interface RuntimeDeps {
   /** The same pool's own occupancy sample, for `router_db_pool_connections` — `main.ts`. */
   readonly dbPoolStats: () => PoolSample
   readonly logger: Logger
+  /**
+   * The effective capability catalog, loaded and validated once at boot (`main.ts`) and injected
+   * here — the same immutable snapshot whose revision the boot log names. Never re-read.
+   */
+  readonly capabilities: ModelCapabilityCatalog
 }
 
 export interface Runtime {
@@ -51,6 +58,8 @@ export interface Runtime {
    */
   readonly models: ModelCatalogStore
   readonly prices: PriceBook
+  /** Virtual-model resolution, shared by the dispatcher and `GET /v1/models` (`auto`, `auto-*`). */
+  readonly virtualModels: VirtualModelRouting
   /** Exposed for the admin plane's "run now" and for shutdown ordering; the timers are internal. */
   readonly scheduler: Scheduler
   /** What `GET /metrics` renders. Fed from the usage drain, the scheduler, and per-scrape gauges. */

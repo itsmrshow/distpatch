@@ -8,12 +8,15 @@ import type {
   RouterKeyVerifier,
   RoutingCatalog,
   UpstreamOperation,
+  VirtualModelRouting,
 } from "../../services/dataplane"
 import {
   catalogListing,
   providerListing,
   reachableModel,
   reachableModels,
+  virtualModelProbe,
+  withVirtualModels,
 } from "../../services/dataplane"
 import type { ModelCatalogStore } from "../../services/models"
 import { renderCatalog, renderProviders } from "./catalog"
@@ -73,6 +76,11 @@ export interface DataPlaneRoutesDeps {
    */
   readonly models?: Pick<ModelCatalogStore, "describe" | "modelsOf">
   readonly prices?: CatalogListingDeps["prices"]
+  /**
+   * Distpatch virtual-model resolution — the same object the dispatcher resolves `auto-*` with.
+   * Omitted, no virtual model is listed and every reserved name probes as not found.
+   */
+  readonly virtualModels?: VirtualModelRouting
   readonly now?: () => Date
 }
 
@@ -121,26 +129,32 @@ export function dataPlaneRoutes(deps: DataPlaneRoutesDeps): Hono<RouterKeyEnv> {
 
   // The warm model catalog rides along so a Claude subscription — which has no `supported_models`
   // to advertise and no HTTP listing to discover them from — lists what its Agent SDK reported.
-  routes.get("/v1/models", guard, (c) =>
-    renderModels(
+  // Active virtual models follow the real ones, router-owned (`virtual-listing.ts`).
+  routes.get("/v1/models", guard, (c) => {
+    const key = c.get("routerKey")
+    const at = now()
+    return renderModels(
       c,
-      reachableModels(deps.catalog, deps.health, c.get("routerKey"), now(), deps.models),
-      now(),
-    ),
-  )
+      withVirtualModels(
+        deps.virtualModels,
+        deps.catalog,
+        key.scope,
+        reachableModels(deps.catalog, deps.health, key, at, deps.models),
+      ),
+      at,
+    )
+  })
 
   // Throws `ModelNotFoundError` (404) when the presenting key's scope can't reach the id; the
-  // error handler renders it in the client's dialect same as any other thrown `RouterError`.
+  // error handler renders it in the client's dialect same as any other thrown `RouterError`. A
+  // reserved virtual name is answered before the concrete probe, which never sees `auto-*`.
   routes.get("/v1/models/:id", guard, (c) => {
     const at = now()
-    const model = reachableModel(
-      deps.catalog,
-      deps.health,
-      c.get("routerKey"),
-      c.req.param("id"),
-      at,
-      deps.models,
-    )
+    const key = c.get("routerKey")
+    const id = c.req.param("id")
+    const model =
+      virtualModelProbe(deps.virtualModels, deps.catalog, key.scope, id) ??
+      reachableModel(deps.catalog, deps.health, key, id, at, deps.models)
     return renderModel(c, model, at)
   })
 

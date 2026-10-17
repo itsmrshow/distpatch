@@ -24,10 +24,10 @@ export const PG_MAX_BIND_PARAMETERS = 65_535
  * builds the real statement and fails when this drifts, so the number cannot go
  * stale quietly.
  */
-export const USAGE_RECORD_BIND_PARAMETERS_PER_ROW = 28
+export const USAGE_RECORD_BIND_PARAMETERS_PER_ROW = 29
 
 /**
- * Maximum raw INSERT rows when all 28 writable cells are bound.
+ * Maximum raw INSERT rows when all 29 writable cells are bound.
  *
  * This bounds configured recorder batches at boot. The repository additionally chunks each
  * table's statements using its conservative schema column count, preserving one transaction

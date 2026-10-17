@@ -13,6 +13,7 @@ import type { VerifiedKey } from "./auth/verifier"
 import type { BodyReadOptions } from "./body/read"
 import type { HealthStore } from "./health"
 import type { RateLimiter } from "./limits"
+import type { VirtualModelRouting } from "./model-choice"
 import type { RecoveryAccess } from "./recovery-access"
 import type {
   DataPlaneClock,
@@ -92,6 +93,12 @@ export const DEFAULT_RESPONSE_OBSERVATION_MAX_BYTES = 65_536
 export interface DispatcherDeps {
   /** Warm upstream-side metadata; no database lookup during dispatch. */
   readonly modelMetadata?: Pick<ModelCatalogStore, "describe">
+  /**
+   * Distpatch virtual-model resolution: the capability catalog loaded once at boot, injected —
+   * never re-read on a request. Omitted, no virtual model is active and every reserved name
+   * (`auto`, `auto-*`) is refused as not found; it never reaches account selection either way.
+   */
+  readonly virtualModels?: VirtualModelRouting
 
   readonly activeRequests?: ActiveRequestRegistry
   readonly recovery?: RecoveryAccess

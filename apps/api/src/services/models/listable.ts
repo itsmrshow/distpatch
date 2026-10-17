@@ -76,6 +76,27 @@ export function listableModels(
   return [...listed.values()]
 }
 
+/**
+ * The ids {@link listableModels} lists — the same name universe and the same support check — without
+ * building the listing, keeping only names `admit` accepts. `admit` runs first, so a caller that
+ * filters most names away (virtual-model candidates keep only catalogued ones) pays the support
+ * check for none of them. Held equal to `listableModels` by `test/unit/models/listable.test.ts`.
+ */
+export function listableModelIds(
+  account: AccountSnapshot,
+  catalogRows: readonly ModelDescriptor[],
+  admit: (name: string) => boolean,
+): readonly string[] {
+  const subscription = PROVIDER_REGISTRY[account.provider].transport === "agent-sdk"
+  const rows = subscription ? [...catalogRows, ...shippedSubscriptionModels()] : []
+  const names = new Set([
+    ...(account.supportedModels ?? []),
+    ...Object.keys(account.modelAliases ?? {}),
+    ...rows.map((row) => row.id),
+  ])
+  return [...names].filter((name) => admit(name) && resolveModel(account, name).supported)
+}
+
 type Size = Pick<ListedModel, "contextTokens" | "maxOutputTokens">
 
 const UNKNOWN: Size = { contextTokens: null, maxOutputTokens: null }

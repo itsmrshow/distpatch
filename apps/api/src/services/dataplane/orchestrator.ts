@@ -9,6 +9,7 @@ import type { Dispatcher, DispatcherDeps, DispatchInput } from "./dispatcher-con
 import { DEFAULT_UPSTREAM_TIMEOUT_MS } from "./dispatcher-config"
 import { resolveEgress } from "./egress/mode"
 import { keyRateLimitedError } from "./limits"
+import { chooseModel, traceVirtualChoice } from "./model-choice"
 import type { RequestProgress } from "./observe"
 import { planCandidates } from "./plan"
 import { attemptRecord, errorClassOf, outcomeOf } from "./records"
@@ -69,8 +70,16 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
 
     const body = await readTrackedRequestBody(input.request, options.body, progress, clock)
     input.request.signal.throwIfAborted()
-    const model = admitRoutingModel(body.fields, body.bytes.length)
-    progress.model = model
+    const requestedModel = admitRoutingModel(body.fields, body.bytes.length)
+    progress.model = requestedModel
+
+    // Before the binding read and any account: a virtual name resolves to a concrete one here, over
+    // warm memory, or the request ends here. Account selection below only ever sees `concreteModel`.
+    const scope = input.key.scope
+    const choice = chooseModel(deps.virtualModels, deps.catalog, scope, requestedModel, operation)
+    const concreteModel = choice.selectedModel ?? requestedModel
+    progress.selectedModel = choice.selectedModel
+    traceVirtualChoice(deps.logger, input.requestId, input.identity.correlationId, choice)
 
     const session = resolveSessionKey(
       input.request.headers,
@@ -133,7 +142,8 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
       clientRequestId: input.identity.clientRequestId,
       apiKeyId: input.key.id,
       sessionKey: session.key,
-      model,
+      requestedModel,
+      selectedModel: choice.selectedModel,
       ingressDialect: input.ingress,
       operation,
       requestStarted,
@@ -159,7 +169,7 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
         buildSnapshot(deps.recovery?.catalog ?? deps.catalog, deps.health, clock.now(), rotation),
         {
           sessionKey: session.key,
-          model,
+          model: concreteModel,
           keyScope: input.key.scope,
           binding,
           rotationCounter: rotation.current(null),
@@ -170,14 +180,15 @@ export function createDispatcher(deps: DispatcherDeps): Dispatcher {
       if (selection.decision.binding.state !== "honored") {
         for (const group of selection.decision.groups) rotation.advance(group.poolId)
       }
-      hintRecoveryRejections(selection.decision.rejected, deps.recovery, model, clock.now())
+      hintRecoveryRejections(selection.decision.rejected, deps.recovery, concreteModel, clock.now())
       return selection
     }
 
-    // Injected clock: identical recorded bodies convert to identical bytes.
+    // Injected clock: identical recorded bodies convert to identical bytes. The model is only the
+    // response's fallback name when an upstream omits its own — the concrete one, never `auto-*`.
     const translation = {
       created: Math.floor(startedAt.getTime() / 1000),
-      model,
+      model: concreteModel,
       fallbackId: input.requestId,
       defaultMaxTokens: options.translation?.defaultMaxTokens,
       maximumPendingBytes: options.translation?.maximumPendingBytes,

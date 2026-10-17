@@ -67,8 +67,14 @@ export interface RuntimeInput {
   readonly correlationId: string
   readonly apiKeyId: string
   readonly sessionKey: string
-  /** Exactly what the client asked for. Never substituted. */
-  readonly model: string
+  /** Exactly what the client asked for — and what the raw body bytes still say. */
+  readonly requestedModel: string
+  /**
+   * The concrete model Distpatch's virtual-model resolution chose. Null for a fixed request, where
+   * no semantic selection happened. Identical on every attempt of one request; only the upstream
+   * (wire) name varies per account, through that account's alias map.
+   */
+  readonly selectedModel: string | null
   /**
    * The client's own safe `x-request-id`, including UUIDs. Null when no label was supplied.
    * Provenance is explicit; the label is never the attempt join key.
@@ -118,7 +124,8 @@ export function createRuntime(input: RuntimeInput): DispatchRuntime {
     clientRequestId: input.clientRequestId,
     apiKeyId: input.apiKeyId,
     sessionKey: input.sessionKey,
-    model: input.model,
+    model: input.requestedModel,
+    selectedModel: input.selectedModel,
     ingressDialect: input.ingressDialect,
     // Carried on the attribution rather than read at write time: every attempt of one request must
     // price against the same book, including the preflight failure that never chose an account.

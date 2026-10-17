@@ -7,6 +7,7 @@ import { createMetrics } from "../../src/observability"
 import type { SdkInvoker, SdkQuotaStore, SessionStore } from "../../src/providers"
 import { metricsRoutes } from "../../src/routes/metrics"
 import { type DataPlaneRoutesDeps, dataPlaneRoutes } from "../../src/routes/v1"
+import type { ModelCapabilityCatalog } from "../../src/services/capabilities"
 import { lookupRates, type RateLookup } from "../../src/services/cost"
 import {
   createDispatcher,
@@ -89,6 +90,11 @@ export interface HarnessOptions {
    * passes a logger that captures instead.
    */
   readonly logger?: Logger
+  /**
+   * The capability catalog virtual-model resolution reads — what the composition root loads once at
+   * boot. Omitted, no virtual model is active and every `auto` / `auto-*` name is refused.
+   */
+  readonly capabilities?: ModelCapabilityCatalog
 }
 
 export function harness(options: HarnessOptions) {
@@ -100,6 +106,13 @@ export function harness(options: HarnessOptions) {
   const testClock = clock()
   const metrics = createMetrics({ now: testClock.now })
   const store = catalog(accounts, options.pools ?? [])
+  const virtualModels =
+    options.capabilities === undefined
+      ? undefined
+      : {
+          capabilities: options.capabilities,
+          ...(options.models === undefined ? {} : { models: options.models }),
+        }
   // Same shape the composition root wires: the usage sink records for the test's own assertions,
   // and metrics observes off the same call — here synchronously, since this harness has no
   // background drain to feed it from.
@@ -135,6 +148,7 @@ export function harness(options: HarnessOptions) {
       catalog: store,
       health,
       now: testClock.now,
+      ...(virtualModels === undefined ? {} : { virtualModels }),
       ...(options.models === undefined
         ? {}
         : {
@@ -145,6 +159,7 @@ export function harness(options: HarnessOptions) {
           }),
       dispatcher: createDispatcher({
         catalog: store,
+        ...(virtualModels === undefined ? {} : { virtualModels }),
         health,
         cipher: CRYPTOR,
         usage: usageWithMetrics,

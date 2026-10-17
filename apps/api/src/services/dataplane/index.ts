@@ -122,6 +122,13 @@ export {
   type RateLimiterOptions,
 } from "./limits"
 export {
+  chooseModel,
+  type ModelChoice,
+  traceVirtualChoice,
+  type VirtualChoice,
+  type VirtualModelRouting,
+} from "./model-choice"
+export {
   type ReachableModel,
   type ReachableModelsCatalog,
   reachableModel,
@@ -147,6 +154,7 @@ export { relayUpstreamError } from "./relay-error"
 export { relayTranslatedResponse, type TranslatedRelayInput } from "./relay-translate"
 export { createRotationCounters, type RotationCounters } from "./rotation"
 export { runSdkAttempt, type SdkAttemptInput, type SdkSessionContext } from "./sdk-attempt"
+export { type CandidateModelsCatalog, scopedConcreteModels } from "./semantic-candidates"
 export {
   type SessionBindings,
   type SessionStoreEnvDeps,
@@ -183,3 +191,4 @@ export {
   type UpstreamOperation,
 } from "./types"
 export { type UnservableInput, unservableError } from "./unservable"
+export { VIRTUAL_MODEL_OWNER, virtualModelProbe, withVirtualModels } from "./virtual-listing"

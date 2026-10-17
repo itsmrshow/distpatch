@@ -179,4 +179,71 @@ describe.skipIf(!url)("stable usage event identity", () => {
       await handle.sql.unsafe(`DROP SCHEMA "${schema}" CASCADE`)
     }
   })
+  test("selected_model persists for virtual requests and stays NULL for fixed ones", async () => {
+    const repo = createUsageRecordRepository(handle.db)
+    const virtual = event({
+      model: "auto-task",
+      selectedModel: "alpha",
+      upstreamModel: "alpha-wire",
+    })
+    const fixed = event({ model: "claude-opus-5", upstreamModel: "claude-opus-5" })
+    expect(await repo.insertMany([virtual, fixed])).toBe(2)
+    const persisted = await handle.db
+      .select({
+        id: usageRecords.id,
+        model: usageRecords.model,
+        selectedModel: usageRecords.selectedModel,
+        upstreamModel: usageRecords.upstreamModel,
+      })
+      .from(usageRecords)
+      .where(inArray(usageRecords.id, [virtual.id, fixed.id]))
+    expect(new Map(persisted.map((row) => [row.id, row]))).toEqual(
+      new Map([
+        [
+          virtual.id,
+          {
+            id: virtual.id,
+            model: "auto-task",
+            selectedModel: "alpha",
+            upstreamModel: "alpha-wire",
+          },
+        ],
+        [
+          fixed.id,
+          {
+            id: fixed.id,
+            model: "claude-opus-5",
+            selectedModel: null,
+            upstreamModel: "claude-opus-5",
+          },
+        ],
+      ]),
+    )
+  })
+  test("0039 adds selected_model without touching or back-filling existing rows", async () => {
+    const schema = `usage_selected_${crypto.randomUUID().replaceAll("-", "")}`
+    await handle.sql.unsafe(`CREATE SCHEMA "${schema}"`)
+    try {
+      await handle.sql.unsafe(
+        `CREATE TABLE "${schema}".usage_records (id uuid PRIMARY KEY, model text, upstream_model text)`,
+      )
+      const id = crypto.randomUUID()
+      await handle.sql.unsafe(
+        `INSERT INTO "${schema}".usage_records VALUES ($1, 'sonnet', 'glm-4.7')`,
+        [id],
+      )
+      const migration = await Bun.file(
+        new URL("../../migrations/0039_selected_model.sql", import.meta.url),
+      ).text()
+      await handle.sql.unsafe(
+        migration.replaceAll('"usage_records"', `"${schema}"."usage_records"`),
+      )
+      const rows = await handle.sql.unsafe<
+        { model: string; upstream_model: string; selected_model: string | null }[]
+      >(`SELECT model, upstream_model, selected_model FROM "${schema}".usage_records`)
+      expect(rows).toEqual([{ model: "sonnet", upstream_model: "glm-4.7", selected_model: null }])
+    } finally {
+      await handle.sql.unsafe(`DROP SCHEMA "${schema}" CASCADE`)
+    }
+  })
 })

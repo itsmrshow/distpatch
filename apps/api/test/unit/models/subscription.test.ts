@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { CLAUDE_SUBSCRIPTION_ALIASES, CLAUDE_SUBSCRIPTION_MODELS } from "@multi-ai-router/core"
 import {
+  listableModelIds,
   listableModels,
   mergeResolution,
   shippedSubscriptionCatalog,
@@ -233,5 +234,41 @@ describe("what an account contributes to GET /v1/models", () => {
     expect(mergeResolution(null, "claude-sonnet-5")).toBe("claude-sonnet-5")
     expect(mergeResolution("claude-sonnet-5", "claude-sonnet-6")).toBe("claude-sonnet-5")
     expect(mergeResolution(null, null)).toBeNull()
+  })
+
+  test("listableModelIds lists exactly listableModels' ids, and filters before it checks support", () => {
+    const rows = shippedSubscriptionModels()
+    const live = [{ ...rows[0], id: "opus[1m]", listingSource: "live" as const }]
+    const cases: [AccountSnapshot, typeof rows][] = [
+      [snapshot(), []],
+      [snapshot(), live],
+      [snapshot({ supportedModels: ["claude-opus-5"] }), live],
+      [snapshot({ provider: "zai", modelAliases: { sonnet: "glm-4.7" } }), []],
+      // An alias whose target is undeclared, and a declared name aliased somewhere unserved.
+      [
+        snapshot({
+          provider: "zai",
+          supportedModels: ["glm-4.6", "glm-4.7"],
+          modelAliases: { sonnet: "glm-5", "glm-4.7": "retired" },
+        }),
+        [],
+      ],
+      [snapshot({ provider: "anthropic-api" }), rows],
+      [snapshot({ provider: "openai-compatible" }), []],
+    ]
+    for (const [account, catalogRows] of cases) {
+      expect([...listableModelIds(account, catalogRows, () => true)].sort()).toEqual(
+        listableModels(account, catalogRows)
+          .map((model) => model.id)
+          .sort(),
+      )
+    }
+    const asked: string[] = []
+    const only = listableModelIds(snapshot(), [], (name) => {
+      asked.push(name)
+      return name === "opus"
+    })
+    expect(only).toEqual(["opus"])
+    expect(asked.length).toBeGreaterThan(1)
   })
 })

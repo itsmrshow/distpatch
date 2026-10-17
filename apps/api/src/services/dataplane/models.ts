@@ -5,6 +5,7 @@ import type { VerifiedKey } from "./auth/verifier"
 import type { HealthStore } from "./health"
 import { buildSnapshot } from "./snapshot"
 import type { RoutingCatalog } from "./types"
+import type { VIRTUAL_MODEL_OWNER } from "./virtual-listing"
 
 /**
  * The models reachable by the presenting key.
@@ -38,8 +39,11 @@ import type { RoutingCatalog } from "./types"
 
 export interface ReachableModel {
   readonly id: string
-  /** The first in-scope provider offering it. Listings want an owner, not the whole set. */
-  readonly owner: ProviderId
+  /**
+   * The first in-scope provider offering it. Listings want an owner, not the whole set. A Distpatch
+   * virtual model (`auto-task`) is owned by the router itself (`virtual-listing.ts`).
+   */
+  readonly owner: ProviderId | typeof VIRTUAL_MODEL_OWNER
   /**
    * For an alias (`sonnet`), what it resolves to today under the first account that says so.
    * Information only — the request path still sends the client's own string (non-negotiable 4).

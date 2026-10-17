@@ -76,6 +76,8 @@ export interface AttemptRecordInput {
   readonly provider: ProviderId | null
   readonly sessionKey: string | null
   readonly model: string | null
+  /** The concrete model a virtual request resolved to. Absent or null: a fixed request. */
+  readonly selectedModel?: string | null
   readonly upstreamModel: string | null
   readonly ingressDialect?: Dialect | null
   readonly egressMode?: EgressMode | null
@@ -120,6 +122,7 @@ export function attemptRecord(input: AttemptRecordInput): UsageRecord {
     provider: input.provider,
     sessionKey: input.sessionKey,
     model: input.model,
+    selectedModel: input.selectedModel ?? null,
     upstreamModel: input.upstreamModel,
     ingressDialect: input.ingressDialect ?? null,
     egressMode: input.egressMode ?? null,

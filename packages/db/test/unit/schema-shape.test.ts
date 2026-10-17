@@ -114,6 +114,7 @@ const TABLE_COLUMNS: ReadonlyArray<{ table: Table; columns: readonly string[] }>
       "provider",
       "sessionKey",
       "model",
+      "selectedModel",
       "upstreamModel",
       "ingressDialect",
       "egressMode",
@@ -260,6 +261,13 @@ describe("usage records are one row per upstream attempt", () => {
     expect(schema.usageRecords.model.notNull).toBe(false)
     expect(schema.usageRecords.model.getSQLType()).toBe("text")
     expect(schema.usageRecords.upstreamModel).toBeDefined()
+  })
+
+  test("the virtual-model selection is its own nullable, default-free text column", () => {
+    // NULL is the honest value for fixed requests and pre-existing rows; a default would invent one.
+    expect(schema.usageRecords.selectedModel.getSQLType()).toBe("text")
+    expect(schema.usageRecords.selectedModel.notNull).toBe(false)
+    expect(schema.usageRecords.selectedModel.hasDefault).toBe(false)
   })
 
   test("upstream and caller response statuses are independent nullable facts", () => {
