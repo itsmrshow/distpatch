@@ -1,38 +1,68 @@
+import { createCapabilityIntelligenceRepository, createDatabase } from "@multi-ai-router/db"
 import {
+  applyPublishedSnapshotToBootstrap,
   buildCapabilityCatalog,
   CAPABILITY_DIMENSIONS,
   type CapabilityDimension,
+  type CompiledCapabilitySnapshotPayload,
   SHIPPED_CAPABILITY_CATALOG,
+  type ShippedCatalogInput,
 } from "../../src/services/capabilities"
 import { selectVirtualModel, virtualModels } from "../../src/services/virtual-models"
 
 /**
- * `bin/calibrate matrix` — what every active virtual policy selects from the shipped catalog, and
- * how fragile that choice is.
- *
- * Candidates: every shipped profile's canonical id. Sensitivity perturbs one known score at a
- * time by ±δ (clamped to [0, 1]) and reports every perturbation that changes the winner; δ = 0.05
- * is about one failed check in a dimension, δ = 0.10 about one failed case. It also reports what
- * happens if each unknown, weighted dimension of a ranked model were known at 1.0 — the most
- * that missing evidence could be hiding.
+ * `bin/calibrate matrix` — what every active virtual policy selects from the effective capability
+ * catalog (published capability-intelligence snapshot layered over the static bootstrap catalog, or
+ * bootstrap alone when `--bootstrap-only` or no database is available), and how fragile that choice is.
  */
 
-const shipped = SHIPPED_CAPABILITY_CATALOG
-const candidates = shipped.profiles.map((p) => p.id).sort()
+async function loadPublishedSnapshot(): Promise<CompiledCapabilitySnapshotPayload | null> {
+  if (process.argv.includes("--bootstrap-only")) return null
+  const url = (process.env.DATABASE_URL ?? "").trim()
+  if (!url) return null
+  const handle = createDatabase({ url, maxConnections: 1 })
+  try {
+    const pub = await createCapabilityIntelligenceRepository(handle.db).getPublishedSnapshot()
+    return (pub?.payload as CompiledCapabilitySnapshotPayload | undefined) ?? null
+  } catch {
+    return null
+  } finally {
+    await handle.close()
+  }
+}
+
+const published = await loadPublishedSnapshot()
+const base = applyPublishedSnapshotToBootstrap(SHIPPED_CAPABILITY_CATALOG, published, null)
+const effectiveInput: ShippedCatalogInput = {
+  schemaVersion: SHIPPED_CAPABILITY_CATALOG.schemaVersion,
+  revision: SHIPPED_CAPABILITY_CATALOG.revision,
+  profiles: base.list().map((p) => ({
+    id: p.id,
+    family: p.family,
+    aliases: [...p.aliases],
+    tags: [...p.tags],
+    enabled: p.enabled,
+    hard: { ...p.hard },
+    scores: { ...p.scores },
+    sources: [...p.sources],
+  })),
+}
+const candidates = effectiveInput.profiles.map((p) => p.id).sort()
 
 type Scores = Partial<Record<CapabilityDimension, number | null>>
 function withScore(id: string, dimension: CapabilityDimension, value: number) {
   return buildCapabilityCatalog({
-    ...shipped,
-    profiles: shipped.profiles.map((p) =>
+    ...effectiveInput,
+    profiles: effectiveInput.profiles.map((p) =>
       p.id === id ? { ...p, scores: { ...(p.scores as Scores), [dimension]: value } } : p,
     ),
   })
 }
 
-const base = buildCapabilityCatalog(shipped)
-const out: string[] = [`catalog ${base.revision().shipped} ${base.revision().effective}`, ""]
-
+const out: string[] = [
+  `catalog shipped=${base.revision().shipped} snapshot=${published?.revision ?? "none"} effective=${base.revision().effective}`,
+  "",
+]
 for (const descriptor of virtualModels()) {
   const decision = selectVirtualModel(base, descriptor, candidates)
   const [first, second] = decision.ranked
@@ -53,10 +83,23 @@ for (const descriptor of virtualModels()) {
     continue
   }
   const margin = second === undefined ? null : first.score - second.score
+  const winnerProfile = base.get(first.profileId)
+  const winnerCompiled = published?.models?.[first.profileId]
+  const contributing = Object.entries(descriptor.policy.weights)
+    .filter(([d, w]) => (w ?? 0) > 0 && winnerProfile?.scores[d as CapabilityDimension] !== null)
+    .map(([d, w]) => {
+      const dim = d as CapabilityDimension
+      const val = winnerProfile?.scores[dim]
+      const src = winnerCompiled?.dimensions[dim]?.sources.join("+") ?? "bootstrap"
+      return `${dim}=${val?.toFixed(4)} (w=${w}, src=${src})`
+    })
   out.push(
     `  winner ${first.profileId}; runner-up ${second?.profileId ?? "—"}; margin ${margin === null ? "—" : margin.toFixed(4)}${margin !== null && margin === 0 ? " (tie: decided by coverage / preference / id)" : ""}`,
   )
-
+  out.push(
+    `  contributing: ${contributing.length === 0 ? "none (0 score tie-break)" : contributing.join(", ")}`,
+  )
+  out.push(`  decision digest: ${decision.digest}`)
   for (const delta of [0.05, 0.1]) {
     const flips: string[] = []
     for (const p of base.list()) {

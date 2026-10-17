@@ -65,31 +65,108 @@ Semantic model tags, pattern `^[a-z][a-z0-9-]{0,31}$`, e.g. `local`, `free`, `do
 `premium`, `subscription`, `coding`. They describe the model, not a route. Account tags (M1)
 describe a route and stay on the Account; #8 combines both without either owning the other.
 
-## Shipped profiles
+## Shipped bootstrap profiles
 
 `shipped.ts`, TypeScript constants validated by Zod at build — the same shape of decision as the
 shipped price and context-window tables. Schema version `1`, revision `YYYY-MM-DD.N` (bump with
-any edit); current `2026-10-17.1`. Sparse on purpose:
+any edit); current `2026-10-17.2`. Sparse on purpose, carrying verified hard facts and **no**
+hardcoded preference scores (`scores` all `null`):
 
-| Id | Case | Known hard facts | Calibrated scores |
+| Id | Case | Known hard facts | Bootstrap scores |
 |---|---|---|---|
-| `anthropic/claude-sonnet-4-6` | hosted first-party | window/output from `models/windows`, text, tools | general 1.00, coding 0.95, agentic 1.00 |
-| `openai/gpt-5.5` | hosted first-party | window/output from `models/windows`, text, tools | none (no reachable route) |
-| `openai/gpt-oss-120b` | many OpenAI-compatible hosts, differing wire ids | 131 072 context (model card), text, tools (live) | general 0.99, coding 1.00, agentic 0.82 |
-| `mimo/mimo-v2.6-distill-9b` | DockerLM, tags `local free dockerlm` | text, tools, JSON schema (M1 live) | general 0.82, coding 0.72, agentic 1.00 |
+| `anthropic/claude-sonnet-4-6` | hosted first-party | window/output from `models/windows`, text, tools | none (`null`) |
+| `openai/gpt-5.5` | hosted first-party | window/output from `models/windows`, text, tools | none (`null`) |
+| `openai/gpt-oss-120b` | many OpenAI-compatible hosts, differing wire ids | 131 072 context (model card), text, tools (live) | none (`null`) |
+| `mimo/mimo-v2.6-distill-9b` | DockerLM, tags `local free dockerlm` | text, tools, JSON schema (M1 live) | none (`null`) |
 
-## Preference scores: calibration
+## Capability Intelligence Pipeline
 
-Shipped scores come only from the Distpatch calibration gate:
-[`evidence/capability-calibration-v1.md`](../../evidence/capability-calibration-v1.md). A
-versioned suite of deterministic, single-dimension cases (`apps/api/bench/calibration/`, run with
-`bin/calibrate`, never in `bin/check`) grades each model through whatever route reaches it; the
-normalizer pools routes per canonical id, takes the mean grade, and **withholds** a dimension that
-every measured model passes above 0.90 (the suite has not shown it can tell models apart there).
-Every shipped value equals `evidence/capability-calibration-v1/scores.json`, and a unit test fails
-if they drift. Vendor benchmarks are recorded as corroboration, not converted into scores.
-`speed`, `cost` and `vision` are not calibrated yet; see the evidence for why.
+Preference scores enter through the off-request-path **Capability Intelligence Pipeline**
+(`apps/api/src/services/capabilities/intelligence/`, CLI `bin/capabilities`):
 
+```text
+Artificial Analysis (implemented) ──┐
+Distpatch Local Eval (supplemental)─┤
+OpenEvals / HF (planned) ───────────┤
+OpenRouter metadata (planned) ──────┘
+                  │
+                  ▼
+     Evidence ingestion (bin/capabilities sync)
+                  │
+                  ▼
+     Postgres: capability_observations (append-only, fingerprinted)
+                  │
+                  ▼
+     Capability compiler (distpatch-cap-compiler-v1 / distpatch-cap-norm-v1)
+                  │
+                  ▼
+     Candidate snapshot -> validation -> atomic publication (capability_snapshots)
+                  │
+                  ▼
+     Immutable in-memory runtime catalog (zero request-path DB or HTTP calls)
+```
+
+### Evidence sources
+
+- **Implemented — Artificial Analysis (`artificial-analysis`)**: fetches `/api/v2/language/models`
+  (falling back to `/api/v2/language/models/free` on Free-tier 403) with `x-api-key: $AA_API_KEY`.
+  Provides primary external evidence for hosted models on `general` (`intelligence_index / 100`),
+  `coding` (`coding_index / 100`), `agentic` (`agentic_index / 100`), and `speed` (normalized from
+  `median_output_tokens_per_second` and `median_time_to_first_token_seconds`). Pricing fields are
+  stored as observations in Postgres for provenance but are **not** converted into a
+  provider-independent semantic `cost` score.
+- **Implemented — Distpatch Local Evaluation Framework (`distpatch-local-eval`)**: versioned deterministic
+  suite (`apps/api/bench/calibration/`, `bin/calibrate`, code execution isolated inside a `bwrap`
+  sandbox with `--unshare-all`, scrubbed environment, isolated temporary filesystem, no network,
+  and resource/timeout limits). Acts as primary evidence for local/DockerLM models
+  (`mimo/mimo-v2.6-distill-9b`), custom quantizations, and models absent from external indexes, and
+  as supplemental evidence for Distpatch-specific dimensions. Saturated dimensions (> 0.90 across
+  all measured models) stay withheld (`null`).
+- **Planned future sources**:
+  - **Hugging Face / OpenEvals**: reasoning, coding, and benchmark-specific capability evidence to
+    fill dimensions external headline indexes omit.
+  - **OpenRouter metadata**: model identity, context length, modalities, and supported parameters
+    (keeping provider availability and pricing distinct from semantic capability).
+  - **LMArena / human preference datasets**: corroborating evidence for general preference, vision,
+    and coding/webdev.
+
+### Explicit external identity mapping
+
+`intelligence/identity.ts` maps `(source, externalId) → CanonicalModelId` (`vendor/model`) by exact
+lowercased match only. No fuzzy matching, Levenshtein distance, or substring guessing is permitted.
+Unmapped external records are persisted in `capability_observations` with
+`canonical_model_id = NULL` and never enter compiled snapshots.
+
+### Source precedence & catalog layering
+
+Effective runtime catalog layering (`applyPublishedSnapshotToBootstrap`):
+
+```text
+1. Static bootstrap catalog (SHIPPED_CAPABILITY_CATALOG — hard facts, tags, aliases, null scores)
+        ↓
+2. Published capability-intelligence snapshot (Postgres capability_snapshots, state = 'published')
+        ↓
+3. Operator override file (MODEL_CAPABILITY_OVERRIDES_PATH — highest authority)
+```
+
+- Within the compiler, sources are **never automatically averaged**:
+  - For hosted models, maintained external evidence (`artificial-analysis`) is primary for
+    headline dimensions (`general`, `coding`, `agentic`, `speed`); local evaluation supplements
+    only dimensions external sources do not measure or models completely absent from external feeds.
+  - For local models (`local` tag), `distpatch-local-eval` is primary where external sources have
+    no entry.
+- Every compiled score records its exact source, benchmark, benchmark version, observation
+  timestamp, staleness flag (> 90 days), and `sha256` provenance digest.
+
+### Snapshot lifecycle & last-known-good retention
+
+`syncCapabilityIntelligence` executes:
+`fetch → validate source payload → store observations → resolve identities → compile candidate → validate candidate → publish atomically → adopt immutable snapshot`.
+
+If any stage fails (API outage, rate limit, schema drift, DB failure, or catalog contradiction),
+publication aborts and the previously published snapshot (or static bootstrap catalog before the
+first sync) remains active. Inference never queries Postgres or external HTTP endpoints on the
+request path.
 ## Operator overrides
 
 `MODEL_CAPABILITY_OVERRIDES_PATH` names a JSON file read **once at boot**. Missing, unreadable,

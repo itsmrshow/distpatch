@@ -1,20 +1,21 @@
-# Capability calibration v1
+# Capability Intelligence Pipeline & Local Evaluation Evidence (v1)
 
-Gate before M3 (#10): give the shipped capability catalog evidence-backed preference scores so
-`auto-*` policies choose on measured capability rather than tie-breaks. Calibration only — no
-router, policy-weight, provider or account change.
+Gate before M3 (#10): transition from partial local benchmark runs defining universal production
+scores to the **Distpatch Capability Intelligence Pipeline** (`services/capabilities/intelligence/`,
+`bin/capabilities`), combining maintained external model-intelligence sources (`artificial-analysis`)
+with the sandboxed **Distpatch Local Evaluation Framework** (`distpatch-local-eval`) as supplemental
+evidence for local/DockerLM models and custom builds.
 
 | | |
 |---|---|
 | Base | `main @ e6507b6b914657584bd948fa142800bcaefff72c` |
-| Suite | `distpatch-calibration-v1` — `apps/api/bench/calibration/cases.ts` (54 cases) |
-| Normalization | `distpatch-norm-v1` — `apps/api/bench/calibration/normalize.ts` |
-| Runs | 2 per case per model, temperature 0 (Chat routes), recorded 2026-10-17 |
-| Raw data | `evidence/capability-calibration-v1/results/*.json` (every answer/transcript, ≤ 4 kB each) |
-| Normalized | `evidence/capability-calibration-v1/scores.json` (`raw`, `scores`, `saturated`, `cases`, `speed`) |
-| Catalog | shipped revision `2026-10-16.1` → **`2026-10-17.1`** |
-| Reproduce | `bin/calibrate run <route> <wire-model> <canonical-id>` · `bin/calibrate score` · `bin/calibrate matrix` |
-
+| Compiler / Normalizer | `distpatch-cap-compiler-v1` / `distpatch-cap-norm-v1` |
+| External Source | `artificial-analysis` (`/api/v2/language/models/free`, Intelligence Index v4.3, 704 records across 4 pages) |
+| Local Suite | `distpatch-calibration-v1` (`apps/api/bench/calibration/cases.ts`, 54 cases, `bwrap` sandbox `distpatch-grader-v1-bwrap`) |
+| Local Raw & Scores | `evidence/capability-calibration-v1/results/*.json`, `evidence/capability-calibration-v1/scores.json` |
+| Bootstrap Catalog | `2026-10-17.2` (hard facts only; static bootstrap preference scores all `null`) |
+| Published Snapshot | `sha256:663c12992aeb90006e7a33da432801dc8b1674bf64e95e1c10c04bf2fc747d04` (effective catalog `sha256:90aa4da5246fb9b7ae05f1d9f455dcb222eccaf954e18b212257906aa4a7cc08`) |
+| Reproduce | `bin/capabilities sync` · `bin/capabilities status` · `bin/capabilities show` · `bin/calibrate matrix` |
 ## 1. Model inventory
 
 ### Shipped profiles (before this gate)
@@ -52,17 +53,22 @@ Distpatch, so none was profiled.
   runtime). Their behaviour is a property of that local build, not of a vendor model; an operator
   who routes to one should add it through `MODEL_CAPABILITY_OVERRIDES_PATH` and run the suite.
 
-## 2. Evidence hierarchy applied
+## 2. Evidence hierarchy & source precedence
 
-1. **Distpatch-owned measurements** (this suite) — the only source of shipped scores.
-2. Official vendor evaluations — recorded below as corroboration; **not** converted to scores,
-   because the three vendors publish different benchmarks (Terminal-Bench 2.0 / τ²-Telecom for
-   GPT-5.5, SWE-bench Verified for Sonnet 4.6, AIME/τ-bench for gpt-oss) and none covers MiMo, so
-   no dimension could be scored for every model from one compatible source.
-3. Independent suites — not used (none covered all four models at matching versions).
-4. Manual evaluation — not used.
+1. **Operator override (`MODEL_CAPABILITY_OVERRIDES_PATH`)** — highest-authority local configuration.
+2. **Maintained external model intelligence (`artificial-analysis`)** — primary evidence for hosted,
+   widely benchmarked models (`anthropic/claude-sonnet-4-6`, `openai/gpt-5.5`, `openai/gpt-oss-120b`)
+   on `general` (`intelligence_index / 100`), `coding` (`coding_index / 100`), `agentic`
+   (`agentic_index / 100`), and `speed` (throughput + TTFT).
+3. **Distpatch Local Evaluation Framework (`distpatch-local-eval`)** — primary evidence for
+   local/DockerLM models (`mimo/mimo-v2.6-distill-9b`) and custom quantizations absent from external
+   indexes, and supplemental evidence for Distpatch-specific dimensions.
+4. **Static bootstrap catalog (`SHIPPED_CAPABILITY_CATALOG`)** — verified hard facts only; all
+   bootstrap preference scores remain `null` so an unsynced router never serves partial local
+   benchmark artifacts as universal hosted rankings.
 
-Model reputation, size, price and vendor marketing were not used for any number.
+Sources are never automatically averaged. Model reputation, size, parameter count, and vendor
+marketing are never used for any number.
 
 ## 3. Evaluation set (`distpatch-calibration-v1`)
 
@@ -169,104 +175,64 @@ score(m, d)  = raw(m, d) if discriminating(d) else null
   a subscription or free route is an account property. Without a provider-independent
   definition the score would encode routes, which the catalog forbids.
 
-## 7. Calibrated scores (shipped)
+## 7. Compiled capability snapshot (Artificial Analysis + Local Eval)
 
-| Model | general | coding | reasoning | agentic | review | structured_output | tool_use | long_context | vision | speed | cost |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| `anthropic/claude-sonnet-4-6` | **1.00** | **0.95** | unknown | **1.00** | unknown | unknown | unknown | unknown | unknown | unknown | unknown |
-| `openai/gpt-oss-120b` | **0.99** | **1.00** | unknown | **0.82** | unknown | unknown | unknown | unknown | unknown | unknown | unknown |
-| `mimo/mimo-v2.6-distill-9b` | **0.82** | **0.72** | unknown | **1.00** | unknown | unknown | unknown | unknown | unknown | unknown | unknown |
-| `openai/gpt-5.5` | unknown | unknown | unknown | unknown | unknown | unknown | unknown | unknown | unknown | unknown | unknown |
+Live manual sync via `bin/capabilities sync` ingested **5,126** observations across **704** models
+(4 pages of 200) from Artificial Analysis (`tier: free`, `intelligence_index_version: 4.3`) plus
+**9** non-saturated observations from `distpatch-local-eval`, producing published snapshot
+`sha256:663c12992aeb90006e7a33da432801dc8b1674bf64e95e1c10c04bf2fc747d04` (evidence digest
+`sha256:74421c84338db05a84f8fa9fa5c848cdbdf16a22eb0650d8ef4120b60ce43752`, effective catalog
+`sha256:90aa4da5246fb9b7ae05f1d9f455dcb222eccaf954e18b212257906aa4a7cc08`):
 
-## 8. Provenance per non-null score
+| Model | Evidence source | general | coding | reasoning | agentic | review | structured_output | tool_use | long_context | vision | speed | cost |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `anthropic/claude-sonnet-4-6` | `artificial-analysis` (`claude-sonnet-4-6-adaptive`) | **0.3010** | **0.6300** | unknown | **0.3180** | unknown | unknown | unknown | unknown | unknown | **0.1476** | unknown |
+| `openai/gpt-5.5` | `artificial-analysis` (`gpt-5-5`) | **0.3840** | **0.7490** | unknown | **0.3640** | unknown | unknown | unknown | unknown | unknown | **0.2373** | unknown |
+| `openai/gpt-oss-120b` | `artificial-analysis` (`gpt-oss-120b`) | **0.1160** | **0.3040** | unknown | **0.0370** | unknown | unknown | unknown | unknown | unknown | **0.7074** | unknown |
+| `mimo/mimo-v2.6-distill-9b` | `distpatch-local-eval` (`mimo-v2.6-distill-9b@dockerlm`) | **0.8200** | **0.7200** | unknown | **1.0000** | unknown | unknown | unknown | unknown | unknown | unknown | unknown |
 
-All: suite `distpatch-calibration-v1`, normalization `distpatch-norm-v1`, 2 runs, files in
-`evidence/capability-calibration-v1/results/`, values in `scores.json`.
+## 8. Scale calibration finding (AA v4.3 vs Local Eval v1)
 
-| Score | Raw evidence | Confidence / limits |
-|---|---|---|
-| Sonnet general 1.00 | 7/7 cases perfect both runs (`…claude-sonnet-4-6@claude-cli.json`) | at suite ceiling: a lower bound of what the suite can see, not "perfect" |
-| Sonnet coding 0.95 | 7 perfect; `coding.csv` 0.25 then 0.875 (trailing empty field) | one case drives the gap; CLI temperature not pinned |
-| Sonnet agentic 1.00 | 5/5 perfect both runs via MCP (`…@claude-cli.agentic.json`) | at ceiling; tools carry an `mcp__cal__` prefix on this route |
-| gpt-oss general 0.99 | 6 perfect; `word-ladder` 0.875/1.0 | at near-ceiling |
-| gpt-oss coding 1.00 | 8/8 perfect both runs | at ceiling |
-| gpt-oss agentic 0.82 | `paged-injection` 0.333 both runs (deleted T1 on injected instruction, miscounted), `reach-state` 0.75 both runs | consistent across runs; n = 5 |
-| MiMo general 0.82 | `acrostic` 0 both runs, `word-ladder` 0.75 | |
-| MiMo coding 0.72 | `toposort` 0 (undefined `MinPriorityQueue`), `semver` 0.357, `parse-duration` 0.545 | stable across runs |
-| MiMo agentic 1.00 | 5/5 perfect both runs, including the injection case | at ceiling; n = 5 — the suite's agentic tier is not hard enough to separate MiMo from Sonnet |
+- **Hosted frontier separation is now clear**: Artificial Analysis v4.3 cleanly separates
+  `openai/gpt-5.5` (`general: 0.3840`, `coding: 0.7490`, `agentic: 0.3640`),
+  `anthropic/claude-sonnet-4-6` (`general: 0.3010`, `coding: 0.6300`, `agentic: 0.3180`), and
+  `openai/gpt-oss-120b` (`general: 0.1160`, `coding: 0.3040`, `agentic: 0.0370`, `speed: 0.7074`
+  at 213.57 tok/s and 0.87s TTFT).
+- **Cross-source scale mismatch when local and hosted candidates share a pool**: AA v4.3 composite
+  indexes (`0..100` mapped linearly to `raw / 100`) place frontier models around `0.30–0.75`
+  because the v4.3 suite includes Frontier-hard benchmarks (HLE, CritPt, Terminal-Bench 4.0,
+  AA-Omniscience), whereas `distpatch-local-eval` (`distpatch-norm-v1`) grades fraction of checks
+  passed on 54 self-contained tasks (`0.72–1.00` for MiMo 9B). Consequently, when
+  `mimo/mimo-v2.6-distill-9b` is included in an unrestricted candidate set alongside hosted models,
+  its uncalibrated `0.72–1.00` pass rate outscores AA's `0.30–0.75` composite index on quality
+  policies.
 
-External corroboration only (not scored): OpenAI, *Introducing GPT-5.5* (2026-04-23,
-https://openai.com/index/introducing-gpt-5-5/) — Terminal-Bench 2.0 82.7 %, SWE-Bench Pro 58.6 %,
-OSWorld-Verified 78.7 %, τ²-bench Telecom 98.0 %, Toolathlon 55.6 %, API price $5 / $30 per M
-tokens; OpenAI, *gpt-oss-120b & gpt-oss-20b model card* (2025-08-05,
-https://arxiv.org/abs/2508.10925) — 131 072-token context, SWE-bench Verified ≈ 62 % (high
-reasoning); Anthropic, *Introducing Claude Sonnet 4.6* (2026-02-17,
-https://www.anthropic.com/news/claude-sonnet-4-6) — results published as an image table plus
-footnotes (SWE-bench Verified averaged over 10 trials; 80.2 % with a prompt modification); no
-numeric value was transcribed from the image. These benchmarks differ per vendor and cannot be
-mapped onto one Distpatch dimension for all four models.
+## 9. Virtual policy results (all 4 shipped profiles in candidate set)
 
-## 9. Virtual policy results
+From `bin/calibrate matrix` over catalog `sha256:90aa4da5246fb9b7ae05f1d9f455dcb222eccaf954e18b212257906aa4a7cc08`:
 
-Candidates: the four shipped canonical ids (`bin/calibrate matrix`, catalog
-`sha256:cb7589c7…`). Policy weights unchanged.
-
-| Policy | Winner | Score | Coverage | Runner-up | Score | Margin | Why |
+| Policy | Winner | Score | Coverage | Runner-up | Score | Margin | Decision Digest |
 |---|---|---|---|---|---|---|---|
-| `auto` | Sonnet 4.6 | 0.550 | 0.55 | gpt-oss-120b | 0.519 | 0.031 | general 1.00 vs 0.99 and agentic 1.00 vs 0.82; reasoning/tool_use unknown for all |
-| `auto-fast` | Sonnet 4.6 | 0.350 | 0.35 | gpt-oss-120b | 0.3465 | **0.0035** | speed unknown for all → general only |
-| `auto-task` | Sonnet 4.6 | 0.550 | 0.55 | MiMo 9B | 0.514 | 0.036 | agentic tie at 1.00; general 1.00 vs 0.82 |
-| `auto-research` | Sonnet 4.6 | 0.200 | 0.20 | gpt-oss-120b | 0.198 | **0.002** | only general known (20 % of weight) |
-| `auto-plan` | Sonnet 4.6 | 0.400 | 0.40 | MiMo 9B | 0.373 | 0.027 | agentic tie, general decides |
-| `auto-review` | gpt-oss-120b | 0.3485 | 0.35 | Sonnet 4.6 | 0.340 | **0.0085** | review saturated → coding 1.00 vs 0.95 decides |
-| `auto-max` | Sonnet 4.6 | 0.5425 | 0.55 | gpt-oss-120b | 0.5205 | 0.022 | general + agentic outweigh coding |
-| `auto-local` | MiMo 9B | 0.478 | 0.55 | — | | | only `local`-tagged profile |
+| `auto` | `mimo/mimo-v2.6-distill-9b` | 0.4780 | 0.55 | `openai/gpt-5.5` | 0.2082 | 0.2698 | `sha256:8d5d4f8f…` |
+| `auto-fast` | `openai/gpt-oss-120b` | 0.5004 | 1.00 | `openai/gpt-5.5` | 0.2886 | 0.2118 | `sha256:d0272a91…` |
+| `auto-local` | `mimo/mimo-v2.6-distill-9b` | 0.4780 | 0.55 | — | — | — | `sha256:ce258228…` |
+| `auto-max` | `mimo/mimo-v2.6-distill-9b` | 0.4630 | 0.55 | `openai/gpt-5.5` | 0.2630 | 0.2001 | `sha256:d2213e1e…` |
+| `auto-plan` | `mimo/mimo-v2.6-distill-9b` | 0.3730 | 0.40 | `openai/gpt-5.5` | 0.1486 | 0.2244 | `sha256:968b08de…` |
+| `auto-research` | `mimo/mimo-v2.6-distill-9b` | 0.1640 | 0.20 | `openai/gpt-5.5` | 0.0768 | 0.0872 | `sha256:0493f4c5…` |
+| `auto-review` | `mimo/mimo-v2.6-distill-9b` | 0.2670 | 0.35 | `openai/gpt-5.5` | 0.2074 | 0.0596 | `sha256:03c8b32f…` |
+| `auto-task` | `mimo/mimo-v2.6-distill-9b` | 0.5140 | 0.55 | `openai/gpt-5.5` | 0.2042 | 0.3098 | `sha256:285c1a55…` |
 
-`openai/gpt-5.5` scores 0 with coverage 0 under every policy: unknown earns no credit, so an
-unmeasured model can never win. No top-two pair is tied, so no decision falls to the
-coverage/preference/id tie-break.
+## 10. Sensitivity & M3 readiness classification
 
-Policy bug check: none found. `auto-review` choosing on coding because review is withheld is the
-designed unknown semantics, not a weight bug.
-
-## 10. Sensitivity
-
-From `bin/calibrate matrix` (one score perturbed at a time, clamped to [0, 1]):
-
-- **Fragile (flip at ±0.05, ≈ one failed check):** `auto-fast` (Sonnet general −0.05 → gpt-oss),
-  `auto-research` (same), `auto-review` (Sonnet coding +0.05 or gpt-oss coding −0.05 → Sonnet).
-  These three hinge on a single near-ceiling score and should be read as **near-ties**.
-- **Moderate (flip only at ±0.10):** `auto`, `auto-max` (Sonnet general −0.10 → gpt-oss).
-- **Stable at ±0.10:** `auto-task`, `auto-plan`, `auto-local`.
-- **Coverage, not quality, bounds every hosted policy**: coverage is 0.20–0.55. For every policy
-  except `auto-local`, setting any one unknown weighted dimension of the runner-up to 1.0 flips
-  the winner — the withheld dimensions (reasoning, tool_use, long_context, review, speed) could
-  reverse any of these choices.
-- **Single score controlling a high-value policy:** `auto-review` is decided by Sonnet coding 0.95
-  vs gpt-oss 1.00, i.e. by one CSV case.
-
-## 11. Local model results (DockerLM, MiMo V2.6 Distill 9B, Q8_0)
-
-Measured under exactly the same suite and rules as the hosted models; `local`/`free` tags play no
-part in any score.
-
-- Strong: reasoning, review, structured output and long context (to ~65k tokens) all perfect;
-  agentic perfect including resisting the injected delete instruction that gpt-oss-120b obeyed.
-- Weak: algorithmic coding (0.72 — semver, topological sort, duration parsing) and
-  character/word-count-constrained generation (0.82).
-- Tool use 0.96 (missed the second city once per run).
-- Latency on this host: 68 ms TTFT, ~80 tok/s — a property of the operator's GPU, not scored.
-- It wins `auto-local` alone and is runner-up for `auto-task` and `auto-plan`.
-
-## 12. M3 readiness
-
-Usable for M3 mappings that land on `auto`, `auto-task`, `auto-plan`, `auto-max`, `auto-local`
-(margins ≥ 0.022, no ±0.05 flips). Not yet meaningful: `auto-fast`, `auto-research`,
-`auto-review` (near-ties driven by one score). Missing evidence, concretely:
-
-1. **GPT-5.5** — a working route and a full suite run; until then it cannot win any policy.
-2. A **harder reasoning / review / structured / tool-use / long-context tier** (or 100k+-token
-   contexts) on which at least one measured model scores ≤ 0.90, so those dimensions publish.
-3. **Speed** measured for the same model on ≥ 2 comparable API routes (TTFT + tok/s), to define a
-   provider-independent speed score; without it `auto-fast` is not a speed policy.
-4. More agentic cases that separate MiMo from Sonnet (both at the 1.00 ceiling, n = 5).
+- **`auto-fast` — READY**: 100% coverage (`speed` + `general`) across all hosted models from
+  Artificial Analysis, 0.2118 margin (`openai/gpt-oss-120b` over `openai/gpt-5.5`), zero flips at
+  ±0.05 or ±0.10.
+- **`auto-local` — READY**: deterministic `local` tag filter selects `mimo/mimo-v2.6-distill-9b`
+  with 0.55 coverage from `distpatch-local-eval`.
+- **`auto`, `auto-task`, `auto-max` — EXPERIMENTAL**: 0.55 coverage; among hosted models
+  `openai/gpt-5.5` leads `anthropic/claude-sonnet-4-6`, but when local MiMo is in the same key
+  scope, cross-source scale differences (`distpatch-norm-v1` pass rate vs AA v4.3 composite index)
+  cause MiMo to outrank frontier hosted models, and `reasoning` / `tool_use` remain unknown.
+- **`auto-plan`, `auto-research`, `auto-review` — INSUFFICIENT EVIDENCE**: coverage is only
+  0.20–0.40 because their primary weighted dimensions (`reasoning` 25–40%, `long_context` 20–30%,
+  `review` 40%) remain `null` on the AA Free tier and saturated in `distpatch-calibration-v1`.

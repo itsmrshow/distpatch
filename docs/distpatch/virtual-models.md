@@ -94,17 +94,15 @@ is not tied to any provider or `premium` tag; `auto-local` is only as truthful a
 on capability profiles (the DockerLM seed carries it); `auto-task` rejects a model whose tool use is
 unknown (`unknownHardFacts: reject`).
 
-### Unknown capability data
+### Unknown capability data and evidence layering
 
-Scores are not invented. Shipped scores come only from the calibration gate
-([`evidence/capability-calibration-v1.md`](../../evidence/capability-calibration-v1.md)), which
-publishes `general`, `coding` and `agentic` for three of the four shipped profiles and leaves
-everything else unknown. Unknown earns no credit, so coverage is partial (0.20–0.55 for hosted
-policies) and an unmeasured model (`openai/gpt-5.5`) scores `0`. Where scores still tie, the M2B
-total order decides: policy preference (none) → canonical id → candidate name. The evidence
-lists each policy's winner, margin and sensitivity; `auto-fast`, `auto-research` and
-`auto-review` are near-ties. Synthetic scores appear only in tests.
-
+Scores are not invented. The static bootstrap catalog (`shipped.ts`) ships verified hard facts and
+`null` preference scores; preference scores enter through the off-request-path Capability
+Intelligence Pipeline ([capability-catalog.md](capability-catalog.md),
+[`evidence/capability-calibration-v1.md`](../../evidence/capability-calibration-v1.md)) or
+operator overrides (`MODEL_CAPABILITY_OVERRIDES_PATH`). Unknown dimensions (`null`) earn no credit
+in M2B ranking (`coverage < 1.0`). Where scores tie, the M2B total order decides: policy
+preference (none) → canonical id → candidate name. Synthetic scores appear only in tests.
 ### Request-derived requirements
 
 None in M2C. The body scanner reads only the model and a bounded conversation prefix; there is no
