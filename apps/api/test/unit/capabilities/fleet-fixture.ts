@@ -6,7 +6,13 @@ import {
   type StoredRouteModel,
 } from "../../../src/services/capabilities"
 
-/** A DockerLM-shaped `GET /v1/models` body: six routes, five generative and one embedding. */
+/**
+ * `GET /v1/models` body captured verbatim from the live DockerLM host on 2026-10-17 (six routes:
+ * five generative, one embedding) and checked against `llamaswap-discovery.ts`: every
+ * `meta.llamaswap` group the parser reads matched; the extra fields the host emits (role, kv_cache,
+ * mtp, vocab_map, OpenAI-style `architecture`, …) are deliberately ignored. No host address,
+ * credential or host path is in it.
+ */
 export const DOCKERLM_MODELS_PATH = fileURLToPath(
   new URL("../../fixtures/dockerlm-v1-models.json", import.meta.url),
 )

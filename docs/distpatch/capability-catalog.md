@@ -243,6 +243,10 @@ Mapping and trust rules for `meta.llamaswap`:
 | `routing` (`model_type`, `endpoint`) | `routing`; `embedding`, `model_type=embedding` or a `/embeddings` endpoint marks an embedding model |
 | `provenance` | `provenance`; the semantic source URL becomes a profile source |
 
+The adapter was validated against a live DockerLM `GET /v1/models` (2026-10-17, six routes): every
+group above matched, and the host's extra fields (`role`, `kv_cache`, `mtp`, OpenAI-style
+`architecture`, …) are ignored. The test fixture is that capture.
+
 An entry **without** `meta.llamaswap` is kept as an unresolved route (no profile). An entry whose
 metadata is present but malformed is rejected: skipped, and its previous row is kept (an untrusted
 entry is not evidence of removal). An unreadable or empty listing rejects the whole discovery.
