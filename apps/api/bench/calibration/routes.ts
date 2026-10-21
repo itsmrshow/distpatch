@@ -1,7 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { CalibrationSandboxUnavailableError, type ToolCase, type ToolTranscript } from "./cases"
+import type { ToolCase, ToolTranscript } from "./cases"
+import { CalibrationSandboxUnavailableError } from "./sandbox"
 
 /**
  * How the calibration harness reaches a model. A route is *evaluation plumbing only*: it never

@@ -1,15 +1,9 @@
 import { mkdir, readdir } from "node:fs/promises"
 import { join } from "node:path"
-import {
-  CASES,
-  CalibrationSandboxUnavailableError,
-  type Check,
-  GRADER_VERSION,
-  SPEED_PROMPT,
-  SUITE_VERSION,
-} from "./cases"
+import { CASES, type Check, GRADER_VERSION, SPEED_PROMPT, SUITE_VERSION } from "./cases"
 import { type ModelRun, NORMALIZATION_VERSION, normalize } from "./normalize"
 import { claudeCliRoute, openAiChatRoute, type Route, type SpeedSample } from "./routes"
+import { CalibrationSandboxUnavailableError } from "./sandbox"
 
 /**
  * `bin/calibrate` — the Distpatch Local Evaluation Framework (evidence/capability-calibration-v1.md).

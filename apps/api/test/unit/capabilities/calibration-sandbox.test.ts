@@ -2,12 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import {
-  CASES,
-  CalibrationSandboxUnavailableError,
-  runBun,
-  type TextCase,
-} from "../../../bench/calibration/cases"
+import { CASES, type TextCase } from "../../../bench/calibration/cases"
+import { CalibrationSandboxUnavailableError, runBun } from "../../../bench/calibration/sandbox"
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url))
 const README_PATH = join(REPO_ROOT, "README.md")
