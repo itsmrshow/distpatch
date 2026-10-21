@@ -71,6 +71,7 @@ async function main(): Promise<void> {
   // last-known-good catalog.
   const capabilityRepository = createCapabilityIntelligenceRepository(database.db)
   let reportedUnmatchedOverrideIds = bootstrapCapabilities.unmatchedOverrideIds()
+  let reportedRejectedOverrides = bootstrapCapabilities.rejectedOverrides()
   let reportedPublishedSnapshotRevision: string | null = null
   const capabilityStore = createCapabilityCatalogStore({
     initialCatalog: bootstrapCapabilities,
@@ -82,12 +83,20 @@ async function main(): Promise<void> {
         : { revision: published.revision, payload: published.payload }
     },
     refreshIntervalMs: env.dataPlane.catalogRefreshSeconds * 1_000,
-    onAdopted: (revision, unmatchedOverrideIds) => {
+    onAdopted: (revision, unmatchedOverrideIds, rejectedOverrides) => {
       const revisionChanged = reportedPublishedSnapshotRevision !== revision
       const next = [...unmatchedOverrideIds]
+      const nextRejected = [...rejectedOverrides]
       const unmatchedChanged =
         reportedUnmatchedOverrideIds.length !== next.length ||
         reportedUnmatchedOverrideIds.some((id, index) => id !== next[index])
+      const rejectedChanged =
+        reportedRejectedOverrides.length !== nextRejected.length ||
+        reportedRejectedOverrides.some(
+          (rejected, index) =>
+            rejected.id !== nextRejected[index]?.id ||
+            rejected.reason !== nextRejected[index]?.reason,
+        )
       if (revisionChanged) {
         reportedPublishedSnapshotRevision = revision
         logger.info("published capability snapshot adopted", {
@@ -95,12 +104,14 @@ async function main(): Promise<void> {
           publishedSnapshotRevision: revision,
         })
       }
-      if (!unmatchedChanged) return
+      if (!unmatchedChanged && !rejectedChanged) return
       reportedUnmatchedOverrideIds = next
-      logger.warn("operator capability override targets changed", {
+      reportedRejectedOverrides = nextRejected
+      logger.warn("operator capability override status changed", {
         component: "capabilities",
         publishedSnapshotRevision: revision,
         unmatchedOverrideIds: next,
+        rejectedOverrides: nextRejected,
       })
     },
     onRefreshError: (reason) =>
@@ -331,16 +342,24 @@ function loadBootCapabilityCatalog(
         : readCapabilityOverridesFile(env.modelCapabilityOverridesPath)
     const catalog = buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG, overrides)
     const unmatchedOverrideIds = catalog.unmatchedOverrideIds()
+    const rejectedOverrides = catalog.rejectedOverrides()
     logger.info("model capability catalog loaded", {
       component: "capabilities",
       profiles: catalog.list().length,
       ...catalog.revision(),
       unmatchedOverrideIds,
+      rejectedOverrides,
     })
     if (unmatchedOverrideIds.length > 0) {
       logger.warn("operator capability overrides have unmatched targets", {
         component: "capabilities",
         unmatchedOverrideIds,
+      })
+    }
+    if (rejectedOverrides.length > 0) {
+      logger.warn("operator capability overrides rejected for discovered profiles", {
+        component: "capabilities",
+        rejectedOverrides,
       })
     }
     return { catalog, overrides }

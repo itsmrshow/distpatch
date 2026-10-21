@@ -571,11 +571,14 @@ export function compileCapabilitySnapshot(
  * Layering precedence:
  *   1. `bootstrap` (`SHIPPED_CAPABILITY_CATALOG` — hard facts, tags, aliases, `null` scores)
  *   2. `publishedSnapshot` (evidence-backed preference scores, provenance refs, discovered profiles)
- *   3. `operatorOverrides` (highest authority; additions and edits to scores, hard facts, aliases, or `enabled`)
+ *   3. `operatorOverrides` (additions and edits to scores, hard facts, aliases, or `enabled`)
  *
- * Discovery yields to operator-declared ids and aliases; conflicting discovered profiles are
- * dropped or have only their conflicting aliases trimmed. Missing override targets remain inert
- * and are reported by the returned catalog until discovery supplies or removes the profile.
+ * Discovery yields to bootstrap/operator canonical ids and effective aliases. A conflict drops a
+ * discovered profile or trims its conflicting alias. Overrides on those static profiles likewise
+ * reserve their aliases. An override targeting a discovered profile is applied atomically; if the
+ * edit creates a contradiction or a collision with another discovered identity/alias, the edit is
+ * rejected and the discovered profile remains unchanged. Missing override targets stay inert and
+ * are reported until discovery supplies or removes the profile.
  *
  * Pure and synchronous: never touches Postgres, the filesystem, or the network.
  */

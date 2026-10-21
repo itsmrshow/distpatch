@@ -164,13 +164,16 @@ Effective runtime catalog layering (`applyPublishedSnapshotToBootstrap`):
 4. Operator override file (highest authority: added profiles and partial field overrides)
 ```
 
-- Discovered profiles yield to operator-declared canonical ids and aliases, and to aliases set by
-  `overrides[]`: a conflicting discovered profile is dropped, while only a conflicting discovered
-  alias is trimmed. Effective bootstrap/operator identities and earlier discovered profiles likewise
-  retain their claims.
-- An override targeting an id absent from the current layered catalog is inert and listed by
-  `unmatchedOverrideIds()`; it applies if that profile is discovered and becomes unmatched again if
-  discovery removes it. Alias targets remain invalid.
+- Discovered profiles yield to bootstrap/operator canonical ids and effective aliases: a conflicting
+  discovered profile is dropped, while only a conflicting discovered alias is trimmed. Operator
+  aliases assigned to shipped or operator-added profiles also take precedence over discovery.
+- An override for a discovered profile is applied atomically. If its merged facts contradict or its
+  aliases collide with another discovered identity/alias, the entire override is rejected; the
+  discovered profile remains unchanged and the report is available from `rejectedOverrides()`.
+- An override targeting an id absent from the current layered catalog is inert for profile fields
+  and listed by `unmatchedOverrideIds()`. Its declared aliases still reserve operator precedence
+  during discovery. If the canonical profile appears, the edit applies only if valid; if it later
+  disappears, it becomes unmatched again. Alias targets remain invalid.
 
 - Within the compiler, sources are **never automatically averaged**:
   - For hosted models, maintained external evidence (`artificial-analysis`) is primary for
@@ -325,11 +328,15 @@ mappings change. The published snapshots (`capability_snapshots`) are the immuta
 ## Operator overrides
 
 `MODEL_CAPABILITY_OVERRIDES_PATH` names a JSON file read **once at boot**. Missing, unreadable,
-non-JSON or schema-invalid files fail boot with every problem listed by entry. A well-formed
-override whose canonical target is not currently present remains inert and is reported; the same
-file is reused when the store adopts later snapshots. Chosen over a database table because the
-catalog changes with deploys, not per request, and an env-named file needs no migration, admin CRUD,
-or refresh loop; DB-backed overrides can be added if runtime editing is ever needed.
+non-JSON or schema-invalid files fail boot with every problem listed by entry. Override content is
+validated at boot even when a target is absent: duplicate targets, aliases colliding with bootstrap
+or operator ids/aliases or another override alias, and contradictions within explicitly supplied
+facts remain fatal. An absent target does not receive its field edits, though its declared aliases
+still reserve precedence during discovery. A discovered-target override that conflicts with
+discovered facts or aliases is rejected atomically and reported without blocking snapshot adoption.
+Chosen over a database table because the catalog changes with deploys,
+not per request, and an env-named file needs no migration, admin CRUD, or refresh loop; DB-backed
+overrides can be added if runtime editing is ever needed.
 
 ```json
 {
@@ -345,16 +352,18 @@ or refresh loop; DB-backed overrides can be added if runtime editing is ever nee
 
 - `profiles`: whole new profiles, same schema as shipped; an id already present in the bootstrap
   or another operator profile is an error. If discovery supplies the same id, the discovered profile
-  is dropped; discovered aliases that collide with an operator id, profile alias, or alias set by
-  `overrides[]` are trimmed.
+  is dropped; discovered aliases that collide with an operator id or effective profile alias are
+  trimmed.
 - `overrides`: partial edits by **canonical id** (an alias remains an error; an absent id is inert
   and reported in `unmatchedOverrideIds()`, duplicate target fails). Absent field = keep; `null` =
   make unknown. `tags` is `{ set }` or `{ add, remove }`; `aliases` / `sources` replace the list.
 - Precedence: shipped → discovered → operator-added profiles → operator field overrides. Operator
-  identities win over discovery; contradictions and remaining alias collisions still fail.
+  profiles and overrides win over discovered identities when valid; invalid discovered-target
+  edits leave the discovered profile unchanged and appear in `rejectedOverrides()`.
 - `enabled: false` keeps the profile resolvable with `enabled: false`; consumers decide.
 - Profiles report `origin` (`shipped` | `discovered` | `operator`) and `overridden` (changed field
-  paths). Unmatched ids are logged at boot and when adoption changes the unmatched set.
+  paths). Unmatched ids and rejected discovered-target overrides are logged at boot and when either
+  reported set changes.
 - Strict schemas reject unknown keys, and every string is pattern-restricted (sources: https
   without query/userinfo, or `repo:` path), so account ids or credentials cannot enter.
 
