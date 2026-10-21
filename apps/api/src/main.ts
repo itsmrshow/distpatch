@@ -25,6 +25,7 @@ import {
   readCapabilityOverridesFile,
   SHIPPED_CAPABILITY_CATALOG,
 } from "./services/capabilities"
+import type { CapabilityCatalogWithUnmatchedOverrides } from "./services/capabilities/build"
 import { createAccountProbe } from "./services/health/accountProbe"
 import { createClaudeCliProbe } from "./services/health/claudeCliProbe"
 import { createDatabaseProbe } from "./services/health/databaseProbe"
@@ -69,6 +70,8 @@ async function main(): Promise<void> {
   // capability-intelligence snapshots without restarting. A failed refresh retains the held
   // last-known-good catalog.
   const capabilityRepository = createCapabilityIntelligenceRepository(database.db)
+  let reportedUnmatchedOverrideIds = bootstrapCapabilities.unmatchedOverrideIds()
+  let reportedPublishedSnapshotRevision: string | null = null
   const capabilityStore = createCapabilityCatalogStore({
     initialCatalog: bootstrapCapabilities,
     overrides,
@@ -79,6 +82,27 @@ async function main(): Promise<void> {
         : { revision: published.revision, payload: published.payload }
     },
     refreshIntervalMs: env.dataPlane.catalogRefreshSeconds * 1_000,
+    onAdopted: (revision, unmatchedOverrideIds) => {
+      const revisionChanged = reportedPublishedSnapshotRevision !== revision
+      const next = [...unmatchedOverrideIds]
+      const unmatchedChanged =
+        reportedUnmatchedOverrideIds.length !== next.length ||
+        reportedUnmatchedOverrideIds.some((id, index) => id !== next[index])
+      if (revisionChanged) {
+        reportedPublishedSnapshotRevision = revision
+        logger.info("published capability snapshot adopted", {
+          component: "capabilities",
+          publishedSnapshotRevision: revision,
+        })
+      }
+      if (!unmatchedChanged) return
+      reportedUnmatchedOverrideIds = next
+      logger.warn("operator capability override targets changed", {
+        component: "capabilities",
+        publishedSnapshotRevision: revision,
+        unmatchedOverrideIds: next,
+      })
+    },
     onRefreshError: (reason) =>
       logger.warn("capability snapshot refresh failed — retaining last-known-good", {
         component: "capabilities",
@@ -102,6 +126,7 @@ async function main(): Promise<void> {
     profiles: capabilities.list().length,
     ...capabilities.revision(),
     publishedSnapshotRevision: capabilityStore.publishedSnapshotRevision(),
+    unmatchedOverrideIds: capabilityStore.unmatchedOverrideIds(),
   })
 
   const runtime = buildRuntime({
@@ -298,18 +323,26 @@ function readEnv(): Env {
 function loadBootCapabilityCatalog(
   env: Env,
   logger: Logger,
-): { readonly catalog: ModelCapabilityCatalog; readonly overrides: unknown } {
+): { readonly catalog: CapabilityCatalogWithUnmatchedOverrides; readonly overrides: unknown } {
   try {
     const overrides =
       env.modelCapabilityOverridesPath === null
         ? null
         : readCapabilityOverridesFile(env.modelCapabilityOverridesPath)
     const catalog = buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG, overrides)
+    const unmatchedOverrideIds = catalog.unmatchedOverrideIds()
     logger.info("model capability catalog loaded", {
       component: "capabilities",
       profiles: catalog.list().length,
       ...catalog.revision(),
+      unmatchedOverrideIds,
     })
+    if (unmatchedOverrideIds.length > 0) {
+      logger.warn("operator capability overrides have unmatched targets", {
+        component: "capabilities",
+        unmatchedOverrideIds,
+      })
+    }
     return { catalog, overrides }
   } catch (error) {
     if (error instanceof CapabilityCatalogError) {

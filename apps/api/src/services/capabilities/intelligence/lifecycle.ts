@@ -1,7 +1,6 @@
 import type { CapabilityIntelligenceRepository, RouteModelInventoryRow } from "@multi-ai-router/db"
 import { redactValue } from "../../../logging/redact"
 import { createSnapshotRefresh } from "../../snapshots/refresh"
-import { readCapabilityOverridesFile } from "../load"
 import type { ShippedCatalogInput } from "../schema"
 import { SHIPPED_CAPABILITY_CATALOG } from "../shipped"
 import type { CatalogRevision, ModelCapabilityCatalog, ModelCapabilityProfile } from "../types"
@@ -259,6 +258,7 @@ export async function compileAndPublishCapabilitySnapshot(
  * catalog untouched.
  */
 export interface CapabilityCatalogStore extends ModelCapabilityCatalog {
+  unmatchedOverrideIds(): readonly string[]
   refresh(): Promise<void>
   refreshAfterMutation(): Promise<void>
   start(): void
@@ -271,7 +271,6 @@ export interface CapabilityCatalogStoreDeps {
   /** Initial boot-validated catalog (`bootstrap + operatorOverrides`), available before Postgres starts. */
   readonly initialCatalog: ModelCapabilityCatalog
   readonly bootstrap?: ShippedCatalogInput
-  readonly overridesPath?: string | null
   readonly overrides?: unknown
   readonly loadPublishedSnapshot: () => Promise<
     | {
@@ -284,26 +283,40 @@ export interface CapabilityCatalogStoreDeps {
   readonly now?: () => Date
   readonly jitter?: (intervalMs: number) => number
   readonly onRefreshError?: (reason: string) => void
+  readonly onAdopted?: (revision: string | null, unmatchedOverrideIds: readonly string[]) => void
 }
 
 function defaultJitter(intervalMs: number): number {
   return Math.round(intervalMs * (0.8 + Math.random() * 0.4))
 }
 
+function findUnmatchedOverrideIds(
+  catalog: ModelCapabilityCatalog,
+  overrides: unknown,
+): readonly string[] {
+  if (typeof overrides !== "object" || overrides === null || !("overrides" in overrides)) {
+    return Object.freeze([])
+  }
+  const entries = overrides.overrides
+  if (!Array.isArray(entries)) return Object.freeze([])
+  const unmatched = entries.flatMap((entry: unknown) => {
+    if (typeof entry !== "object" || entry === null || !("id" in entry)) return []
+    const id = entry.id
+    return typeof id === "string" && catalog.resolve(id) === null ? [id] : []
+  })
+  return Object.freeze(unmatched.sort())
+}
+
 export function createCapabilityCatalogStore(
   deps: CapabilityCatalogStoreDeps,
 ): CapabilityCatalogStore {
   const bootstrap = deps.bootstrap ?? SHIPPED_CAPABILITY_CATALOG
-  const parsedOverrides =
-    deps.overrides !== undefined
-      ? deps.overrides
-      : deps.overridesPath
-        ? readCapabilityOverridesFile(deps.overridesPath)
-        : null
+  const parsedOverrides = deps.overrides ?? null
   const now = deps.now ?? (() => new Date())
   const jitter = deps.jitter ?? defaultJitter
 
   let current: ModelCapabilityCatalog = deps.initialCatalog
+  let currentUnmatchedOverrideIds = findUnmatchedOverrideIds(deps.initialCatalog, parsedOverrides)
   let activeSnapshotRevision: string | null = null
   let loadedAt: Date | null = null
   let timer: Timer | undefined
@@ -329,10 +342,19 @@ export function createCapabilityCatalogStore(
     },
     (next) => {
       // Atomic pointer swap: in-flight requests holding a reference or calling methods see either
-      // the previous immutable catalog or the new immutable catalog, never a half-built state.
+      // the previous immutable catalog or the new immutable state, never a half-built state.
+      const nextUnmatchedOverrideIds = next.catalog.unmatchedOverrideIds()
+      const revisionChanged = activeSnapshotRevision !== next.snapshotRevision
+      const unmatchedChanged =
+        currentUnmatchedOverrideIds.length !== nextUnmatchedOverrideIds.length ||
+        currentUnmatchedOverrideIds.some((id, index) => id !== nextUnmatchedOverrideIds[index])
       current = next.catalog
+      currentUnmatchedOverrideIds = nextUnmatchedOverrideIds
       activeSnapshotRevision = next.snapshotRevision
       loadedAt = now()
+      if (revisionChanged || unmatchedChanged) {
+        deps.onAdopted?.(activeSnapshotRevision, currentUnmatchedOverrideIds)
+      }
     },
   )
 
@@ -352,6 +374,7 @@ export function createCapabilityCatalogStore(
     get: (id): ModelCapabilityProfile | null => current.get(id),
     list: (): readonly ModelCapabilityProfile[] => current.list(),
     revision: (): CatalogRevision => current.revision(),
+    unmatchedOverrideIds: () => currentUnmatchedOverrideIds,
     refresh,
     refreshAfterMutation,
     start: () => {

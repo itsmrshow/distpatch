@@ -157,11 +157,20 @@ Effective runtime catalog layering (`applyPublishedSnapshotToBootstrap`):
 ```text
 1. Static bootstrap catalog (SHIPPED_CAPABILITY_CATALOG — hard facts, tags, aliases, null scores)
         ↓
-2. Published capability-intelligence snapshot (Postgres capability_snapshots, state = 'published'):
-   evidence-backed scores plus `discovered` profiles from route-model discovery
+2. Published snapshot evidence (compiled preference scores and provenance for known profiles)
         ↓
-3. Operator override file (MODEL_CAPABILITY_OVERRIDES_PATH — highest authority)
+3. Discovered profiles in the published snapshot (dynamic route-model identities and facts)
+        ↓
+4. Operator override file (highest authority: added profiles and partial field overrides)
 ```
+
+- Discovered profiles yield to operator-declared canonical ids and aliases, and to aliases set by
+  `overrides[]`: a conflicting discovered profile is dropped, while only a conflicting discovered
+  alias is trimmed. Effective bootstrap/operator identities and earlier discovered profiles likewise
+  retain their claims.
+- An override targeting an id absent from the current layered catalog is inert and listed by
+  `unmatchedOverrideIds()`; it applies if that profile is discovered and becomes unmatched again if
+  discovery removes it. Alias targets remain invalid.
 
 - Within the compiler, sources are **never automatically averaged**:
   - For hosted models, maintained external evidence (`artificial-analysis`) is primary for
@@ -316,10 +325,11 @@ mappings change. The published snapshots (`capability_snapshots`) are the immuta
 ## Operator overrides
 
 `MODEL_CAPABILITY_OVERRIDES_PATH` names a JSON file read **once at boot**. Missing, unreadable,
-non-JSON or invalid → boot fails with every problem listed by entry. Chosen over a database table
-because the catalog changes with deploys, not per request, and an env-named file needs no
-migration, admin CRUD, or refresh loop; DB-backed overrides can be added if runtime editing is
-ever needed.
+non-JSON or schema-invalid files fail boot with every problem listed by entry. A well-formed
+override whose canonical target is not currently present remains inert and is reported; the same
+file is reused when the store adopts later snapshots. Chosen over a database table because the
+catalog changes with deploys, not per request, and an env-named file needs no migration, admin CRUD,
+or refresh loop; DB-backed overrides can be added if runtime editing is ever needed.
 
 ```json
 {
@@ -333,14 +343,18 @@ ever needed.
 }
 ```
 
-- `profiles`: whole new profiles, same schema as shipped; an id already present fails.
-- `overrides`: partial edits by **canonical id** (an alias or unknown id fails, duplicate target
-  fails). Absent field = keep; `null` = make unknown. `tags` is `{ set }` or `{ add, remove }`.
-  `aliases` / `sources` replace the list.
-- Precedence: shipped → added profiles → overrides; then contradictions and alias collisions are
-  re-checked on the merged result.
+- `profiles`: whole new profiles, same schema as shipped; an id already present in the bootstrap
+  or another operator profile is an error. If discovery supplies the same id, the discovered profile
+  is dropped; discovered aliases that collide with an operator id, profile alias, or alias set by
+  `overrides[]` are trimmed.
+- `overrides`: partial edits by **canonical id** (an alias remains an error; an absent id is inert
+  and reported in `unmatchedOverrideIds()`, duplicate target fails). Absent field = keep; `null` =
+  make unknown. `tags` is `{ set }` or `{ add, remove }`; `aliases` / `sources` replace the list.
+- Precedence: shipped → discovered → operator-added profiles → operator field overrides. Operator
+  identities win over discovery; contradictions and remaining alias collisions still fail.
 - `enabled: false` keeps the profile resolvable with `enabled: false`; consumers decide.
-- Each profile reports `origin` (`shipped` | `operator`) and `overridden` (changed field paths).
+- Profiles report `origin` (`shipped` | `discovered` | `operator`) and `overridden` (changed field
+  paths). Unmatched ids are logged at boot and when adoption changes the unmatched set.
 - Strict schemas reject unknown keys, and every string is pattern-restricted (sources: https
   without query/userinfo, or `repo:` path), so account ids or credentials cannot enter.
 

@@ -93,8 +93,11 @@ has a `preference` list, floors, or a hidden ranking.
 
 Limitations: `auto-fast` reads the catalog's static `speed` class, never live latency; `auto-max`
 is not tied to any provider or `premium` tag; `auto-local` is only as truthful as the `local` tag
-on capability profiles (the DockerLM seed carries it); `auto-task` rejects a model whose tool use is
-unknown (`unknownHardFacts: reject`).
+on capability profiles. Discovered DockerLM profiles carry their route source's `local` tag on the
+*semantic* profile, so if a non-local account also lists the same semantic model (for example a
+hosted Qwen3.8-27B), `auto-local` can select that account; placement-aware filtering belongs on
+account tags and is not implemented. `auto-task` rejects a model whose tool use is unknown
+(`unknownHardFacts: reject`).
 
 ### Unknown capability data and evidence layering
 

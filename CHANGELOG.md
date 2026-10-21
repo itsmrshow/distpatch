@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - The capability catalog is validated at boot and held by a warm store that layers the published capability-intelligence snapshot beneath `MODEL_CAPABILITY_OVERRIDES_PATH` before the listener opens and re-checks for newly published snapshots every `CATALOG_REFRESH_SECONDS` (jittered); a failed refresh, or no published snapshot, keeps the last-known-good (initially the static bootstrap) catalog. The override file is still read once at boot.
-- Shipped bootstrap capability catalog revision `2026-10-17.4`: verified hard facts only, all static bootstrap preference scores `null`; local models are no longer shipped and arrive through route-model discovery.
+- Shipped bootstrap capability catalog revision `2026-10-17.4`: verified hard facts only, all static bootstrap preference scores `null`; local models are no longer shipped and arrive through route-model discovery. Shipped `mimo/mimo-v2.6-distill-9b` was removed; overrides must use discovered canonical id `xiaomimimo/mimo-v2.6-distill-qwen-9b`.
 - A usage row now binds 29 parameters (`selected_model`), so a raw `usage_records` INSERT statement holds at most 2259 rows. `USAGE_BATCH_SIZE` keeps its `1..2340` range: it is the flush size, and a larger flush is written as several bind-safe statements in one transaction.
 
 ## [2.40.0] — 2026-10-16

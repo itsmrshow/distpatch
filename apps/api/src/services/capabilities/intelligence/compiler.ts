@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto"
-import { buildCapabilityCatalog, CapabilityCatalogError } from "../build"
+import {
+  buildCapabilityCatalog,
+  CapabilityCatalogError,
+  type CapabilityCatalogWithUnmatchedOverrides,
+} from "../build"
 import {
   CAPABILITY_DIMENSIONS,
   CAPABILITY_SCHEMA_VERSION,
@@ -8,7 +12,6 @@ import {
   type ShippedCatalogInput,
 } from "../schema"
 import { SHIPPED_CAPABILITY_CATALOG } from "../shipped"
-import type { ModelCapabilityCatalog } from "../types"
 import { ARTIFICIAL_ANALYSIS_SOURCE_ID } from "./artificial-analysis"
 import { isProductionComparable, type SourceComparability } from "./comparability"
 import { LOCAL_EVAL_SOURCE_ID } from "./local-eval"
@@ -378,7 +381,7 @@ export interface CompileCapabilitySnapshotOptions {
 
 export interface CompiledCapabilitySnapshotResult {
   readonly snapshot: CompiledCapabilitySnapshotPayload
-  readonly catalog: ModelCapabilityCatalog
+  readonly catalog: CapabilityCatalogWithUnmatchedOverrides
   readonly summary: {
     readonly compilerVersion: string
     readonly normalizerVersion: string
@@ -558,13 +561,17 @@ export function compileCapabilitySnapshot(
 }
 
 /**
- * Merges a published capability-intelligence snapshot over the static bootstrap catalog, and then
- * applies operator overrides (`MODEL_CAPABILITY_OVERRIDES_PATH`) on top.
+ * Merges the static bootstrap catalog with the published snapshot, including its discovered
+ * profiles, then applies operator additions and field overrides.
  *
  * Layering precedence:
  *   1. `bootstrap` (`SHIPPED_CAPABILITY_CATALOG` — hard facts, tags, aliases, `null` scores)
- *   2. `publishedSnapshot` (evidence-backed preference scores + provenance source refs)
- *   3. `operatorOverrides` (highest authority; can override or null out any score, hard fact, or `enabled`)
+ *   2. `publishedSnapshot` (evidence-backed preference scores, provenance refs, discovered profiles)
+ *   3. `operatorOverrides` (highest authority; additions and edits to scores, hard facts, aliases, or `enabled`)
+ *
+ * Discovery yields to operator-declared ids and aliases; conflicting discovered profiles are
+ * dropped or have only their conflicting aliases trimmed. Missing override targets remain inert
+ * and are reported by the returned catalog until discovery supplies or removes the profile.
  *
  * Pure and synchronous: never touches Postgres, the filesystem, or the network.
  */
@@ -572,7 +579,7 @@ export function applyPublishedSnapshotToBootstrap(
   bootstrap: ShippedCatalogInput,
   publishedSnapshot: unknown | null,
   operatorOverrides: unknown = null,
-): ModelCapabilityCatalog {
+): CapabilityCatalogWithUnmatchedOverrides {
   if (publishedSnapshot === null || publishedSnapshot === undefined) {
     return buildCapabilityCatalog(bootstrap, operatorOverrides)
   }

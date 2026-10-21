@@ -20,11 +20,11 @@ import type {
 } from "./types"
 
 /**
- * shipped catalog + validated operator overrides → one immutable effective snapshot.
+ * shipped catalog + discovered profiles + validated operator overrides → one immutable snapshot.
  *
- * Pure: no I/O, no clock. Any problem anywhere — schema, duplicate, collision, unknown override
- * target, contradiction after merge — collects into one {@link CapabilityCatalogError} naming
- * every bad entry, and no snapshot is produced. A partially trusted catalog is never served.
+ * Pure: no I/O, no clock. Any strict problem anywhere — schema, duplicates, alias target, or
+ * contradiction after merge — collects into one {@link CapabilityCatalogError} naming every bad
+ * entry. A canonical override target that is not present is inert and reported by the result.
  */
 
 export class CapabilityCatalogError extends Error {
@@ -39,13 +39,18 @@ export class CapabilityCatalogError extends Error {
 
 type Draft = Omit<ModelCapabilityProfile, "overridden"> & { overridden: Set<string> }
 
+export interface CapabilityCatalogWithUnmatchedOverrides extends ModelCapabilityCatalog {
+  /** Canonical override targets not present in this effective catalog, sorted by id. */
+  unmatchedOverrideIds(): readonly string[]
+}
+
 const HARD_KEYS = ["contextTokens", "maxOutputTokens", ...HARD_FEATURES] as const
 
 export function buildCapabilityCatalog(
   shipped: unknown,
   overrides: unknown = null,
   discovered: unknown = [],
-): ModelCapabilityCatalog {
+): CapabilityCatalogWithUnmatchedOverrides {
   const problems: string[] = []
   const base = parse(ShippedCatalogInput, shipped, "shipped", problems)
   const edits =
@@ -53,17 +58,28 @@ export function buildCapabilityCatalog(
   const found = parse(z.array(ProfileInput), discovered, "discovered", problems)
   if (base === null || problems.length > 0) throw new CapabilityCatalogError(problems)
 
+  const discoveredProfiles = yieldDiscoveredProfiles(
+    base.profiles,
+    found ?? [],
+    edits?.profiles ?? [],
+    edits?.overrides ?? [],
+  )
   const drafts = new Map<string, Draft>()
   addProfiles(drafts, base.profiles, "shipped", problems)
-  addProfiles(drafts, found ?? [], "discovered", problems)
+  addProfiles(drafts, discoveredProfiles, "discovered", problems)
   addProfiles(drafts, edits?.profiles ?? [], "operator", problems)
-  applyOverrides(drafts, edits?.overrides ?? [], problems)
+  const unmatchedOverrideIds = Object.freeze(
+    [...applyOverrides(drafts, edits?.overrides ?? [], problems)].sort(),
+  )
 
   const profiles = [...drafts.values()].sort((a, b) => (a.id < b.id ? -1 : 1)).map(finish)
   for (const profile of profiles) checkContradictions(profile, problems)
   const lookup = createCatalogLookup(profiles, revisionOf(base.revision, profiles), problems)
   if (problems.length > 0) throw new CapabilityCatalogError(problems)
-  return lookup
+  return Object.freeze({
+    ...lookup,
+    unmatchedOverrideIds: () => unmatchedOverrideIds,
+  })
 }
 
 function parse<T>(
@@ -124,12 +140,72 @@ function addProfiles(
   }
 }
 
+/**
+ * Discovery yields to operator-declared identities. Canonical conflicts drop a discovered profile;
+ * alias conflicts only trim the discovered alias. Canonical ids are reserved before aliases, and
+ * profiles are processed in id order so a malformed duplicate discovered alias resolves
+ * deterministically.
+ */
+function yieldDiscoveredProfiles(
+  bootstrap: readonly ProfileInput[],
+  discovered: readonly ProfileInput[],
+  operatorProfiles: readonly ProfileInput[],
+  operatorOverrides: readonly ProfileOverride[],
+): readonly ProfileInput[] {
+  const overrideAliasesById = new Map<string, readonly string[]>()
+  const operatorAliasOwners = new Map<string, Set<string>>()
+  for (const edit of operatorOverrides) {
+    if (edit.aliases !== undefined) overrideAliasesById.set(edit.id, edit.aliases)
+    for (const alias of edit.aliases ?? []) {
+      const owners = operatorAliasOwners.get(alias) ?? new Set<string>()
+      owners.add(edit.id)
+      operatorAliasOwners.set(alias, owners)
+    }
+  }
+  const aliasesAfterOperatorEdits = (profile: ProfileInput) =>
+    overrideAliasesById.get(profile.id) ?? profile.aliases ?? []
+  const protectedNames = new Set([
+    ...bootstrap.flatMap((profile) => [profile.id, ...aliasesAfterOperatorEdits(profile)]),
+    ...operatorProfiles.flatMap((profile) => [profile.id, ...aliasesAfterOperatorEdits(profile)]),
+  ])
+  const canonicalIds = new Set([
+    ...bootstrap.map((profile) => profile.id),
+    ...operatorProfiles.map((profile) => profile.id),
+    ...discovered.map((profile) => profile.id),
+  ])
+  const claimedAliases = new Set([
+    ...bootstrap.flatMap(aliasesAfterOperatorEdits),
+    ...operatorProfiles.flatMap(aliasesAfterOperatorEdits),
+    ...operatorAliasOwners.keys(),
+  ])
+  const discoveredAliases = new Set<string>()
+  const kept: ProfileInput[] = []
+
+  for (const profile of [...discovered].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+    if (protectedNames.has(profile.id)) continue
+    const overrideOwners = operatorAliasOwners.get(profile.id)
+    if (overrideOwners !== undefined && !overrideOwners.has(profile.id)) continue
+
+    const originalAliases = profile.aliases ?? []
+    const aliases = originalAliases.filter((alias) => {
+      if (canonicalIds.has(alias) || claimedAliases.has(alias) || discoveredAliases.has(alias)) {
+        return false
+      }
+      discoveredAliases.add(alias)
+      return true
+    })
+    kept.push(aliases.length === originalAliases.length ? profile : { ...profile, aliases })
+  }
+  return kept
+}
+
 function applyOverrides(
   drafts: Map<string, Draft>,
   overrides: readonly ProfileOverride[],
   problems: string[],
-): void {
+): readonly string[] {
   const seen = new Set<string>()
+  const unresolved: ProfileOverride[] = []
   for (const edit of overrides) {
     if (seen.has(edit.id)) {
       problems.push(`override ${edit.id}: duplicate override target`)
@@ -138,12 +214,7 @@ function applyOverrides(
     seen.add(edit.id)
     const draft = drafts.get(edit.id)
     if (draft === undefined) {
-      const owner = [...drafts.values()].find((d) => d.aliases.includes(edit.id))
-      problems.push(
-        owner === undefined
-          ? `override ${edit.id}: no profile with this canonical id`
-          : `override ${edit.id}: is an alias of ${owner.id}; target the canonical id`,
-      )
+      unresolved.push(edit)
       continue
     }
     const set = <K extends "enabled" | "family" | "aliases" | "sources">(
@@ -176,6 +247,16 @@ function applyOverrides(
       draft.overridden.add(`scores.${key}`)
     }
   }
+
+  const unmatched: string[] = []
+  for (const edit of unresolved) {
+    const owner = [...drafts.values()].find((draft) => draft.aliases.includes(edit.id))
+    if (owner === undefined) unmatched.push(edit.id)
+    else {
+      problems.push(`override ${edit.id}: is an alias of ${owner.id}; target the canonical id`)
+    }
+  }
+  return unmatched
 }
 
 function hardFacts(input: HardFactsInput | undefined): HardFacts {
