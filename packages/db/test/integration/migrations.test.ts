@@ -456,6 +456,29 @@ describe.skipIf(!runnable)("migrations against a live database", () => {
       "superseded",
     )
   })
+  test("the published-snapshot partial unique index exists and rejects a second published row", async () => {
+    const live = handle as DatabaseHandle
+    const indexes = await live.sql<{ indexdef: string }[]>`
+      select indexdef
+      from pg_indexes
+      where schemaname = 'public'
+        and tablename = 'capability_snapshots'
+        and indexname = 'capability_snapshots_single_published_idx'
+    `
+    expect(indexes).toHaveLength(1)
+    expect(indexes[0]?.indexdef).toContain("UNIQUE")
+    expect(indexes[0]?.indexdef).toContain("WHERE (publication_state = 'published'::text)")
+
+    await expect(live.sql`
+      insert into capability_snapshots (
+        revision, generated_at, compiler_version, normalizer_version, evidence_digest,
+        publication_state, payload, summary
+      ) values (
+        'sha256:test-second-published', now(), 'test', 'test', 'sha256:test',
+        'published', '{}'::jsonb, '{}'::jsonb
+      )
+    `).rejects.toThrow()
+  })
 
   test("route model inventory upserts keep first-seen, mark absence, and never delete", async () => {
     db = (handle as DatabaseHandle).db
