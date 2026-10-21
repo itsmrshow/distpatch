@@ -107,7 +107,11 @@ export interface CapabilityIntelligenceRepository {
       readonly routeModels: readonly RouteModelInventoryRow[]
     }) => Promise<{ readonly snapshot: CapabilitySnapshotCandidate; readonly result: T }>,
   ): Promise<{ readonly publishedSnapshot: CapabilitySnapshotRow; readonly result: T }>
-  /** Run an entire sync under a session-scoped lock, or report that another process owns it. */
+  /**
+   * Run an entire sync under a session-scoped lock, or report that another process owns it.
+   * Requires a pool with at least two connections: the lock connection stays reserved while the
+   * callback uses pooled connections; smaller pools are rejected before the lock query.
+   */
   withSyncLock<T>(
     work: () => Promise<T>,
   ): Promise<{ readonly acquired: true; readonly value: T } | { readonly acquired: false }>
@@ -276,6 +280,11 @@ export function createCapabilityIntelligenceRepository(
     withSyncLock: (work) => {
       if (syncSql === undefined) {
         throw new Error("Capability sync requires the database handle's raw SQL connection")
+      }
+      if (syncSql.options.max < 2) {
+        throw new Error(
+          `Capability sync requires maxConnections >= 2; configured maximum is ${syncSql.options.max}`,
+        )
       }
       return withAdvisoryLock(syncSql, CAPABILITY_SYNC_LOCK_KEY, work)
     },

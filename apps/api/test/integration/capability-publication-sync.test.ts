@@ -79,13 +79,66 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
     const testUrl = new URL(configuredUrl)
     testUrl.pathname = `/${databaseName}`
     await runMigrations({ url: testUrl.toString(), migrationsFolder: defaultMigrationsFolder() })
-    handle = createDatabase({ url: testUrl.toString(), maxConnections: 8 })
+    handle = createDatabase({ url: testUrl.toString(), maxConnections: 2 })
     repository = createCapabilityIntelligenceRepository(handle.db, handle.sql)
   })
 
   beforeEach(async () => {
     if (!handle) throw new Error("database fixture is not initialized")
     await handle.sql`truncate table capability_snapshots, capability_observations, route_model_inventory`
+  })
+
+  test("a one-connection pool rejects sync before work and remains usable", async () => {
+    const testUrl = new URL(configuredUrl)
+    testUrl.pathname = `/${databaseName}`
+    const singleHandle = createDatabase({
+      url: testUrl.toString(),
+      maxConnections: 1,
+      closeTimeoutSeconds: 0,
+    })
+    const singleRepository = createCapabilityIntelligenceRepository(
+      singleHandle.db,
+      singleHandle.sql,
+    )
+    const poolBeforeSync = singleHandle.poolStats()
+    let fetches = 0
+    const sync = syncCapabilityIntelligence({
+      repository: singleRepository,
+      sources: [
+        evidenceSource(
+          observation({
+            key: `single-pool-${crypto.randomUUID()}`,
+            sourceModelId: "claude-sonnet-4-6",
+            canonicalModelId: "anthropic/claude-sonnet-4-6",
+            rawValue: 63,
+            observedAt: new Date("2026-10-21T16:00:00Z"),
+          }),
+          async () => {
+            fetches += 1
+          },
+        ),
+      ],
+    }).then(
+      () => ({ status: "fulfilled" as const }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    )
+    const watchdogResult = Promise.withResolvers<{ readonly status: "timeout" }>()
+    // This real-clock watchdog only bounds the old deadlock: that sync has no cancellation or
+    // settlement signal, so there is no deterministic event to await if the regression returns.
+    const watchdog = setTimeout(() => watchdogResult.resolve({ status: "timeout" }), 4_000)
+    try {
+      const outcome = await Promise.race([sync, watchdogResult.promise])
+      if (outcome.status !== "rejected") {
+        throw new Error(`Single-connection sync did not reject promptly (${outcome.status})`)
+      }
+      expect(outcome.error).toBeInstanceOf(Error)
+      expect(fetches).toBe(0)
+      expect(singleHandle.poolStats()).toEqual(poolBeforeSync)
+      await expect(singleHandle.sql`select 1 as ok`).resolves.toEqual([{ ok: 1 }])
+    } finally {
+      clearTimeout(watchdog)
+      await singleHandle.close()
+    }
   })
 
   afterAll(async () => {

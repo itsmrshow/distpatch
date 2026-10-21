@@ -274,6 +274,8 @@ never syncs.) **Inference never calls `/v1/models`**: discovery runs only in the
 drives a real dataplane request through virtual-model selection with fetch, the repository, the
 discovery client and the compiler all guarded, and asserts none of them is called.
 
+**Pool requirement for sync:** The raw PostgreSQL pool supplied to `createCapabilityIntelligenceRepository` must have `maxConnections >= 2` for `syncCapabilityIntelligence`. Its session lock reserves one connection while sync work uses the same pool; smaller pools are rejected before lock reservation, fetches or database work. This requirement is specific to sync; other database-handle operations may use a one-connection pool.
+
 `RouteModelSource` (`route-discovery.ts`) is the provider-neutral contract (`id`, contributed `tags`,
 `discover()`); the llama-swap/DockerLM adapter is one implementation, and Ollama, MLX, another
 OpenAI-compatible host or NVIDIA need only a new adapter mapping their listing into

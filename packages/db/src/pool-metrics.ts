@@ -1,11 +1,9 @@
 import type { SqlConnection } from "./client"
 
 /**
- * Connections as postgres.js would describe them if it exposed pool internals directly. It does
- * not: `max`, `idle_timeout`, and friends are write-only knobs on the driver's options object, and
- * the queues that actually track reserved/idle/waiting connections (`connecting`, `reserved`,
- * `open`, `busy`, `full` in `postgres/src/index.js`) live in its own module closure, unreachable
- * from a consumer.
+ * postgres.js exposes its parsed options (including `max`) to consumers, but not its live pool
+ * queues: `connecting`, `reserved`, `open`, `busy`, and `full` in `postgres/src/index.js` are
+ * private to the driver's module closure.
  *
  * This counts concurrently in-flight statements instead. Below `max` that is exactly the number of
  * connections doing work — postgres.js gives every dispatched statement its own connection, no
