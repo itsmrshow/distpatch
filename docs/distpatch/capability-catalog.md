@@ -128,8 +128,13 @@ OpenRouter metadata (planned) ──────┘
   system, input and root mounts; writes only to a `/tmp` tmpfs) inside a transient systemd user
   scope whose cgroup limits are verified before the program starts (256 MiB memory, no swap, 64
   tasks, one CPU), plus per-process `ulimit`s; stdout/stderr are bounded while read, and a timeout
-  or overflow kills the whole scope. If any of that cannot be established the run aborts
-  (`CalibrationSandboxUnavailableError`) instead of grading. Pass/fail is decided on the host from
+  or overflow kills the whole scope. If any setup cannot be established the run aborts
+  (`CalibrationSandboxUnavailableError`) instead of grading. Each calibration invocation runs in a
+  uniquely named systemd scope. The launcher remains blocked until `/proc/<pid>/cgroup` identifies
+  that exact scope and verifies its memory, swap, task, and CPU limits plus write access to
+  `cgroup.kill`; inherited harness cgroups and unexpected scope units are rejected.
+  Timeout/output-limit termination therefore targets only the invocation’s verified scope. Pass/fail
+  is decided on the host from the
   raw observations of a fixed probe list (`distpatch-grader-v3-host-oracle`); expected values never
   enter the sandbox. **Supplemental, stored evidence**: not cross-source comparable with Artificial
   Analysis, so it does not write shared preference scores (see Cross-source comparability).
@@ -329,6 +334,11 @@ observations and route inventory, compiling, saving the candidate and publishing
 transaction holding it, so a `compile` always publishes from the newest committed evidence and
 cannot regress the published snapshot. `generatedAt` describes a snapshot; it is not the ordering
 primitive. A partial unique index allows at most one `published` row.
+
+The public publication callback accepts only `candidate` builds; `rejected`, `published` and
+`superseded` build states are refused before stored history is consulted. A rejected historical
+revision therefore cannot be reactivated, and an invalid first publication cannot become published
+without its first `publishedAt`.
 `latestSnapshot` history is ordered by `generatedAt` regardless of publication state and can therefore
 be superseded; the row whose state is `published` is authoritative for the active catalog, including
 when an older revision is reactivated.
@@ -337,8 +347,12 @@ when an older revision is reactivated.
 
 `capability_observations` is a **fingerprint-deduplicated observation log**, not an immutable
 append-only ledger. New values insert new rows; an unchanged latest value is deduplicated. If an
-older value *reappears* after an intermediate one, its existing row is re-stamped (`observed_at`,
-`ingested_at`, `source_ref`, provenance) so the compiler sees it as current, which means the
+older value *reappears* after an intermediate one, its existing row is re-stamped only when its
+measurement timestamp (`observed_at`) advances; a later `ingested_at` alone does not make the same
+measurement fresh. This keeps provenance-addressed Local Eval run identities from becoming new
+evidence through delayed re-ingestion. Sources without an upstream measurement timestamp may
+use fetch time as `observed_at` (Artificial Analysis does), so a later read can still represent
+newer evidence. The
 intermediate period is not recorded as a row. `canonical_model_id` is also rewritten when identity
 mappings change. Published snapshot content (including its payload, generation time, compiler and
 normalizer versions, evidence digest, summary, and first `publishedAt`) is immutable even after it is

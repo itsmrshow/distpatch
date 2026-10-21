@@ -263,19 +263,6 @@ export function claudeCliRoute(model: string): Route {
       const dir = await mkdtemp(join(tmpdir(), "distpatch-cal-mcp-"))
       const stateFile = join(dir, "state.json")
       const config = join(dir, "mcp.json")
-      await Bun.write(
-        config,
-        JSON.stringify({
-          mcpServers: {
-            cal: {
-              command: "bun",
-              args: [join(import.meta.dir, "mcp-env.ts")],
-              env: { CAL_CASE: c.id, CAL_STATE_FILE: stateFile },
-            },
-          },
-        }),
-      )
-      const started = performance.now()
       const readRecorded = async () => {
         try {
           return (await Bun.file(stateFile).json()) as {
@@ -288,6 +275,19 @@ export function claudeCliRoute(model: string): Route {
         }
       }
       try {
+        await Bun.write(
+          config,
+          JSON.stringify({
+            mcpServers: {
+              cal: {
+                command: "bun",
+                args: [join(import.meta.dir, "mcp-env.ts")],
+                env: { CAL_CASE: c.id, CAL_STATE_FILE: stateFile },
+              },
+            },
+          }),
+        )
+        const started = performance.now()
         const { answer, turns } = await invoke(c.prompt, [
           "--mcp-config",
           config,

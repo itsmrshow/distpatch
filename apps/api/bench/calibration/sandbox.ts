@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import fs, { accessSync, constants, existsSync, readFileSync, writeFileSync } from "node:fs"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -41,6 +42,8 @@ const MEMORY_MAX_BYTES = 256 * 1024 * 1024
 const MEMORY_MAX_SETTING = "256M"
 const TASKS_MAX = 64
 const CPU_QUOTA_SETTING = "100%"
+const CALIBRATION_SCOPE_UNIT_PATTERN =
+  /^distpatch-calibration-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.scope$/
 const READY_TOKEN = "__DISTPATCH_CALIBRATION_SANDBOX_READY_91E43B__"
 const PREFLIGHT_OUTPUT = "__DISTPATCH_CALIBRATION_SANDBOX_PREFLIGHT_OK__"
 const PREFLIGHT_SOURCE = `console.log(${JSON.stringify(PREFLIGHT_OUTPUT)}); const delay = Promise.withResolvers<void>(); setTimeout(delay.resolve, 250); await delay.promise`
@@ -99,20 +102,30 @@ async function readBoundedStream(
   return out
 }
 
-function scopeCgroupPath(pid: number): string {
+export function verifyScopeIdentity(relativePath: string, expectedUnit: string): void {
+  if (!CALIBRATION_SCOPE_UNIT_PATTERN.test(expectedUnit)) {
+    throw new Error("the sandbox scope unit name is invalid")
+  }
+  if (!relativePath.startsWith("/") || relativePath.split("/").includes("..")) {
+    throw new Error("the sandbox process has an invalid cgroup-v2 path")
+  }
+  if (relativePath.slice(relativePath.lastIndexOf("/") + 1) !== expectedUnit) {
+    throw new Error("the sandbox process is not in its requested systemd scope")
+  }
+}
+
+function scopeCgroupPath(pid: number, expectedUnit: string): string {
   const line = readFileSync(`/proc/${pid}/cgroup`, "utf8")
     .split("\n")
     .find((entry) => entry.startsWith("0::"))
   if (!line) throw new Error("the sandbox process has no cgroup-v2 membership")
   const relativePath = line.slice(3)
-  if (!relativePath.startsWith("/") || relativePath.split("/").includes("..")) {
-    throw new Error("the sandbox process has an invalid cgroup-v2 path")
-  }
+  verifyScopeIdentity(relativePath, expectedUnit)
   return join("/sys/fs/cgroup", relativePath.slice(1))
 }
 
-function verifyScopeLimits(pid: number): string {
-  const directory = scopeCgroupPath(pid)
+function verifyScopeLimits(pid: number, expectedUnit: string): string {
+  const directory = scopeCgroupPath(pid, expectedUnit)
   const memoryMax = readFileSync(join(directory, "memory.max"), "utf8").trim()
   const memorySwapMax = readFileSync(join(directory, "memory.swap.max"), "utf8").trim()
   const tasksMax = readFileSync(join(directory, "pids.max"), "utf8").trim()
@@ -135,12 +148,16 @@ function verifyScopeLimits(pid: number): string {
   return directory
 }
 
-async function waitForScopeLimits(pid: number, processExited: () => boolean): Promise<string> {
+async function waitForScopeLimits(
+  pid: number,
+  expectedUnit: string,
+  processExited: () => boolean,
+): Promise<string> {
   const deadline = Date.now() + 2_000
   let lastError: unknown
   while (!processExited() && Date.now() < deadline) {
     try {
-      return verifyScopeLimits(pid)
+      return verifyScopeLimits(pid, expectedUnit)
     } catch (error) {
       lastError = error
     }
@@ -212,6 +229,7 @@ async function executeSandbox(
     const mounts = ["/usr", "/lib", "/lib64", "/bin", "/sbin"].flatMap((p) =>
       existsSync(p) ? ["--ro-bind", p, p] : [],
     )
+    const scopeUnit = `distpatch-calibration-${randomUUID()}.scope`
     const proc = (() => {
       try {
         return Bun.spawn(
@@ -221,6 +239,7 @@ async function executeSandbox(
             "--scope",
             "--quiet",
             "--collect",
+            `--unit=${scopeUnit}`,
             `--property=MemoryMax=${MEMORY_MAX_SETTING}`,
             "--property=MemorySwapMax=0",
             `--property=TasksMax=${TASKS_MAX}`,
@@ -315,7 +334,7 @@ async function executeSandbox(
     try {
       try {
         // The launcher waits on stdin so limits can be confirmed before it starts bwrap.
-        cgroupDirectory = await waitForScopeLimits(proc.pid, () => processExited)
+        cgroupDirectory = await waitForScopeLimits(proc.pid, scopeUnit, () => processExited)
         if (!proc.stdin) throw new Error("the systemd scope launcher has no input pipe")
         proc.stdin.write("start-calibration\n")
         if (options.reportNonce !== undefined) proc.stdin.write(`${options.reportNonce}\n`)

@@ -3,12 +3,17 @@ import fs, { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { CASES, type TextCase } from "../../../bench/calibration/cases"
-import { CalibrationSandboxUnavailableError, runBun } from "../../../bench/calibration/sandbox"
+import {
+  CalibrationSandboxUnavailableError,
+  runBun,
+  verifyScopeIdentity,
+} from "../../../bench/calibration/sandbox"
 import { calibrationSandboxSkipped } from "../../support/calibration-sandbox-gate"
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url))
 const README_PATH = join(REPO_ROOT, "README.md")
 const PTRACE_SCOPE_PATH = "/proc/sys/kernel/yama/ptrace_scope"
+const EXPECTED_SCOPE_UNIT = "distpatch-calibration-00000000-0000-4000-8000-000000000000.scope"
 const sandboxSkipped = await calibrationSandboxSkipped(
   "apps/api/test/unit/capabilities/calibration-sandbox.test.ts",
 )
@@ -34,6 +39,18 @@ async function expectNoDetachedProbe(): Promise<void> {
     await delay.promise
   }
 }
+
+describe("calibration scope identity", () => {
+  test("rejects inherited and sibling scope identities", () => {
+    const parentCgroup = "/user.slice/user-1000.slice/user@1000.service/app.slice"
+    const siblingUnit = "distpatch-calibration-00000000-0000-4000-8000-000000000001.scope"
+
+    expect(() => verifyScopeIdentity(parentCgroup, EXPECTED_SCOPE_UNIT)).toThrow()
+    expect(() =>
+      verifyScopeIdentity(`${parentCgroup}/${siblingUnit}`, EXPECTED_SCOPE_UNIT),
+    ).toThrow()
+  })
+})
 
 describe.skipIf(sandboxSkipped)("local evaluation code-grading sandbox (Codex P2)", () => {
   test("1. cannot read a fake secret environment variable", async () => {

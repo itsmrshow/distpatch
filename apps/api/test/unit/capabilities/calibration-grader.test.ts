@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
+import { existsSync } from "node:fs"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -10,7 +11,7 @@ import {
   type ToolCase,
   type ToolTranscript,
 } from "../../../bench/calibration/cases"
-import { openAiChatRoute } from "../../../bench/calibration/routes"
+import { claudeCliRoute, openAiChatRoute } from "../../../bench/calibration/routes"
 import { failedCase, score } from "../../../bench/calibration/run"
 import { CalibrationSandboxUnavailableError } from "../../../bench/calibration/sandbox"
 import { calibrationSandboxSkipped } from "../../support/calibration-sandbox-gate"
@@ -808,6 +809,28 @@ describe("calibration grading pipeline", () => {
     expect(() =>
       failedCase({ id: "coding.semver", run: 0 }, new CalibrationSandboxUnavailableError()),
     ).toThrow(CalibrationSandboxUnavailableError)
+  })
+
+  test("claudeCliRoute cleans up staging tempdir when config write fails", async () => {
+    const route = claudeCliRoute("claude-test-model")
+    const c = CASES.find((candidate): candidate is ToolCase => candidate.kind === "tools")
+    if (!c) throw new Error("missing tool case")
+    let createdDir: string | null = null
+    const writeSpy = spyOn(Bun, "write").mockImplementation((destination) => {
+      if (typeof destination === "string" && destination.includes("distpatch-cal-mcp-")) {
+        createdDir = destination.replace(/\/mcp\.json$/, "")
+      }
+      throw new Error("simulated staging write failure")
+    })
+    try {
+      await expect(route.runTools?.(c)).rejects.toThrow("simulated staging write failure")
+      expect(createdDir).not.toBeNull()
+      if (createdDir) {
+        expect(existsSync(createdDir)).toBe(false)
+      }
+    } finally {
+      writeSpy.mockRestore()
+    }
   })
 
   test("score records only current inputs and provenance", async () => {
