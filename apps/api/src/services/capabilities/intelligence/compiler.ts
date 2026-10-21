@@ -229,6 +229,7 @@ function compileDimension(
   dimension: CapabilityDimension,
   isLocalModel: boolean,
   promoteLocalEval: boolean,
+  promoteArtificialAnalysis: boolean,
   observations: readonly SourceObservation[],
   now: Date,
   staleDays: number,
@@ -242,7 +243,7 @@ function compileDimension(
   // hosted API serving, not a local quant on a local runtime, so a local model's speed stays
   // unknown until a route-aware local measurement exists.
   if (dimension === "speed") {
-    if (isLocalModel) return emptyDimensionEvidence(dimension)
+    if (isLocalModel || !promoteArtificialAnalysis) return emptyDimensionEvidence(dimension)
     const tpsObs = selectNewestObservation(
       observations,
       canonicalModelId,
@@ -298,7 +299,7 @@ function compileDimension(
 
   const aaMetric = AA_INDEX_METRIC_BY_DIMENSION[dimension]
   const aaObs =
-    aaMetric !== undefined
+    promoteArtificialAnalysis && aaMetric !== undefined
       ? selectNewestObservation(
           observations,
           canonicalModelId,
@@ -354,10 +355,12 @@ function compileDimension(
       staleDays,
     )
   }
-  const hasAnyExternalEvidenceForModel = observations.some(
-    (o) => o.canonicalModelId === canonicalModelId && o.source === ARTIFICIAL_ANALYSIS_SOURCE_ID,
-  )
-  if (localObs !== null && (aaMetric === undefined || !hasAnyExternalEvidenceForModel)) {
+  const hasComparableExternalEvidenceForModel =
+    promoteArtificialAnalysis &&
+    observations.some(
+      (o) => o.canonicalModelId === canonicalModelId && o.source === ARTIFICIAL_ANALYSIS_SOURCE_ID,
+    )
+  if (localObs !== null && (aaMetric === undefined || !hasComparableExternalEvidenceForModel)) {
     return buildSingleObservationEvidence(
       dimension,
       localObs,
@@ -404,6 +407,10 @@ export function compileCapabilitySnapshot(
   const now = options.generatedAt ?? new Date()
   const staleDays = options.staleDays ?? DEFAULT_OBSERVATION_STALE_DAYS
   const promoteLocalEval = isProductionComparable(LOCAL_EVAL_SOURCE_ID, options.comparability)
+  const promoteArtificialAnalysis = isProductionComparable(
+    ARTIFICIAL_ANALYSIS_SOURCE_ID,
+    options.comparability,
+  )
 
   const resolvedObs = observations
     .filter((o) => o.canonicalModelId !== null)
@@ -468,6 +475,7 @@ export function compileCapabilitySnapshot(
             dim,
             isLocalModel,
             promoteLocalEval,
+            promoteArtificialAnalysis,
             resolvedObs,
             now,
             staleDays,

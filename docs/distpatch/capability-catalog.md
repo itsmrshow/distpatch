@@ -133,8 +133,9 @@ OpenRouter metadata (planned) ──────┘
   raw observations of a fixed probe list (`distpatch-grader-v3-host-oracle`); expected values never
   enter the sandbox. **Supplemental, stored evidence**: not cross-source comparable with Artificial
   Analysis, so it does not write shared preference scores (see Cross-source comparability).
-  Saturated dimensions (> 0.90 across all measured models) stay withheld (`null`) and their raw
-  means are kept as non-compiling `saturated_*` audit observations.
+  Saturated dimensions (> 0.90 across all measured models) stay withheld (`null`). When `saturated`
+  names a dimension, its raw mean is retained only as non-compiling `saturated_*` audit evidence;
+  any conflicting numeric score for that dimension is withheld.
 - **Planned future sources**:
   - **Hugging Face / OpenEvals**: reasoning, coding, and benchmark-specific capability evidence to
     fill dimensions external headline indexes omit.
@@ -204,6 +205,10 @@ never score. A source becomes comparable only through a versioned registry entry
 calibration (future anchor-model calibration). Any new evidence provider follows the same rule; an
 unlisted source is not comparable.
 
+The registry's `comparable` plus named-calibration gate applies to every Artificial Analysis
+dimension, including `speed`; resolved raw observations remain in the evidence digest even when
+they do not score.
+
 ### Local Evaluation trust boundary
 
 The normalized artifact must carry `suite`, `graderVersion` and `normalization`
@@ -213,6 +218,11 @@ The source accepts only the current versions; anything else (missing stamp, an o
 normalization, a missing or mismatched input) is rejected as production evidence and retained as
 `historical_*` observations — never as zero scores. An observation is dated by the newest recorded
 run behind it, not by when it was ingested.
+
+Observation fingerprints include canonical, order-stable per-model contributing input provenance
+(`file`, `profileId`, `route`, `wireModel`, `recordedAt`), not the artifact-level `generatedAt`;
+changes to contributing input provenance create a distinct observation identity, while a
+`generatedAt`-only restamp remains deduplicated.
 
 `bin/calibrate score` normalizes only result files whose suite and grader equal the current ones
 and lists every other file under `excluded`, so `scores.json` states exactly which runs it rests
@@ -319,6 +329,9 @@ observations and route inventory, compiling, saving the candidate and publishing
 transaction holding it, so a `compile` always publishes from the newest committed evidence and
 cannot regress the published snapshot. `generatedAt` describes a snapshot; it is not the ordering
 primitive. A partial unique index allows at most one `published` row.
+`latestSnapshot` history is ordered by `generatedAt` regardless of publication state and can therefore
+be superseded; the row whose state is `published` is authoritative for the active catalog, including
+when an older revision is reactivated.
 
 ### Observation history semantics
 
@@ -327,7 +340,10 @@ append-only ledger. New values insert new rows; an unchanged latest value is ded
 older value *reappears* after an intermediate one, its existing row is re-stamped (`observed_at`,
 `ingested_at`, `source_ref`, provenance) so the compiler sees it as current, which means the
 intermediate period is not recorded as a row. `canonical_model_id` is also rewritten when identity
-mappings change. The published snapshots (`capability_snapshots`) are the immutable audit trail.
+mappings change. Published snapshot content (including its payload, generation time, compiler and
+normalizer versions, evidence digest, summary, and first `publishedAt`) is immutable even after it is
+superseded; republishing that revision changes only its lifecycle state. A candidate that has never
+been published retains the existing replaceable-candidate behavior.
 
 ## Operator overrides
 

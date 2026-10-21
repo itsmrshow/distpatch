@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A usage row now binds 29 parameters (`selected_model`), so a raw `usage_records` INSERT statement holds at most 2259 rows. `USAGE_BATCH_SIZE` keeps its `1..2340` range: it is the flush size, and a larger flush is written as several bind-safe statements in one transaction.
 
 ### Fixed
+- A superseded capability snapshot keeps its first published payload and metadata when its revision is reactivated; only lifecycle state changes, and `published` rather than `generatedAt` identifies the active snapshot.
+- Local Evaluation observations now deduplicate by contributing run provenance rather than artifact generation time; saturation withholds conflicting numeric scores while retaining raw audit evidence, and explicit comparability registries gate Artificial Analysis scores across dimensions without dropping evidence.
 - Calibration grading now aborts unless host Yama `ptrace_scope` is exactly `1`, `2`, or `3`, so a same-UID candidate cannot read trusted grader memory on unsupported hosts.
 
 ## [2.40.0] — 2026-10-16

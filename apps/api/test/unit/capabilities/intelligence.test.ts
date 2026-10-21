@@ -12,11 +12,15 @@ import {
   createArtificialAnalysisSource,
   createCapabilityCatalogStore,
   createExternalIdentityResolver,
+  LOCAL_EVAL_GRADER_VERSION,
+  LOCAL_EVAL_NORMALIZATION_VERSION,
   LOCAL_EVAL_SOURCE_ID,
+  LOCAL_EVAL_SUITE_VERSION,
   parseArtificialAnalysisPayload,
   parseLocalEvaluationArtifact,
   resolveArtificialAnalysisApiKey,
   SHIPPED_CAPABILITY_CATALOG,
+  type SourceComparability,
   type SourceObservation,
   syncCapabilityIntelligence,
 } from "../../../src/services/capabilities"
@@ -613,6 +617,110 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     expect((await repo.getPublishedSnapshot())?.revision).toBe(olderCandidate.revision)
   })
 
+  test("Local Evaluation sync preserves new provenance across same-score runs and delayed replay", async () => {
+    const repo = createMemoryCapabilityRepo()
+    const initialInput = {
+      file: "result-2026-10-15.json",
+      profileId: "openai/gpt-oss-120b",
+      route: "gpt-oss-route",
+      wireModel: "gpt-oss/wire",
+      recordedAt: "2026-10-15T00:00:00.000Z",
+      suite: LOCAL_EVAL_SUITE_VERSION,
+      graderVersion: LOCAL_EVAL_GRADER_VERSION,
+    }
+    const newInput = {
+      ...initialInput,
+      file: "result-2026-10-16.json",
+      route: "gpt-oss-route-new",
+      wireModel: "gpt-oss/wire-new",
+      recordedAt: "2026-10-16T00:00:00.000Z",
+    }
+    const artifactFor = (input: typeof initialInput, generatedAt: string) => ({
+      suite: LOCAL_EVAL_SUITE_VERSION,
+      graderVersion: LOCAL_EVAL_GRADER_VERSION,
+      normalization: LOCAL_EVAL_NORMALIZATION_VERSION,
+      generatedAt,
+      inputs: [input],
+      scores: { [input.profileId]: { general: 0.82 } },
+    })
+    let currentArtifact: unknown = artifactFor(initialInput, "2026-10-15T01:00:00.000Z")
+    const source = {
+      id: LOCAL_EVAL_SOURCE_ID,
+      fetch: async () => {
+        const parsed = parseLocalEvaluationArtifact(currentArtifact, { ingestedAt: NOW })
+        return {
+          observations: parsed.observations,
+          metadata: {
+            source: LOCAL_EVAL_SOURCE_ID,
+            endpoint: "fixture://local-eval",
+            tier: null,
+            pagesFetched: 1,
+            recordsRetrieved: parsed.observations.length,
+            observationsEmitted: parsed.observations.length,
+            matchedModels: parsed.matchedCanonicalIds,
+            unresolvedSourceModelIds: parsed.unresolvedSourceModelIds,
+            rejections: parsed.rejections,
+            rateLimit: { limit: null, remaining: null, reset: null },
+          },
+        }
+      },
+    }
+    const sync = () =>
+      syncCapabilityIntelligence({
+        repository: repo,
+        sources: [source],
+        now: () => NOW,
+      })
+
+    const first = await sync()
+    expect(first.insertedObservations).toBe(1)
+    const originalStored = repo.observations[0]
+    if (!originalStored) throw new Error("missing first local observation")
+    expect(originalStored.provenance).toMatchObject({
+      inputs: [{ file: initialInput.file, recordedAt: initialInput.recordedAt }],
+    })
+
+    currentArtifact = artifactFor(initialInput, "2026-10-16T01:00:00.000Z")
+    const timestampOnlyReingest = await sync()
+    expect(timestampOnlyReingest.insertedObservations).toBe(0)
+    expect(timestampOnlyReingest.deduplicatedObservations).toBe(1)
+    expect(timestampOnlyReingest.publishedRevision).toBe(first.publishedRevision)
+
+    currentArtifact = artifactFor(newInput, "2026-10-16T02:00:00.000Z")
+    const newRun = await sync()
+    expect(newRun.insertedObservations).toBe(1)
+    const gptOssProfile = newRun.compiled.catalog.get("openai/gpt-oss-120b")
+    expect(gptOssProfile).toBeDefined()
+    expect(gptOssProfile?.scores.general).toBeNull()
+    const newStored = repo.observations.find(
+      (row) => row.fingerprint !== originalStored.fingerprint,
+    )
+    if (!newStored) throw new Error("missing observation for the new local run")
+    expect(newStored.observedAt).toEqual(new Date(newInput.recordedAt))
+    expect(newStored.provenance).toMatchObject({
+      inputs: [{ file: newInput.file, recordedAt: newInput.recordedAt }],
+    })
+    expect(newRun.publishedRevision).not.toBe(first.publishedRevision)
+
+    currentArtifact = artifactFor(initialInput, "2026-10-17T01:00:00.000Z")
+    const delayedReplay = await sync()
+    expect(delayedReplay.insertedObservations).toBe(0)
+    expect(delayedReplay.deduplicatedObservations).toBe(1)
+    expect(delayedReplay.publishedRevision).toBe(newRun.publishedRevision)
+    const retainedNewRun = repo.observations.find(
+      (row) => row.fingerprint === newStored.fingerprint,
+    )
+    expect(retainedNewRun?.provenance).toMatchObject({
+      inputs: [{ file: newInput.file, recordedAt: newInput.recordedAt }],
+    })
+
+    currentArtifact = artifactFor(newInput, "2026-10-18T01:00:00.000Z")
+    const sameRunReingest = await sync()
+    expect(sameRunReingest.insertedObservations).toBe(0)
+    expect(sameRunReingest.deduplicatedObservations).toBe(1)
+    expect(sameRunReingest.publishedRevision).toBe(newRun.publishedRevision)
+  })
+
   test("repeated sync is idempotent and failed sync / failed publish retains last-known-good snapshot", async () => {
     const repo = createMemoryCapabilityRepo()
     let currentPayload: unknown = VALID_AA_PAGE_1
@@ -811,5 +919,52 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
       comparability: comparable,
     })
     expect(compiled.catalog.get(id)?.scores.tool_use).toBeNull()
+  })
+  test("AA registry comparability gates all scores without dropping retained evidence", () => {
+    const parsed = parseArtificialAnalysisPayload(VALID_AA_PAGE_1, {
+      ingestedAt: NOW,
+      observedAt: NOW,
+    })
+    const sonnetObservations = parsed.observations.filter(
+      (row) => row.canonicalModelId === "anthropic/claude-sonnet-4-6",
+    )
+    const registries: SourceComparability[] = [
+      {
+        [ARTIFICIAL_ANALYSIS_SOURCE_ID]: {
+          comparable: false,
+          calibration: null,
+          reason: "revoked",
+        },
+      },
+      {},
+      {
+        [ARTIFICIAL_ANALYSIS_SOURCE_ID]: {
+          comparable: true,
+          calibration: null,
+          reason: "calibration missing",
+        },
+      },
+    ]
+    for (const comparability of registries) {
+      const compiled = compileCapabilitySnapshot(sonnetObservations, {
+        generatedAt: NOW,
+        comparability,
+      })
+      const withoutEvidence = compileCapabilitySnapshot([], { generatedAt: NOW, comparability })
+      const sonnet = compiled.catalog.get("anthropic/claude-sonnet-4-6")
+      expect(sonnet?.scores.general).toBeNull()
+      expect(sonnet?.scores.coding).toBeNull()
+      expect(sonnet?.scores.agentic).toBeNull()
+      expect(sonnet?.scores.speed).toBeNull()
+      expect(compiled.summary.resolvedObservations).toBe(sonnetObservations.length)
+      expect(compiled.snapshot.evidenceDigest).not.toBe(withoutEvidence.snapshot.evidenceDigest)
+    }
+
+    const defaultComparable = compileCapabilitySnapshot(sonnetObservations, { generatedAt: NOW })
+    const defaultSonnet = defaultComparable.catalog.get("anthropic/claude-sonnet-4-6")
+    expect(defaultSonnet?.scores.general).toBe(0.642)
+    expect(defaultSonnet?.scores.coding).toBe(0.615)
+    expect(defaultSonnet?.scores.agentic).toBe(0.68)
+    expect(defaultSonnet?.scores.speed).not.toBeNull()
   })
 })

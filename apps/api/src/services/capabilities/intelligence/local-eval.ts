@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -8,12 +9,7 @@ import {
   LOCAL_EVAL_NORMALIZATION_VERSION,
   LOCAL_EVAL_SUITE_VERSION,
 } from "./local-eval-versions"
-import {
-  type CapabilityEvidenceSource,
-  type EvidenceFetchResult,
-  observationFingerprint,
-  type SourceObservation,
-} from "./types"
+import type { CapabilityEvidenceSource, EvidenceFetchResult, SourceObservation } from "./types"
 
 /**
  * Distpatch Local Evaluation Framework (`distpatch-local-eval`) evidence adapter.
@@ -153,7 +149,17 @@ export function parseLocalEvaluationArtifact(
     const canonicalModelId = resolver.resolve(LOCAL_EVAL_SOURCE_ID, modelId)
     if (canonicalModelId !== null) matchedSet.add(canonicalModelId)
     else unresolvedSet.add(modelId)
-    const modelInputs = inputsByModel.get(modelId) ?? []
+    const modelInputs = [...(inputsByModel.get(modelId) ?? [])]
+      .map(({ file, profileId, route, wireModel, recordedAt, suite, graderVersion }) => ({
+        file,
+        profileId,
+        route,
+        wireModel,
+        recordedAt,
+        suite,
+        graderVersion,
+      }))
+      .sort(compareLocalEvalInputProvenance)
     const recorded = modelInputs.map((input) => (validDate(input.recordedAt) as Date).getTime())
     // A measurement is as old as its newest recorded run. Provenance-free (historical) artifacts
     // fall back to the artifact time, then the caller's, then the epoch, so they never look fresh
@@ -177,40 +183,36 @@ export function parseLocalEvaluationArtifact(
       const val = dimMap[dimension]
       const rawVal = rawDimMap[dimension]
 
-      if (typeof val === "number" && Number.isFinite(val)) {
-        if (val < 0 || val > 1) {
-          throw new Error(
-            `Local evaluation score for ${modelId}.${dimension} (${val}) is outside [0, 1]`,
+      if (typeof val === "number" && Number.isFinite(val) && (val < 0 || val > 1)) {
+        throw new Error(
+          `Local evaluation score for ${modelId}.${dimension} (${val}) is outside [0, 1]`,
+        )
+      }
+
+      // Saturation is authoritative even if a malformed artifact also supplies a score. Preserve
+      // only its raw mean as audit evidence, never as a comparable local_eval_* observation.
+      if (saturatedDims.has(dimension)) {
+        if (typeof rawVal === "number" && Number.isFinite(rawVal) && rawVal >= 0 && rawVal <= 1) {
+          observations.push(
+            emitLocalMetric(
+              modelId,
+              canonicalModelId,
+              `${metricPrefix}saturated_${dimension}`,
+              rawVal,
+              meta,
+            ),
           )
         }
+        continue
+      }
+
+      if (typeof val === "number" && Number.isFinite(val)) {
         observations.push(
           emitLocalMetric(
             modelId,
             canonicalModelId,
             `${metricPrefix}local_eval_${dimension}`,
             val,
-            meta,
-          ),
-        )
-        continue
-      }
-
-      // Saturated dimension: the published score is `null` but the raw suite mean is a measured
-      // value. Retain it as audit evidence under a `saturated_` metric that the compiler never
-      // converts into a preference score.
-      if (
-        saturatedDims.has(dimension) &&
-        typeof rawVal === "number" &&
-        Number.isFinite(rawVal) &&
-        rawVal >= 0 &&
-        rawVal <= 1
-      ) {
-        observations.push(
-          emitLocalMetric(
-            modelId,
-            canonicalModelId,
-            `${metricPrefix}saturated_${dimension}`,
-            rawVal,
             meta,
           ),
         )
@@ -241,6 +243,46 @@ function isInputProvenance(value: unknown): value is LocalEvalInputProvenance {
   )
 }
 
+function compareLocalEvalInputProvenance(
+  left: LocalEvalInputProvenance,
+  right: LocalEvalInputProvenance,
+): number {
+  return (
+    compareStrings(left.file, right.file) ||
+    compareStrings(left.profileId, right.profileId) ||
+    compareStrings(left.route, right.route) ||
+    compareStrings(left.wireModel, right.wireModel) ||
+    compareStrings(left.recordedAt, right.recordedAt) ||
+    compareStrings(left.suite, right.suite) ||
+    compareStrings(left.graderVersion, right.graderVersion)
+  )
+}
+
+function compareStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
+}
+
+function localEvalObservationFingerprint(input: {
+  readonly modelId: string
+  readonly metric: string
+  readonly benchmark: string
+  readonly benchmarkVersion: string
+  readonly rawValue: number
+  readonly inputProvenance: readonly LocalEvalInputProvenance[]
+}): string {
+  const canonical = JSON.stringify({
+    source: LOCAL_EVAL_SOURCE_ID,
+    sourceModelId: input.modelId.trim().toLowerCase(),
+    metric: input.metric,
+    benchmark: input.benchmark,
+    benchmarkVersion: input.benchmarkVersion,
+    rawValue: Number(input.rawValue.toFixed(6)),
+    unit: "score_0_1",
+    inputProvenance: input.inputProvenance,
+  })
+  return `sha256:${createHash("sha256").update(canonical).digest("hex")}`
+}
+
 function emitLocalMetric(
   modelId: string,
   canonicalModelId: string | null,
@@ -256,14 +298,13 @@ function emitLocalMetric(
   },
 ): SourceObservation {
   const benchmarkVersion = `${meta.normalization}/${meta.grader}`
-  const fingerprint = observationFingerprint({
-    source: LOCAL_EVAL_SOURCE_ID,
-    sourceModelId: modelId,
+  const fingerprint = localEvalObservationFingerprint({
+    modelId,
     metric,
     benchmark: meta.suite,
     benchmarkVersion,
     rawValue,
-    unit: "score_0_1",
+    inputProvenance: meta.inputProvenance,
   })
   return {
     source: LOCAL_EVAL_SOURCE_ID,

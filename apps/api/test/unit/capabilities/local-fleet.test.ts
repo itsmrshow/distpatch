@@ -296,6 +296,60 @@ describe("Local Evaluation trust boundary", () => {
     expect(parsed.observations[0]?.provenance.graderVersion).toBe(LOCAL_EVAL_GRADER_VERSION)
   })
 
+  test("local observation identity tracks input runs, not generated time or input order", () => {
+    const firstInput = stamped.inputs[0]
+    if (!firstInput) throw new Error("missing stamped local input")
+    const original = metrics(stamped).observations[0]
+    const generatedAtOnly = metrics({
+      ...stamped,
+      generatedAt: "2026-10-17T00:00:00.000Z",
+    }).observations[0]
+    expect(generatedAtOnly?.fingerprint).toBe(original?.fingerprint)
+
+    const secondInput = {
+      ...firstInput,
+      file: "result-2.json",
+      route: "route-b",
+      wireModel: "wire/b",
+      recordedAt: "2026-10-16T00:00:00.000Z",
+    }
+    const withBothInputs = metrics({
+      ...stamped,
+      generatedAt: "2026-10-17T00:00:00.000Z",
+      inputs: [firstInput, secondInput],
+    }).observations[0]
+    const reversedInputs = metrics({
+      ...stamped,
+      generatedAt: "2026-10-18T00:00:00.000Z",
+      inputs: [secondInput, firstInput],
+    }).observations[0]
+    expect(reversedInputs?.fingerprint).toBe(withBothInputs?.fingerprint)
+    expect(reversedInputs?.provenance.inputs).toEqual(withBothInputs?.provenance.inputs)
+    expect(reversedInputs?.observedAt).toEqual(new Date("2026-10-16T00:00:00.000Z"))
+
+    const rerun = metrics({
+      ...stamped,
+      generatedAt: "2026-10-18T00:00:00.000Z",
+      inputs: [
+        {
+          ...firstInput,
+          file: "result-2026-10-17.json",
+          route: "route-c",
+          wireModel: "wire/c",
+          recordedAt: "2026-10-17T00:00:00.000Z",
+        },
+      ],
+    }).observations[0]
+    expect(rerun?.fingerprint).not.toBe(original?.fingerprint)
+    expect(rerun?.observedAt).toEqual(new Date("2026-10-17T00:00:00.000Z"))
+    expect(rerun?.provenance.inputs[0]).toMatchObject({
+      file: "result-2026-10-17.json",
+      route: "route-c",
+      wireModel: "wire/c",
+      recordedAt: "2026-10-17T00:00:00.000Z",
+    })
+  })
+
   test.each([
     ["missing grader version", { ...stamped, graderVersion: undefined }],
     ["pre-sandbox grader", { ...stamped, graderVersion: "distpatch-grader-v1-pre-sandbox" }],
@@ -335,6 +389,30 @@ describe("Local Evaluation trust boundary", () => {
     expect(
       compile(parsed.observations).catalog.get("xiaomimimo/mimo-v2.6-distill-qwen-9b")?.scores
         .reasoning,
+    ).toBeNull()
+  })
+
+  test("saturated raw audit takes precedence over a conflicting numeric score", () => {
+    const parsed = metrics({
+      ...stamped,
+      saturated: ["reasoning"],
+      scores: { "mimo/mimo-v2.6-distill-9b": { reasoning: 0.95 } },
+      raw: { "mimo/mimo-v2.6-distill-9b": { reasoning: 0.73 } },
+    })
+    expect(parsed.observations.map((o) => o.metric)).toEqual(["saturated_reasoning"])
+    expect(parsed.observations[0]?.rawValue).toBe(0.73)
+
+    const compiled = compile(parsed.observations, {
+      comparability: {
+        [LOCAL_EVAL_SOURCE_ID]: {
+          comparable: true,
+          calibration: "test-calibration",
+          reason: "test",
+        },
+      },
+    })
+    expect(
+      compiled.catalog.get("xiaomimimo/mimo-v2.6-distill-qwen-9b")?.scores.reasoning,
     ).toBeNull()
   })
 
