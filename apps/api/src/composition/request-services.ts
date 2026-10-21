@@ -182,7 +182,7 @@ export function createRequestServices(
   })
 
   const activeRequests = createActiveRequestRegistry(env.relayLifetimes)
-  // The boot-loaded capability snapshot plus warm discovery: resolving `auto-*` reads nothing else.
+  // The warm in-memory capability catalog plus warm discovery: resolving `auto-*` reads nothing else.
   const virtualModels: VirtualModelRouting = {
     capabilities: deps.capabilities,
     models: modelCatalogStore,

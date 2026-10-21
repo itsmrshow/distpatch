@@ -25,12 +25,12 @@ import type { RoutingCatalog, UpstreamOperation } from "./types"
  * is: no candidate enumeration, no catalog lookup, no selector — one namespace check. A
  * **virtual** request is resolved here, before account selection ever sees it: the active
  * descriptor's policy and requirements choose among the key's statically configured concrete
- * models (`semantic-candidates.ts`) against the boot-loaded capability catalog. A reserved name
+ * models (`semantic-candidates.ts`) against the warm in-memory capability catalog. A reserved name
  * that is not active, or one asked of an operation the catalog cannot judge, is refused. So
  * `selectAccounts()` never receives a virtual name.
  */
 
-/** What virtual resolution reads: the capability catalog loaded once at boot, and warm discovery. */
+/** What virtual resolution reads: the warm in-memory capability catalog, and warm discovery. */
 export interface VirtualModelRouting {
   readonly capabilities: ModelCapabilityCatalog
   readonly models?: CandidateModelsCatalog

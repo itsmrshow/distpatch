@@ -147,7 +147,12 @@ export const EXPLICIT_EXTERNAL_MODEL_MAPPINGS: readonly ExternalModelIdentityEnt
     canonicalId: "openai/gpt-oss-120b",
   },
   {
-    // The committed v1 artifact keyed this model by its earlier, pre-inventory profile id.
+    source: "distpatch-local-eval",
+    externalId: "xiaomimimo/mimo-v2.6-distill-qwen-9b",
+    canonicalId: "xiaomimimo/mimo-v2.6-distill-qwen-9b",
+  },
+  {
+    // The historical pre-sandbox artifact keyed this model by its earlier, pre-inventory profile id.
     source: "distpatch-local-eval",
     externalId: "mimo/mimo-v2.6-distill-9b",
     canonicalId: "xiaomimimo/mimo-v2.6-distill-qwen-9b",

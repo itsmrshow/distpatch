@@ -4,7 +4,7 @@ import type { VirtualModelDescriptor } from "./registry"
 
 /**
  * One virtual model's choice among concrete candidates: the descriptor's own policy and hard
- * requirements, the injected (boot-loaded) capability catalog, and nothing else — no accounts, no
+ * requirements, the injected in-memory capability catalog, and nothing else — no accounts, no
  * health, no quota. Pure and synchronous; the same inputs always give the same decision and digest.
  *
  * The one place a request's virtual model meets `selectModel()`, shared by the request path and

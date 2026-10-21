@@ -34,11 +34,13 @@ Resolution happens in the orchestrator immediately after `admitRoutingModel()` a
 session-binding read and every account decision. `selectAccounts()` — and the `GET /v1/models/:id`
 reachability probe, its only other caller — never receives `auto` or an `auto-*` name.
 
-The capability catalog is loaded once at boot (`main.ts::loadBootCapabilityCatalog`, override
-file included, malformed data still fails boot), logged with its revision, and the same immutable
-snapshot is injected through `RuntimeDeps.capabilities` into the dispatcher and the `/v1/models`
-routes (`VirtualModelRouting`). There is no singleton and no request-path file read, query,
-network call or catalog rebuild.
+The capability catalog is validated at boot (`main.ts::loadBootCapabilityCatalog`, override file
+read once, malformed data still fails boot), logged with its revision, and held by one warm store
+that adopts the published capability-intelligence snapshot at boot and on a jittered timer
+(`CATALOG_REFRESH_SECONDS`), keeping the last-known-good catalog when a refresh fails. That store is
+injected through `RuntimeDeps.capabilities` into the dispatcher and the `/v1/models` routes
+(`VirtualModelRouting`); each request reads its current immutable catalog reference. There is no
+singleton and no request-path file read, query, network call or catalog rebuild.
 
 ## Three model identities
 

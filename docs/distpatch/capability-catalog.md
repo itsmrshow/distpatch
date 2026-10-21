@@ -12,11 +12,15 @@ It does not choose a model (#8), resolve `auto-*` names (#9), or know anything a
 task classification -> model selection (#8 reads catalog) -> selectAccounts() -> context -> execution
 ```
 
-Loaded and validated **once at boot** (`main.ts::loadBootCapabilityCatalog`), its revision logged,
-and that same immutable snapshot injected through composition into virtual-model resolution
-([virtual-models.md](virtual-models.md), #9) — the only consumer. Fixed-model routing,
-translation and the real `/v1/models` entries never consult it; nothing re-reads the override
-file after boot.
+Validated **at boot** (`main.ts::loadBootCapabilityCatalog`: the shipped bootstrap plus the operator
+override file, which is read once; malformed data fails boot) and then held by one warm store
+(`createCapabilityCatalogStore`) that adopts the published capability-intelligence snapshot before
+the listener opens and re-checks Postgres on a jittered timer (`CATALOG_REFRESH_SECONDS`, default
+30). Each adoption validates the layered catalog and swaps one immutable reference; a failed
+refresh keeps the last-known-good catalog. That reference is injected through composition into
+virtual-model resolution ([virtual-models.md](virtual-models.md), #9) — the only consumer — and
+read synchronously. Fixed-model routing, translation and the real `/v1/models` entries never
+consult it; nothing re-reads the override file after boot.
 
 ## Identity
 
@@ -118,12 +122,19 @@ OpenRouter metadata (planned) ──────┘
   `median_output_tokens_per_second` and `median_time_to_first_token_seconds`). Pricing fields are
   stored as observations in Postgres for provenance but are **not** converted into a
   provider-independent semantic `cost` score.
-- **Implemented — Distpatch Local Evaluation Framework (`distpatch-local-eval`)**: versioned deterministic
-  suite (`apps/api/bench/calibration/`, `bin/calibrate`, code execution isolated inside a `bwrap`
-  sandbox with `--unshare-all`, scrubbed environment, isolated temporary filesystem, no network,
-  and resource/timeout limits). **Supplemental, stored evidence**: not cross-source comparable with
-  Artificial Analysis, so it does not write shared preference scores (see Cross-source
-  comparability). Saturated dimensions (> 0.90 across all measured models) stay withheld (`null`).
+- **Implemented — Distpatch Local Evaluation Framework (`distpatch-local-eval`)**: versioned
+  deterministic suite (`apps/api/bench/calibration/`, `bin/calibrate`). Model-generated code runs
+  under `bwrap` (`--unshare-all`: no network, private PID/IPC/UTS namespaces; `--clearenv`; read-only
+  system, input and root mounts; writes only to a `/tmp` tmpfs) inside a transient systemd user
+  scope whose cgroup limits are verified before the program starts (256 MiB memory, no swap, 64
+  tasks, one CPU), plus per-process `ulimit`s; stdout/stderr are bounded while read, and a timeout
+  or overflow kills the whole scope. If any of that cannot be established the run aborts
+  (`CalibrationSandboxUnavailableError`) instead of grading. Pass/fail is decided on the host from
+  raw observations of a fixed probe list (`distpatch-grader-v2-host-oracle`); expected values never
+  enter the sandbox. **Supplemental, stored evidence**: not cross-source comparable with Artificial
+  Analysis, so it does not write shared preference scores (see Cross-source comparability).
+  Saturated dimensions (> 0.90 across all measured models) stay withheld (`null`) and their raw
+  means are kept as non-compiling `saturated_*` audit observations.
 - **Planned future sources**:
   - **Hugging Face / OpenEvals**: reasoning, coding, and benchmark-specific capability evidence to
     fill dimensions external headline indexes omit.
@@ -184,12 +195,17 @@ unlisted source is not comparable.
 ### Local Evaluation trust boundary
 
 The normalized artifact must carry `suite`, `graderVersion` and `normalization`
-(`intelligence/local-eval-versions.ts`, shared by the harness and the reader). The source accepts
-only the current values; anything else (missing stamp, the pre-sandbox grader, another normalization)
-is rejected as production evidence and retained as `historical_*` observations — never as zero
-scores. The committed `evidence/capability-calibration-v1/scores.json` is stamped
-`distpatch-grader-v1-pre-sandbox`, so it is historical until models are re-run under the sandboxed
-grader.
+(`intelligence/local-eval-versions.ts`, shared by the harness and the reader), a `generatedAt`, and
+an `inputs` entry (file, route, wire model, `recordedAt`, suite, grader) for every model it scores.
+The source accepts only the current versions; anything else (missing stamp, an older grader, another
+normalization, a missing or mismatched input) is rejected as production evidence and retained as
+`historical_*` observations — never as zero scores. An observation is dated by the newest recorded
+run behind it, not by when it was ingested.
+
+`bin/calibrate score` normalizes only result files whose suite and grader equal the current ones
+and lists every other file under `excluded`, so `scores.json` states exactly which runs it rests
+on. Results from earlier graders are kept, unchanged, under
+`evidence/capability-calibration-v1/historical/pre-sandbox/`; they are not read by the source.
 
 ### Local model identity layers
 
@@ -223,9 +239,11 @@ DockerLM  GET {DOCKERLM_BASE_URL}/models        (OpenAI-compatible list, `meta.l
 
 Run with `bin/capabilities sync` (a manual sync fetches Artificial Analysis, Local Evaluation and
 every configured route source; `--route-fixture <file>` replays a saved `/v1/models` body,
-`--no-route-discovery` skips it). There is no scheduler yet; a future one calls the same
-`syncCapabilityIntelligence`. **Inference never calls `/v1/models`**: discovery runs only in the sync,
-and a test proves selection touches neither the network, the repository nor the discovery client.
+`--no-route-discovery` skips it). Sync and discovery have no scheduler yet; a future one calls the
+same `syncCapabilityIntelligence`. (The running router only *polls for published snapshots*; it
+never syncs.) **Inference never calls `/v1/models`**: discovery runs only in the sync, and a test
+drives a real dataplane request through virtual-model selection with fetch, the repository, the
+discovery client and the compiler all guarded, and asserts none of them is called.
 
 `RouteModelSource` (`route-discovery.ts`) is the provider-neutral contract (`id`, contributed `tags`,
 `discover()`); the llama-swap/DockerLM adapter is one implementation, and Ollama, MLX, another
@@ -278,6 +296,13 @@ If any stage fails (API outage, rate limit, schema drift, DB failure, or catalog
 publication aborts and the previously published snapshot (or static bootstrap catalog before the
 first sync) remains active. Inference never queries Postgres or external HTTP endpoints on the
 request path.
+
+Ordering: reading the observations and route inventory, compiling, saving the candidate and
+publishing it all run in one transaction that holds the publication advisory lock, and every sync
+compiles only after its own evidence writes commit. The last publisher therefore always compiled
+from the newest committed evidence, so overlapping `sync`/`compile` processes cannot regress the
+published snapshot. `generatedAt` describes a snapshot; it is not the ordering primitive. A partial
+unique index allows at most one `published` row.
 
 ### Observation history semantics
 
