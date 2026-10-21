@@ -78,7 +78,7 @@ export type {
   CapabilityIntelligenceRepository,
   CapabilityObservationInsert,
   CapabilityObservationInsertResult,
-  CapabilitySnapshotInsert,
+  CapabilitySnapshotCandidate,
 } from "./repositories/capability-intelligence-repository"
 export { createCapabilityIntelligenceRepository } from "./repositories/capability-intelligence-repository"
 export type {

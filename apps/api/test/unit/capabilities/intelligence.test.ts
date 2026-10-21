@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import type { CapabilitySnapshotInsert } from "@multi-ai-router/db"
+import type {
+  CapabilityObservationInsert,
+  CapabilitySnapshotCandidate,
+  CapabilitySnapshotInsert,
+} from "@multi-ai-router/db"
 import { redact, redactValue } from "../../../src/logging/redact"
 import {
   ARTIFICIAL_ANALYSIS_SOURCE_ID,
@@ -557,7 +561,7 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
 
   test("memory repository serializes publication, rejects invalid snapshots, and ignores clock skew", async () => {
     const repo = createMemoryCapabilityRepo()
-    const candidate: CapabilitySnapshotInsert = {
+    const candidate: CapabilitySnapshotCandidate = {
       revision: "memory-revision-a",
       generatedAt: NOW,
       compilerVersion: "compiler-v1",
@@ -567,9 +571,14 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
       payload: { value: "published" },
       summary: { observations: 1 },
     }
-    const publish = (snapshot: CapabilitySnapshotInsert) =>
+    const publish = (snapshot: CapabilitySnapshotCandidate) =>
       repo.publishSnapshotWithCurrentEvidence(async () => ({
         snapshot,
+        result: undefined,
+      }))
+    const publishUnchecked = (snapshot: CapabilitySnapshotInsert) =>
+      repo.publishSnapshotWithCurrentEvidence(async () => ({
+        snapshot: snapshot as unknown as CapabilitySnapshotCandidate,
         result: undefined,
       }))
     await publish(candidate)
@@ -596,7 +605,7 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     })
 
     await expect(
-      publish({
+      publishUnchecked({
         ...candidate,
         revision: "memory-revision-rejected",
         publicationState: "rejected",
@@ -615,6 +624,116 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     }
     await publish(olderCandidate)
     expect((await repo.getPublishedSnapshot())?.revision).toBe(olderCandidate.revision)
+  })
+
+  test("memory public publisher rejects historical rejected and non-candidate snapshots", async () => {
+    const repo = createMemoryCapabilityRepo()
+    const candidate = (revision: string, generatedAt: Date): CapabilitySnapshotCandidate => ({
+      revision,
+      generatedAt,
+      compilerVersion: "compiler-v1",
+      normalizerVersion: "normalizer-v1",
+      evidenceDigest: `sha256:${revision}`,
+      publicationState: "candidate",
+      payload: { revision },
+      summary: { revision },
+    })
+    const publish = (snapshot: CapabilitySnapshotCandidate) =>
+      repo.publishSnapshotWithCurrentEvidence(async () => ({
+        snapshot,
+        result: undefined,
+      }))
+    const publishUnchecked = (snapshot: CapabilitySnapshotInsert) =>
+      repo.publishSnapshotWithCurrentEvidence(async () => ({
+        snapshot: snapshot as unknown as CapabilitySnapshotCandidate,
+        result: undefined,
+      }))
+    const a = candidate("memory-revision-a", NOW)
+    const b = candidate("memory-revision-b", new Date(NOW.getTime() + 1_000))
+    await publish(a)
+    await publish(b)
+    const storedA = repo.snapshots.find((snapshot) => snapshot.revision === a.revision)
+    if (!storedA) throw new Error("missing superseded memory snapshot A")
+
+    await expect(
+      publishUnchecked({
+        ...a,
+        generatedAt: new Date(NOW.getTime() + 2_000),
+        publicationState: "rejected",
+        payload: { revision: a.revision, changed: true },
+      }),
+    ).rejects.toThrow(/rejected/)
+    expect(repo.snapshots.find((snapshot) => snapshot.revision === a.revision)).toEqual(storedA)
+    expect((await repo.getPublishedSnapshot())?.revision).toBe(b.revision)
+
+    for (const publicationState of ["published", "superseded"] as const) {
+      const neverPublished = {
+        ...candidate(`memory-invalid-${publicationState}`, new Date(NOW.getTime() + 3_000)),
+        publicationState,
+      }
+      await expect(publishUnchecked(neverPublished)).rejects.toThrow(/candidate/)
+      expect(
+        repo.snapshots.find((snapshot) => snapshot.revision === neverPublished.revision),
+      ).toBeUndefined()
+    }
+    expect((await repo.getPublishedSnapshot())?.revision).toBe(b.revision)
+  })
+
+  test("memory repository ignores ingestion-only replays but restamps later measurements", async () => {
+    const repo = createMemoryCapabilityRepo()
+    const measurementTime = (minute: number) =>
+      new Date(`2026-10-17T12:${String(minute).padStart(2, "0")}:00.000Z`)
+    const aTime = measurementTime(0)
+    const a = {
+      source: ARTIFICIAL_ANALYSIS_SOURCE_ID,
+      sourceModelId: "memory-recurrence-model",
+      canonicalModelId: "anthropic/claude-sonnet-4-6",
+      metric: "intelligence_index",
+      rawValue: 61,
+      unit: "index_100",
+      benchmark: "artificial_analysis_intelligence_index",
+      benchmarkVersion: "memory-test-v1",
+      fingerprint: "memory-recurrence-a",
+      observedAt: aTime,
+      ingestedAt: aTime,
+      sourceRef: "fixture:a",
+      provenance: { fixture: "a" },
+    } satisfies CapabilityObservationInsert
+    const bTime = measurementTime(1)
+    const b = {
+      ...a,
+      rawValue: 68,
+      fingerprint: "memory-recurrence-b",
+      observedAt: bTime,
+      ingestedAt: bTime,
+      sourceRef: "fixture:b",
+      provenance: { fixture: "b" },
+    }
+
+    expect(await repo.recordObservations([a])).toEqual({ inserted: 1, deduplicated: 0 })
+    expect(await repo.recordObservations([b])).toEqual({ inserted: 1, deduplicated: 0 })
+    expect(await repo.recordObservations([{ ...a, ingestedAt: measurementTime(2) }])).toEqual({
+      inserted: 0,
+      deduplicated: 1,
+    })
+    expect((await repo.listObservations()).at(-1)?.fingerprint).toBe(b.fingerprint)
+
+    const recurrenceA = {
+      ...a,
+      observedAt: measurementTime(3),
+      ingestedAt: measurementTime(3),
+    }
+    expect(await repo.recordObservations([recurrenceA])).toEqual({
+      inserted: 1,
+      deduplicated: 0,
+    })
+    const history = await repo.listObservations()
+    expect(history).toHaveLength(2)
+    expect(history.at(-1)).toMatchObject({
+      fingerprint: a.fingerprint,
+      observedAt: recurrenceA.observedAt,
+      ingestedAt: recurrenceA.ingestedAt,
+    })
   })
 
   test("Local Evaluation sync preserves new provenance across same-score runs and delayed replay", async () => {
@@ -644,10 +763,13 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
       scores: { [input.profileId]: { general: 0.82 } },
     })
     let currentArtifact: unknown = artifactFor(initialInput, "2026-10-15T01:00:00.000Z")
+    let ingestionClock = NOW
     const source = {
       id: LOCAL_EVAL_SOURCE_ID,
       fetch: async () => {
-        const parsed = parseLocalEvaluationArtifact(currentArtifact, { ingestedAt: NOW })
+        const parsed = parseLocalEvaluationArtifact(currentArtifact, {
+          ingestedAt: ingestionClock,
+        })
         return {
           observations: parsed.observations,
           metadata: {
@@ -669,7 +791,7 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
       syncCapabilityIntelligence({
         repository: repo,
         sources: [source],
-        now: () => NOW,
+        now: () => ingestionClock,
       })
 
     const first = await sync()
@@ -702,10 +824,15 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     })
     expect(newRun.publishedRevision).not.toBe(first.publishedRevision)
 
-    currentArtifact = artifactFor(initialInput, "2026-10-17T01:00:00.000Z")
+    ingestionClock = new Date(NOW.getTime() + 60_000)
     const delayedReplay = await sync()
     expect(delayedReplay.insertedObservations).toBe(0)
     expect(delayedReplay.deduplicatedObservations).toBe(1)
+    const retainedOriginalRun = repo.observations.find(
+      (row) => row.fingerprint === originalStored.fingerprint,
+    )
+    expect(retainedOriginalRun?.observedAt).toEqual(originalStored.observedAt)
+    expect(retainedOriginalRun?.ingestedAt).toEqual(originalStored.ingestedAt)
     expect(delayedReplay.publishedRevision).toBe(newRun.publishedRevision)
     const retainedNewRun = repo.observations.find(
       (row) => row.fingerprint === newStored.fingerprint,
@@ -713,6 +840,7 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     expect(retainedNewRun?.provenance).toMatchObject({
       inputs: [{ file: newInput.file, recordedAt: newInput.recordedAt }],
     })
+    expect(retainedNewRun?.observedAt).toEqual(new Date(newInput.recordedAt))
 
     currentArtifact = artifactFor(newInput, "2026-10-18T01:00:00.000Z")
     const sameRunReingest = await sync()

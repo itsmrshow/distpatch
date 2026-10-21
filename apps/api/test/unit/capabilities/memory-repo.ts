@@ -1,6 +1,7 @@
 import type {
   CapabilityIntelligenceRepository,
   CapabilityObservationRow,
+  CapabilitySnapshotCandidate,
   CapabilitySnapshotInsert,
   CapabilitySnapshotRow,
   RouteModelInventoryRow,
@@ -42,7 +43,7 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     }
   }
 
-  const saveSnapshotUnlocked = (snap: CapabilitySnapshotInsert): CapabilitySnapshotRow => {
+  const saveSnapshotUnlocked = (snap: CapabilitySnapshotCandidate): CapabilitySnapshotRow => {
     const idx = snapshots.findIndex((s) => s.revision === snap.revision)
     if (idx !== -1) {
       const current = snapshots[idx]
@@ -173,12 +174,7 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
           const existingIdx = observations.findIndex((o) => o.fingerprint === row.fingerprint)
           if (existingIdx !== -1) {
             const existing = observations[existingIdx]
-            if (
-              existing &&
-              (row.observedAt.getTime() < existing.observedAt.getTime() ||
-                (row.observedAt.getTime() === existing.observedAt.getTime() &&
-                  row.ingestedAt.getTime() <= existing.ingestedAt.getTime()))
-            ) {
+            if (existing && row.observedAt.getTime() <= existing.observedAt.getTime()) {
               deduplicated += 1
               continue
             }
@@ -240,6 +236,12 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
           observations: sortedObservations(),
           routeModels: sortedRouteRows(),
         })
+        const snapshot = built.snapshot as CapabilitySnapshotInsert
+        if (snapshot.publicationState !== "candidate") {
+          throw new Error(
+            `Cannot publish capability snapshot revision ${snapshot.revision} with publication state "${snapshot.publicationState}"; expected "candidate"`,
+          )
+        }
         if (failNextPublish) {
           failNextPublish = false
           throw new Error("simulated atomic publish transaction failure")

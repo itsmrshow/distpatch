@@ -22,10 +22,10 @@ import {
  * - Repeating a sync over identical upstream records inserts 0 new rows.
  * - A changed upstream score or new benchmark version produces a new `fingerprint` and inserts a
  *   new row, leaving earlier rows untouched.
- * - A value that *reappears* after an intermediate value B re-stamps its existing row only when
- *   its observation order advances; a delayed replay cannot move that fingerprint backwards.
+ * - A value that *reappears* after an intermediate value B re-stamps its existing row only when its
+ *   `observedAt` advances; a later `ingestedAt` alone does not make the same measurement fresh.
  * - Identity resolution rewrites `canonical_model_id` in place.
- *
+
  * Snapshot publication is atomic: promoting a candidate snapshot demotes any previously
  * `published` row to `superseded` and marks the target row `published` inside one database
  * transaction. A failed validation or failed transaction leaves the previous `published` row
@@ -65,8 +65,12 @@ export interface CapabilitySnapshotInsert {
   readonly publishedAt?: Date | null
 }
 
+export type CapabilitySnapshotCandidate = Omit<CapabilitySnapshotInsert, "publicationState"> & {
+  readonly publicationState: "candidate"
+}
+
 export interface CapabilityIntelligenceRepository {
-  /** Record fingerprint-deduplicated observations; newer recurrences restamp historical fingerprints. */
+  /** Record observations; a historical fingerprint is restamped only when `observedAt` advances. */
   recordObservations(
     rows: readonly CapabilityObservationInsert[],
   ): Promise<CapabilityObservationInsertResult>
@@ -94,13 +98,14 @@ export interface CapabilityIntelligenceRepository {
 
   /**
    * Compile and publish from one evidence read while holding the publication lock. The callback
-   * runs inside that transaction after observations and route models are read.
+   * runs inside that transaction after observations and route models are read, and must return a
+   * candidate snapshot; other publication states are refused before stored history is consulted.
    */
   publishSnapshotWithCurrentEvidence<T>(
     build: (evidence: {
       readonly observations: readonly CapabilityObservationRow[]
       readonly routeModels: readonly RouteModelInventoryRow[]
-    }) => Promise<{ readonly snapshot: CapabilitySnapshotInsert; readonly result: T }>,
+    }) => Promise<{ readonly snapshot: CapabilitySnapshotCandidate; readonly result: T }>,
   ): Promise<{ readonly publishedSnapshot: CapabilitySnapshotRow; readonly result: T }>
   /** Run an entire sync under a session-scoped lock, or report that another process owns it. */
   withSyncLock<T>(
@@ -141,9 +146,17 @@ const SNAPSHOT_PUBLISH_LOCK_CLASS = 0x726f_7574
 const SNAPSHOT_PUBLISH_LOCK_KEY = advisoryLockKey("capability_snapshot_publish")
 const CAPABILITY_SYNC_LOCK_KEY = advisoryLockKey("capability_intelligence_sync")
 
+function assertCandidateSnapshot(snapshot: CapabilitySnapshotInsert): void {
+  if (snapshot.publicationState !== "candidate") {
+    throw new Error(
+      `Cannot publish capability snapshot revision ${snapshot.revision} with publication state "${snapshot.publicationState}"; expected "candidate"`,
+    )
+  }
+}
+
 async function saveSnapshotInTransaction(
   tx: DatabaseExecutor,
-  snapshot: CapabilitySnapshotInsert,
+  snapshot: CapabilitySnapshotCandidate,
 ): Promise<CapabilitySnapshotRow> {
   const existing = await tx
     .select()
@@ -308,27 +321,20 @@ export function createCapabilityIntelligenceRepository(
             .select({
               id: capabilityObservations.id,
               observedAt: capabilityObservations.observedAt,
-              ingestedAt: capabilityObservations.ingestedAt,
             })
             .from(capabilityObservations)
             .where(eq(capabilityObservations.fingerprint, row.fingerprint))
             .limit(1)
 
           if (existingByFp !== undefined) {
-            // A historical fingerprint may reappear, but a delayed replay must never move its
-            // timestamp backwards or make it appear newer than evidence already committed.
+            // A recurrent value is new evidence only when its measurement timestamp advances.
+            // Ingestion time alone must not make an unchanged historical observation look fresh.
             const observedAt = row.observedAt.getTime()
             const existingObservedAt = existingByFp.observedAt.getTime()
-            const ingestedAt = row.ingestedAt.getTime()
-            const existingIngestedAt = existingByFp.ingestedAt.getTime()
-            if (
-              observedAt < existingObservedAt ||
-              (observedAt === existingObservedAt && ingestedAt <= existingIngestedAt)
-            ) {
+            if (observedAt <= existingObservedAt) {
               deduplicated += 1
               continue
             }
-
             await tx
               .update(capabilityObservations)
               .set({
@@ -451,6 +457,7 @@ export function createCapabilityIntelligenceRepository(
           .from(routeModelInventory)
           .orderBy(asc(routeModelInventory.source), asc(routeModelInventory.routeModelId))
         const built = await build({ observations, routeModels })
+        assertCandidateSnapshot(built.snapshot)
         await saveSnapshotInTransaction(tx, built.snapshot)
         const publishedSnapshot = await publishSnapshotInTransaction(
           tx,

@@ -4,6 +4,7 @@ import { defaultMigrationsFolder, runMigrations } from "../../src/migrate"
 import {
   type CapabilityIntelligenceRepository,
   type CapabilityObservationInsert,
+  type CapabilitySnapshotCandidate,
   type CapabilitySnapshotInsert,
   createCapabilityIntelligenceRepository,
 } from "../../src/repositories/capability-intelligence-repository"
@@ -38,25 +39,27 @@ function observation(input: {
   }
 }
 
-function snapshot(
-  revision: string,
-  generatedAt: Date,
-  publicationState: CapabilitySnapshotInsert["publicationState"] = "candidate",
-): CapabilitySnapshotInsert {
+function snapshot(revision: string, generatedAt: Date): CapabilitySnapshotCandidate {
   return {
     revision,
     generatedAt,
     compilerVersion: "publication-test-compiler",
     normalizerVersion: "publication-test-normalizer",
     evidenceDigest: `sha256:${revision}`,
-    publicationState,
+    publicationState: "candidate",
     payload: { revision },
     summary: { observations: 0 },
   }
 }
-async function publish(candidate: CapabilitySnapshotInsert) {
+async function publish(candidate: CapabilitySnapshotCandidate) {
   return repository.publishSnapshotWithCurrentEvidence(async () => ({
     snapshot: candidate,
+    result: undefined,
+  }))
+}
+async function publishUnchecked(snapshot: CapabilitySnapshotInsert) {
+  return repository.publishSnapshotWithCurrentEvidence(async () => ({
+    snapshot: snapshot as unknown as CapabilitySnapshotCandidate,
     result: undefined,
   }))
 }
@@ -110,7 +113,7 @@ describe.skipIf(!configuredUrl)("capability publication concurrency in Postgres"
 
   test("republishing a superseded revision preserves its first published snapshot", async () => {
     const generatedAt = new Date("2026-10-21T12:00:00Z")
-    const firstCandidate: CapabilitySnapshotInsert = {
+    const firstCandidate: CapabilitySnapshotCandidate = {
       ...snapshot(`recurrence-a-${crypto.randomUUID()}`, generatedAt),
       compilerVersion: "first-compiler",
       normalizerVersion: "first-normalizer",
@@ -146,6 +149,51 @@ describe.skipIf(!configuredUrl)("capability publication concurrency in Postgres"
     expect(
       (await repository.listSnapshots(1000)).filter((row) => row.publicationState === "published"),
     ).toHaveLength(1)
+  })
+
+  test("public publisher rejects historical rejected and non-candidate snapshots", async () => {
+    const generatedAt = new Date("2026-10-21T12:00:00Z")
+    const a = snapshot(`rejected-history-a-${crypto.randomUUID()}`, generatedAt)
+    const b = snapshot(
+      `rejected-history-b-${crypto.randomUUID()}`,
+      new Date("2026-10-21T13:00:00Z"),
+    )
+    await publish(a)
+    await publish(b)
+    const storedA = (await repository.listSnapshots(1000)).find(
+      (row) => row.revision === a.revision,
+    )
+    if (!storedA) throw new Error("missing superseded Postgres snapshot A")
+
+    await expect(
+      publishUnchecked({
+        ...a,
+        generatedAt: new Date("2026-10-21T14:00:00Z"),
+        publicationState: "rejected",
+        payload: { revision: a.revision, changed: true },
+      }),
+    ).rejects.toThrow(/rejected/)
+    expect(
+      (await repository.listSnapshots(1000)).find((row) => row.revision === a.revision),
+    ).toEqual(storedA)
+    expect((await repository.getPublishedSnapshot())?.revision).toBe(b.revision)
+
+    for (const publicationState of ["published", "superseded"] as const) {
+      const neverPublished: CapabilitySnapshotInsert = {
+        ...snapshot(
+          `invalid-first-${publicationState}-${crypto.randomUUID()}`,
+          new Date("2026-10-21T15:00:00Z"),
+        ),
+        publicationState,
+      }
+      await expect(publishUnchecked(neverPublished)).rejects.toThrow(/candidate/)
+      expect(
+        (await repository.listSnapshots(1000)).find(
+          (row) => row.revision === neverPublished.revision,
+        ),
+      ).toBeUndefined()
+    }
+    expect((await repository.getPublishedSnapshot())?.revision).toBe(b.revision)
   })
 
   test("simultaneous publications leave exactly one published row", async () => {
@@ -257,6 +305,79 @@ describe.skipIf(!configuredUrl)("capability publication concurrency in Postgres"
       fingerprint: b.fingerprint,
       observedAt: laterB.observedAt,
       ingestedAt: laterB.ingestedAt,
+    })
+  })
+
+  test("Local Eval replay with newer ingestion time does not restamp historical evidence", async () => {
+    const sourceModelId = `local-eval-replay-${crypto.randomUUID()}`
+    const measuredAt = (hour: number) => new Date(`2026-10-19T${hour}:00:00Z`)
+    const aObservedAt = measuredAt(10)
+    const a = {
+      ...observation({
+        key: `${sourceModelId}-a`,
+        sourceModelId,
+        rawValue: 61,
+        observedAt: aObservedAt,
+      }),
+      source: "distpatch-local-eval",
+      metric: "general",
+      provenance: {
+        inputs: [
+          {
+            file: "result-a.json",
+            profileId: "fixture/model",
+            route: "fixture-a",
+            wireModel: "fixture/a",
+            recordedAt: aObservedAt.toISOString(),
+          },
+        ],
+      },
+    }
+    const bObservedAt = measuredAt(11)
+    const b = {
+      ...observation({
+        key: `${sourceModelId}-b`,
+        sourceModelId,
+        rawValue: 68,
+        observedAt: bObservedAt,
+      }),
+      source: a.source,
+      metric: a.metric,
+      provenance: {
+        inputs: [
+          {
+            file: "result-b.json",
+            profileId: "fixture/model",
+            route: "fixture-b",
+            wireModel: "fixture/b",
+            recordedAt: bObservedAt.toISOString(),
+          },
+        ],
+      },
+    }
+    const delayedReplay = { ...a, ingestedAt: measuredAt(12) }
+
+    expect(await repository.recordObservations([a])).toEqual({ inserted: 1, deduplicated: 0 })
+    expect(await repository.recordObservations([b])).toEqual({ inserted: 1, deduplicated: 0 })
+    expect(await repository.recordObservations([delayedReplay])).toEqual({
+      inserted: 0,
+      deduplicated: 1,
+    })
+
+    const history = (await repository.listObservations()).filter(
+      (row) => row.sourceModelId === sourceModelId,
+    )
+    expect(history).toHaveLength(2)
+    expect(history.find((row) => row.fingerprint === a.fingerprint)).toMatchObject({
+      observedAt: a.observedAt,
+      ingestedAt: a.ingestedAt,
+      sourceRef: a.sourceRef,
+      provenance: a.provenance,
+    })
+    expect(history.at(-1)).toMatchObject({
+      fingerprint: b.fingerprint,
+      observedAt: b.observedAt,
+      ingestedAt: b.ingestedAt,
     })
   })
 
