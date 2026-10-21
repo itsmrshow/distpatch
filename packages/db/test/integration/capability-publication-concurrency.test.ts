@@ -108,6 +108,46 @@ describe.skipIf(!configuredUrl)("capability publication concurrency in Postgres"
     })
   })
 
+  test("republishing a superseded revision preserves its first published snapshot", async () => {
+    const generatedAt = new Date("2026-10-21T12:00:00Z")
+    const firstCandidate: CapabilitySnapshotInsert = {
+      ...snapshot(`recurrence-a-${crypto.randomUUID()}`, generatedAt),
+      compilerVersion: "first-compiler",
+      normalizerVersion: "first-normalizer",
+      evidenceDigest: "sha256:first-evidence",
+      payload: { generatedAt: generatedAt.toISOString(), revision: "A", immutable: true },
+      summary: { observations: 1, source: "first" },
+    }
+    const firstPublished = await publish(firstCandidate)
+    await publish(snapshot(`recurrence-b-${crypto.randomUUID()}`, new Date("2026-10-21T13:00:00Z")))
+
+    const republished = await publish({
+      ...firstCandidate,
+      generatedAt: new Date("2026-10-21T14:00:00Z"),
+      compilerVersion: "replacement-compiler",
+      normalizerVersion: "replacement-normalizer",
+      evidenceDigest: "sha256:replacement-evidence",
+      payload: { generatedAt: "2026-10-21T14:00:00.000Z", revision: "A", immutable: false },
+      summary: { observations: 99, source: "replacement" },
+    })
+
+    expect(republished.publishedSnapshot).toMatchObject({
+      id: firstPublished.publishedSnapshot.id,
+      revision: firstCandidate.revision,
+      publicationState: "published",
+      generatedAt,
+      publishedAt: generatedAt,
+      compilerVersion: firstCandidate.compilerVersion,
+      normalizerVersion: firstCandidate.normalizerVersion,
+      evidenceDigest: firstCandidate.evidenceDigest,
+      payload: firstCandidate.payload,
+      summary: firstCandidate.summary,
+    })
+    expect(
+      (await repository.listSnapshots(1000)).filter((row) => row.publicationState === "published"),
+    ).toHaveLength(1)
+  })
+
   test("simultaneous publications leave exactly one published row", async () => {
     for (let iteration = 0; iteration < 20; iteration += 1) {
       const candidates = Array.from({ length: 2 }, (_, candidateIndex) =>

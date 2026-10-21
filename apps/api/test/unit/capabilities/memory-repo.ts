@@ -46,7 +46,12 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     const idx = snapshots.findIndex((s) => s.revision === snap.revision)
     if (idx !== -1) {
       const current = snapshots[idx]
-      if (current && current.publicationState === "published") return current
+      if (
+        current &&
+        (current.publicationState === "published" || current.publicationState === "superseded")
+      ) {
+        return current
+      }
       const updated: CapabilitySnapshotRow = {
         id: current?.id ?? crypto.randomUUID(),
         revision: snap.revision,
@@ -95,7 +100,7 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     const published: CapabilitySnapshotRow = {
       ...target,
       publicationState: "published",
-      publishedAt,
+      publishedAt: target?.publicationState === "superseded" ? target.publishedAt : publishedAt,
     }
     snapshots[targetIdx] = published
     return published

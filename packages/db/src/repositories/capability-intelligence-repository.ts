@@ -151,7 +151,13 @@ async function saveSnapshotInTransaction(
     .where(eq(capabilitySnapshots.revision, snapshot.revision))
     .limit(1)
   if (existing[0] !== undefined) {
-    if (existing[0].publicationState === "published") return existing[0]
+    // `superseded` records prior publication; preserve every stored field when that revision returns.
+    if (
+      existing[0].publicationState === "published" ||
+      existing[0].publicationState === "superseded"
+    ) {
+      return existing[0]
+    }
     const [updated] = await tx
       .update(capabilitySnapshots)
       .set({
@@ -216,7 +222,10 @@ async function publishSnapshotInTransaction(
 
   const [published] = await tx
     .update(capabilitySnapshots)
-    .set({ publicationState: "published", publishedAt })
+    .set({
+      publicationState: "published",
+      ...(target.publicationState === "superseded" ? {} : { publishedAt }),
+    })
     .where(eq(capabilitySnapshots.revision, revision))
     .returning()
   if (published === undefined) {

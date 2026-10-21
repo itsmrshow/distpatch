@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import type { CapabilityObservationInsert, RouteModelInventoryRow } from "@multi-ai-router/db"
+import type {
+  CapabilityObservationInsert,
+  CapabilitySnapshotInsert,
+  RouteModelInventoryRow,
+} from "@multi-ai-router/db"
 import { createMemoryCapabilityRepo } from "./memory-repo"
 
 function observation(sourceModelId: string): CapabilityObservationInsert {
@@ -80,5 +84,59 @@ describe("memory capability repository concurrency semantics", () => {
     }))
 
     expect((await repository.listRouteModels())[0]?.firstSeenAt).toEqual(firstSeenAt)
+  })
+
+  test("republishing a superseded snapshot preserves its first publication metadata", async () => {
+    const repository = createMemoryCapabilityRepo()
+    const generatedAt = new Date("2026-10-21T12:00:00Z")
+    const original: CapabilitySnapshotInsert = {
+      revision: "memory-recurrence-a",
+      generatedAt,
+      compilerVersion: "first-compiler",
+      normalizerVersion: "first-normalizer",
+      evidenceDigest: "sha256:first",
+      publicationState: "candidate",
+      payload: { generatedAt: generatedAt.toISOString(), revision: "A" },
+      summary: { observations: 1 },
+    }
+    const publish = (snapshot: CapabilitySnapshotInsert) =>
+      repository.publishSnapshotWithCurrentEvidence(async () => ({
+        snapshot,
+        result: undefined,
+      }))
+
+    const firstPublished = await publish(original)
+    await publish({
+      ...original,
+      revision: "memory-recurrence-b",
+      generatedAt: new Date("2026-10-21T13:00:00Z"),
+      evidenceDigest: "sha256:intermediate",
+      payload: { revision: "B" },
+    })
+    const republished = await publish({
+      ...original,
+      generatedAt: new Date("2026-10-21T14:00:00Z"),
+      compilerVersion: "replacement-compiler",
+      normalizerVersion: "replacement-normalizer",
+      evidenceDigest: "sha256:replacement",
+      payload: { generatedAt: "2026-10-21T14:00:00.000Z", revision: "A-replaced" },
+      summary: { observations: 99 },
+    })
+
+    expect(republished.publishedSnapshot).toMatchObject({
+      id: firstPublished.publishedSnapshot.id,
+      revision: original.revision,
+      publicationState: "published",
+      generatedAt,
+      publishedAt: generatedAt,
+      compilerVersion: original.compilerVersion,
+      normalizerVersion: original.normalizerVersion,
+      evidenceDigest: original.evidenceDigest,
+      payload: original.payload,
+      summary: original.summary,
+    })
+    expect(repository.snapshots.filter((row) => row.publicationState === "published")).toHaveLength(
+      1,
+    )
   })
 })

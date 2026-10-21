@@ -218,4 +218,65 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
     expect(published?.revision).toBe(next.publishedRevision)
     expect(published?.summary).toMatchObject({ totalObservations: 2, unresolvedObservations: 1 })
   })
+
+  test("A-B-A route reconciliation republishes the original immutable snapshot", async () => {
+    let textInput = true
+    const routeSource = {
+      id: "publication-recurrence",
+      tags: ["local"],
+      discover: async () => ({
+        descriptors: [
+          {
+            routeModelId: "audit-model",
+            semanticModelId: "audit/model",
+            baseModelId: null,
+            derivativeModelId: null,
+            capabilities: { textInput, textOutput: true },
+          },
+        ],
+        rejected: [],
+      }),
+    }
+    const times = [
+      new Date("2026-10-21T10:00:00Z"),
+      new Date("2026-10-21T11:00:00Z"),
+      new Date("2026-10-21T12:00:00Z"),
+    ] as const
+    const syncAt = (generatedAt: Date) =>
+      syncCapabilityIntelligence({
+        repository,
+        sources: [],
+        routeSources: [routeSource],
+        bootstrap,
+        now: () => generatedAt,
+      })
+
+    const first = await syncAt(times[0])
+    const firstPublished = await repository.getPublishedSnapshot()
+    if (!firstPublished) throw new Error("first route snapshot was not published")
+    textInput = false
+    const second = await syncAt(times[1])
+    textInput = true
+    const third = await syncAt(times[2])
+    const republished = await repository.getPublishedSnapshot()
+
+    expect(second.publishedRevision).not.toBe(first.publishedRevision)
+    expect(third.publishedRevision).toBe(first.publishedRevision)
+    expect(third.publishedAt).toBe(first.publishedAt)
+    expect(republished).toMatchObject({
+      id: firstPublished.id,
+      revision: firstPublished.revision,
+      publicationState: "published",
+      generatedAt: firstPublished.generatedAt,
+      publishedAt: firstPublished.publishedAt,
+      compilerVersion: firstPublished.compilerVersion,
+      normalizerVersion: firstPublished.normalizerVersion,
+      evidenceDigest: firstPublished.evidenceDigest,
+      payload: firstPublished.payload,
+      summary: firstPublished.summary,
+    })
+    expect(
+      (await repository.listSnapshots(1000)).filter((row) => row.publicationState === "published"),
+    ).toHaveLength(1)
+  })
 })
