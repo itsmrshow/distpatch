@@ -92,11 +92,12 @@ const ORACLE_FRAME_START = "\u001eDISTPATCH_CALIBRATION_ORACLE:"
 const ORACLE_FRAME_END = "\u001f"
 
 interface OracleObservation {
-  readonly kind: "return" | "throw"
+  readonly kind: "return" | "throw" | "oversized"
   readonly value?: unknown
   readonly isError?: boolean
   readonly isRangeError?: boolean
   readonly message?: string | null
+  readonly thrown?: string
   readonly elapsedMs: number
 }
 
@@ -115,14 +116,17 @@ interface OracleResult {
 }
 
 const CANDIDATE_HOST_SOURCE = String.raw`
+import { writeSync as __importedWriteSync } from "node:fs"
+// Captured by value before the candidate loads: an import binding is live and could follow a
+// later reassignment of the module export.
+const __writeSync = __importedWriteSync
 const __Process = process
-const __stdout = __Process.stdout
-const __write = __stdout.write.bind(__stdout)
 const __json = JSON
 const __parse = __json.parse.bind(__json)
 const __stringify = __json.stringify.bind(__json)
 const __Array = Array
 const __Object = Object
+const __String = String
 const __Function = Function
 const __Reflect = Reflect
 const __Map = Map
@@ -184,19 +188,22 @@ const __targets = [
   Math,
   crypto,
   __Process,
-  __stdout,
   performance,
   globalThis,
 ]
-const __snapshots = new __Array(__targets.length)
-for (let i = 0; i < __targets.length; i++) {
-  const target = __targets[i]
-  const keys = __ownKeys(target)
-  const descriptors = new __Map()
-  for (let j = 0; j < keys.length; j++) {
-    __apply(__mapSet, descriptors, [keys[j], __getOwnPropertyDescriptor(target, keys[j])])
+let __snapshots
+function __captureRealm() {
+  const snapshots = new __Array(__targets.length)
+  for (let i = 0; i < __targets.length; i++) {
+    const target = __targets[i]
+    const keys = __ownKeys(target)
+    const descriptors = new __Map()
+    for (let j = 0; j < keys.length; j++) {
+      __apply(__mapSet, descriptors, [keys[j], __getOwnPropertyDescriptor(target, keys[j])])
+    }
+    snapshots[i] = { target, keys, descriptors, prototype: __getPrototypeOf(target) }
   }
-  __snapshots[i] = { target, keys, descriptors, prototype: __getPrototypeOf(target) }
+  __snapshots = snapshots
 }
 function __restoreRealm() {
   let intact = true
@@ -248,52 +255,124 @@ function __safeObject() {
 function __safeArray() {
   return __setPrototypeOf([], null)
 }
-function __encode(value, depth) {
+const __MAX_OBSERVATION_BYTES = 8192
+const __MAX_OBSERVATION_ITEMS = 4096
+function __oversizedObservation(elapsedMs) {
+  const observation = __safeObject()
+  observation.kind = "oversized"
+  observation.elapsedMs = elapsedMs
+  return observation
+}
+function __encode(value, depth, budget) {
   if (value === undefined) {
+    budget.bytes += 32
+    if (budget.bytes > __MAX_OBSERVATION_BYTES) budget.oversized = true
     const marker = __safeObject()
     marker.__oracleType = "undefined"
     return marker
   }
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+  if (value === null || typeof value === "boolean" || typeof value === "string" || typeof value === "number") {
+    budget.bytes +=
+      typeof value === "string"
+        ? value.length * 6 + 2
+        : typeof value === "number"
+          ? __stringify(value).length
+          : value === null
+            ? 4
+            : value
+              ? 4
+              : 5
+    if (budget.bytes > __MAX_OBSERVATION_BYTES) budget.oversized = true
     return value
-  if (__arrayIsArray(value) && depth < 32 && value.length <= 1024) {
+  }
+  if (__arrayIsArray(value) && depth < 32) {
+    const length = value.length
+    if (
+      length > 1024 ||
+      budget.items + length > __MAX_OBSERVATION_ITEMS
+    ) {
+      budget.oversized = true
+      return null
+    }
+    budget.items += length
+    budget.bytes += length === 0 ? 2 : length + 1
+    if (budget.bytes > __MAX_OBSERVATION_BYTES) {
+      budget.oversized = true
+      return null
+    }
     const items = __safeArray()
-    for (let i = 0; i < value.length; i++) items[i] = __encode(value[i], depth + 1)
+    for (let i = 0; i < length; i++) {
+      items[i] = __encode(value[i], depth + 1, budget)
+      if (budget.oversized) return null
+    }
     return items
   }
+  budget.bytes += 32
+  if (budget.bytes > __MAX_OBSERVATION_BYTES) budget.oversized = true
   const marker = __safeObject()
   marker.__oracleType = "object"
   return marker
 }
 function __returnObservation(value, elapsedMs) {
+  const budget = { bytes: 128, items: 0, oversized: false }
+  const encoded = __encode(value, 0, budget)
+  if (budget.oversized) return __oversizedObservation(elapsedMs)
   const observation = __safeObject()
   observation.kind = "return"
-  observation.value = __encode(value, 0)
+  observation.value = encoded
   observation.elapsedMs = elapsedMs
   return observation
+}
+function __safeThrownName(error) {
+  const type = typeof error
+  if (error === null) return "null"
+  if (type !== "object" && type !== "function") {
+    try {
+      const text = __String(error)
+      return text.length > 256 ? text.slice(0, 256) : text
+    } catch {
+      return type
+    }
+  }
+  try {
+    let prototype = __getPrototypeOf(error)
+    while (prototype !== null) {
+      const constructor = __getOwnPropertyDescriptor(prototype, "constructor")
+      if (constructor !== undefined && typeof constructor.value === "function") {
+        const name = __getOwnPropertyDescriptor(constructor.value, "name")
+        if (name !== undefined && typeof name.value === "string")
+          return name.value.length > 128 ? "Error" : name.value
+      }
+      prototype = __getPrototypeOf(prototype)
+    }
+  } catch {}
+  return type === "function" ? "Function" : "Object"
 }
 function __throwObservation(error, elapsedMs) {
   let isError = false
   let isRangeError = false
   let message = null
+  const thrown = __safeThrownName(error)
   try {
     isError = __isInstance(error, __ErrorPrototype)
     isRangeError = __isInstance(error, __RangeErrorPrototype)
-    if (isError && typeof error.message === "string") message = error.message
+    if (isError && typeof error.message === "string")
+      message = error.message.length > 1024 ? error.message.slice(0, 1024) : error.message
   } catch {}
   const observation = __safeObject()
   observation.kind = "throw"
   observation.isError = isError
   observation.isRangeError = isRangeError
   observation.message = message
+  observation.thrown = thrown
   observation.elapsedMs = elapsedMs
   return observation
 }
 function __emitObservation(index, observation) {
-  __write("__DISTPATCH_CALIBRATION_CHILD_OBSERVATION:" + __token + ":" + index + ":" + __stringify(observation) + "\n")
+  __writeSync(1, "__DISTPATCH_CALIBRATION_CHILD_OBSERVATION:" + __token + ":" + index + ":" + __stringify(observation) + "\n")
 }
 function __emitError(reason) {
-  __write("__DISTPATCH_CALIBRATION_CHILD_ERROR:" + __token + ":" + reason + "\n")
+  __writeSync(1, "__DISTPATCH_CALIBRATION_CHILD_ERROR:" + __token + ":" + reason + "\n")
 }
 function __suppressRejection(value) {
   if (value === null || (typeof value !== "object" && typeof value !== "function")) return
@@ -301,7 +380,7 @@ function __suppressRejection(value) {
     __apply(__promiseThen, value, [undefined, () => {}])
   } catch {}
 }
-__write("__DISTPATCH_CALIBRATION_CHILD_READY:" + __token + "\n")
+__writeSync(1, "__DISTPATCH_CALIBRATION_CHILD_READY:" + __token + "\n")
 let __requestText = ""
 for await (const chunk of __Process.stdin) __requestText += chunk.toString()
 let __request
@@ -318,6 +397,7 @@ if (__request !== undefined) {
     __emitError("candidate module failed to load")
   }
   if (__module !== undefined) {
+    __captureRealm()
     const __candidate = __module[__request.exportName]
     if (typeof __candidate !== "function") {
       __emitError("candidate export is not a function")
@@ -359,9 +439,7 @@ if (__request !== undefined) {
           try {
             observation = __returnObservation(value, elapsedMs)
           } catch {
-            __restoreRealm()
-            __emitError("candidate result could not be observed")
-            break
+            observation = __oversizedObservation(elapsedMs)
           }
         }
         if (!__restoreRealm()) {
@@ -392,9 +470,9 @@ const throwsErrorMessage = (message: string) => (o: OracleObservation) =>
   o.kind === "throw" && o.isError === true && o.message === message
 
 /**
- * Execute candidate code in its own module; the driver reports raw observations for a fixed host
- * probe list. The nonce is generated at runtime inside a closure (not embedded in /work/case.ts),
- * and expected values/pass logic never enter the sandbox.
+ * Execute candidate code in a separate Bun process inside the sandbox. The outer driver reads its
+ * report nonce from stdin and sends only the candidate module and fixed probe sources to the child.
+ * The child returns token-framed raw observations; expected values and pass/fail logic remain here.
  */
 async function execute(
   code: string,
@@ -403,8 +481,11 @@ async function execute(
 ): Promise<OracleResult> {
   const reportNonce = crypto.randomUUID()
   const candidate = code
-    .replace(/^export\s+(?=(?:async\s+)?(?:function|class|const|let|var|interface|type)\b)/gm, "")
-    .replace(/^export\s*\{[^}]*\}\s*;?\s*$/gm, "")
+    .replace(
+      /^[ \t]*export\s+(?=(?:async\s+)?(?:function|class|const|let|var|interface|type)\b)/gm,
+      "",
+    )
+    .replace(/^[ \t]*export\s*\{[^}]*\}\s*;?\s*$/gm, "")
   const candidateModule = `${candidate}\nexport { ${exportName} }\n`
   const probeSpecifications = probes.map((probe) => ({
     source: probe.source,
@@ -445,14 +526,15 @@ if (__spawnFailed || !__child?.stdin || !__child.stdout) {
   let __childOutput = ""
   let __outputBytes = 0
   let __overflowed = false
+  const __maxChildOutputBytes = 65_536 + __probeSpecifications.length * 8_400
   const __decoder = new TextDecoder()
   for await (const chunk of __child.stdout) {
     __outputBytes += chunk.byteLength
-    if (__outputBytes <= 65_536) __childOutput += __decoder.decode(chunk, { stream: true })
+    if (__outputBytes <= __maxChildOutputBytes) __childOutput += __decoder.decode(chunk, { stream: true })
     else __overflowed = true
   }
   __childOutput += __decoder.decode()
-  const __exitCode = await __child.exited
+  await __child.exited
   if (__overflowed) {
     __report({ valid: false, observations: [] })
   } else {
@@ -461,8 +543,6 @@ if (__spawnFailed || !__child?.stdin || !__child.stdout) {
     const __readyEnd = __childOutput.indexOf("\\n", __readyAt)
     if (__readyAt === -1 || __readyEnd === -1) {
       __report({ launchFailed: true, valid: false, observations: [] })
-    } else if (__exitCode !== 0) {
-      __report({ valid: false, observations: [] })
     } else {
       const __childNonce = __childOutput.slice(__readyAt + __readyPrefix.length, __readyEnd)
       if (!/^[0-9a-f-]{36}$/i.test(__childNonce)) {
@@ -502,13 +582,16 @@ if (__spawnFailed || !__child?.stdin || !__child.stdout) {
             if (
               __observation === null ||
               typeof __observation !== "object" ||
-              (__observation.kind !== "return" && __observation.kind !== "throw") ||
+              (__observation.kind !== "return" &&
+                __observation.kind !== "throw" &&
+                __observation.kind !== "oversized") ||
               typeof __observation.elapsedMs !== "number" ||
               !Number.isFinite(__observation.elapsedMs) ||
-              ( __observation.kind === "return" && !("value" in __observation)) ||
-              ( __observation.kind === "throw" &&
+              (__observation.kind === "return" && !("value" in __observation)) ||
+              (__observation.kind === "throw" &&
                 (typeof __observation.isError !== "boolean" ||
                   typeof __observation.isRangeError !== "boolean" ||
+                  typeof __observation.thrown !== "string" ||
                   !("message" in __observation) ||
                   (__observation.message !== null && typeof __observation.message !== "string")))
             ) {
@@ -565,7 +648,7 @@ if (__spawnFailed || !__child?.stdin || !__child.stdout) {
       if (
         value === null ||
         typeof value !== "object" ||
-        (value.kind !== "return" && value.kind !== "throw") ||
+        (value.kind !== "return" && value.kind !== "throw" && value.kind !== "oversized") ||
         typeof value.elapsedMs !== "number" ||
         !Number.isFinite(value.elapsedMs)
       )
@@ -575,6 +658,7 @@ if (__spawnFailed || !__child?.stdin || !__child.stdout) {
         value.kind === "throw" &&
         (typeof value.isError !== "boolean" ||
           typeof value.isRangeError !== "boolean" ||
+          typeof value.thrown !== "string" ||
           !("message" in value) ||
           (value.message !== null && typeof value.message !== "string"))
       )
@@ -608,7 +692,10 @@ function displayedObservation(observation: OracleObservation | undefined): unkno
       ? undefined
       : observation.value
   }
-  const type = observation.isRangeError ? "RangeError" : observation.isError ? "Error" : "Error"
+  if (observation.kind === "oversized") return "observation exceeded size limit"
+  const type =
+    observation.thrown ??
+    (observation.isRangeError ? "RangeError" : observation.isError ? "Error" : "Error")
   return `threw ${type}${observation.message ? `: ${observation.message}` : ""}`
 }
 

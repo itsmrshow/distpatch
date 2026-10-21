@@ -7,6 +7,6 @@
  * bumps the matching constant; older artifacts then stay stored as historical evidence only.
  */
 export const LOCAL_EVAL_SUITE_VERSION = "distpatch-calibration-v1"
-/** Host-side oracle grader; older sandbox and pre-sandbox outputs are historical only. */
-export const LOCAL_EVAL_GRADER_VERSION = "distpatch-grader-v2-host-oracle"
+/** Host-side observation oracle v3; older graders are historical only. */
+export const LOCAL_EVAL_GRADER_VERSION = "distpatch-grader-v3-host-oracle"
 export const LOCAL_EVAL_NORMALIZATION_VERSION = "distpatch-norm-v1"

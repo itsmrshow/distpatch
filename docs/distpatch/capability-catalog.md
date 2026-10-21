@@ -130,7 +130,7 @@ OpenRouter metadata (planned) ──────┘
   tasks, one CPU), plus per-process `ulimit`s; stdout/stderr are bounded while read, and a timeout
   or overflow kills the whole scope. If any of that cannot be established the run aborts
   (`CalibrationSandboxUnavailableError`) instead of grading. Pass/fail is decided on the host from
-  raw observations of a fixed probe list (`distpatch-grader-v2-host-oracle`); expected values never
+  raw observations of a fixed probe list (`distpatch-grader-v3-host-oracle`); expected values never
   enter the sandbox. **Supplemental, stored evidence**: not cross-source comparable with Artificial
   Analysis, so it does not write shared preference scores (see Cross-source comparability).
   Saturated dimensions (> 0.90 across all measured models) stay withheld (`null`) and their raw

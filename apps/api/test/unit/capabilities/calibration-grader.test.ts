@@ -592,6 +592,138 @@ export function slugify(_input: string): string { return "wrong" }
     expect(checks.slice(0, 5).every((entry) => !entry.pass)).toBe(true)
     expect(checks.find((entry) => entry.name === "confirmed green")?.pass).toBe(false)
   }, 60_000)
+  test("stdout fast-path sink hooks cannot forge observations", async () => {
+    const answer = fenced(`
+const expected = [5415, 2700, 7200, 10, 3605]
+function rewrite(data: unknown): unknown {
+  if (typeof data !== "string") return data
+  const match = /^(__DISTPATCH_CALIBRATION_CHILD_OBSERVATION:[0-9a-f-]+:)(\\d+):/.exec(data)
+  if (!match) return data
+  const index = Number(match[2])
+  const forged = index < 5
+    ? { kind: "return", value: expected[index], elapsedMs: 0 }
+    : { kind: "throw", isError: true, isRangeError: false, message: "invalid", thrown: "Error", elapsedMs: 0 }
+  return match[1] + index + ":" + JSON.stringify(forged) + "\\n"
+}
+const stdout = process.stdout as unknown as Record<PropertyKey, unknown>
+const symbol = Object.getOwnPropertySymbols(stdout).find((key) => String(key).includes("kWriteStreamFastPath"))
+if (symbol === undefined) throw new Error("Bun stdout fast path not found")
+const sink = stdout[symbol] as { write: (data: unknown) => unknown }
+const originalWrite = sink.write.bind(sink)
+Object.defineProperty(sink, "write", {
+  value: (data: unknown) => originalWrite(rewrite(data)),
+  configurable: true,
+  writable: true,
+})
+function parseDuration(_input: string): number { return 0 }
+`)
+    const checks = await textCase("coding.parse-duration").grade(answer)
+    expect(checks).toHaveLength(11)
+    expect(checks.every((entry) => !entry.pass)).toBe(true)
+  }, 30_000)
+
+  test("complete observations survive nonzero candidate exit statuses", async () => {
+    const exitCodeAnswer = fenced(`${parseDuration}\nprocess.exitCode = 2`)
+    const exitCodeChecks = await textCase("coding.parse-duration").grade(exitCodeAnswer)
+    expect(exitCodeChecks).toHaveLength(11)
+    expect(exitCodeChecks.every((entry) => entry.pass)).toBe(true)
+
+    const unhandledRejectionAnswer = fenced(`
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("timeout")), ms)
+  })
+  work.finally(() => clearTimeout(timer))
+  return Promise.race([work, timeout])
+}
+`)
+    const timeoutChecks = await textCase("coding.with-timeout").grade(unhandledRejectionAnswer)
+    expect(timeoutChecks).toHaveLength(4)
+    expect(timeoutChecks.every((entry) => entry.pass)).toBe(true)
+  }, 60_000)
+
+  test("candidate prototype extensions remain available to its probes", async () => {
+    const answer = fenced(`
+declare global {
+  interface Array<T> { chunkBy(size: number): T[][] }
+}
+Array.prototype.chunkBy = function <T>(this: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < this.length; i += size) out.push(this.slice(i, i + size))
+  return out
+}
+function chunk<T>(items: T[], size: number): T[][] {
+  if (!Number.isInteger(size) || size <= 0) throw new RangeError("size must be a positive integer")
+  return items.chunkBy(size)
+}
+`)
+    const checks = await textCase("coding.fix-chunk").grade(answer)
+    expect(checks).toHaveLength(6)
+    expect(checks.every((entry) => entry.pass)).toBe(true)
+  }, 30_000)
+
+  test("indented fenced exports are stripped before module export", async () => {
+    const answer = fenced(
+      parseDuration.replace("function parseDuration", "    export function parseDuration"),
+    )
+    const checks = await textCase("coding.parse-duration").grade(answer)
+    expect(checks).toHaveLength(11)
+    expect(checks.every((entry) => entry.pass)).toBe(true)
+  }, 30_000)
+
+  test("oversized and unencodable values fail only their own probe", async () => {
+    const wideAnswer = fenced(`
+function chunk<T>(items: T[], size: number): T[][] {
+  if (!Number.isInteger(size) || size <= 0) throw new RangeError("size must be a positive integer")
+  if (items.length === 1 && size === 3)
+    return Array.from({ length: 1000 }, () => Array.from({ length: 1000 }, () => 1)) as T[][]
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+  return out
+}
+`)
+    const wideChecks = await textCase("coding.fix-chunk").grade(wideAnswer)
+    expect(wideChecks.filter((entry) => entry.pass)).toHaveLength(5)
+    expect(wideChecks.find((entry) => entry.name === "chunk larger than array")?.pass).toBe(false)
+
+    const proxyAnswer = fenced(`
+function chunk<T>(items: T[], size: number): T[][] {
+  if (!Number.isInteger(size) || size <= 0) throw new RangeError("size must be a positive integer")
+  if (items.length === 1 && size === 3)
+    return new Proxy([], { get() { throw new Error("unencodable") } }) as T[][]
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+  return out
+}
+`)
+    const proxyChecks = await textCase("coding.fix-chunk").grade(proxyAnswer)
+    expect(proxyChecks.filter((entry) => entry.pass)).toHaveLength(5)
+    expect(proxyChecks.find((entry) => entry.name === "chunk larger than array")?.pass).toBe(false)
+  }, 60_000)
+
+  test("run_tests reports thrown values with their own type", async () => {
+    const c = CASES.find(
+      (candidate): candidate is ToolCase =>
+        candidate.kind === "tools" && candidate.id === "agentic.iterate-to-green",
+    )
+    if (!c) throw new Error("missing iterate-to-green tool case")
+    const typeErrorSource = slugify.replace(
+      '  return s.normalize("NFKD")',
+      '  if (s === "Hello World") throw new TypeError("broken")\n  return s.normalize("NFKD")',
+    )
+    const stringThrowSource = slugify.replace(
+      '  return s.normalize("NFKD")',
+      '  if (s === "Hello World") throw "broken"\n  return s.normalize("NFKD")',
+    )
+    const runTests = async (source: string) => {
+      const env = c.environment()
+      await env.call("write_file", { path: "src/slug.ts", content: source })
+      return await env.call("run_tests", {})
+    }
+    expect(await runTests(typeErrorSource)).toContain('received "threw TypeError: broken"')
+    expect(await runTests(stringThrowSource)).toContain('received "threw broken"')
+  }, 60_000)
 })
 
 describe("calibration grading pipeline", () => {
