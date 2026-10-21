@@ -187,6 +187,13 @@ export function parseLlamaSwapModelList(payload: unknown): RouteDiscoveryResult 
       }),
     })
   }
+  // Every entry refused is an unreadable listing, not an empty fleet: reconciling zero descriptors
+  // would mark every known route absent on a source that only broke its shape.
+  if (descriptors.length === 0) {
+    throw new RouteDiscoveryError(
+      `every model listing entry was rejected (${rejected.length}); refusing to treat it as removal`,
+    )
+  }
 
   return {
     descriptors: descriptors.sort((a, b) => (a.routeModelId < b.routeModelId ? -1 : 1)),

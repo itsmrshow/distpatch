@@ -181,6 +181,12 @@ describe("DockerLM / llama-swap discovery parsing", () => {
     expect(result.descriptors.map((d) => d.semanticModelId)).toEqual(["acme/first"])
   })
 
+  test("a listing whose every entry is rejected rejects the whole discovery", () => {
+    expect(() =>
+      parseLlamaSwapModelList(list({ object: "model" }, entry("x", "not-a-repo"))),
+    ).toThrow(RouteDiscoveryError)
+  })
+
   test.each([[null], [{}], [{ data: "nope" }], [list()]])(
     "an unreadable or empty listing rejects the whole discovery: %j",
     (body: unknown) => {
