@@ -27,8 +27,10 @@ const SECRET_FIELD_NAMES = new Set(
     "set-cookie",
     "x-api-key",
     "api-key",
+    // Artificial Analysis API keys may be passed under either configuration spelling.
     "aa_api_key",
     "artificial_analysis_api_key",
+    // Google's API-key header, and the quota project it is billed against. The project id is not a
     // credential, but it names a tenant, and a log line is the wrong place to learn one.
     "x-goog-api-key",
     "x-goog-user-project",

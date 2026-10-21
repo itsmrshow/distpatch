@@ -18,11 +18,12 @@ import { initSentry } from "./observability"
 import { ConfigDirError } from "./providers/claude-sdk/config-dir"
 import { adminAuthBootProblem } from "./services/admin-auth"
 import {
+  buildCapabilityCatalog,
   CapabilityCatalogError,
   createCapabilityCatalogStore,
-  loadCapabilityCatalog,
   type ModelCapabilityCatalog,
   readCapabilityOverridesFile,
+  SHIPPED_CAPABILITY_CATALOG,
 } from "./services/capabilities"
 import { createAccountProbe } from "./services/health/accountProbe"
 import { createClaudeCliProbe } from "./services/health/claudeCliProbe"
@@ -48,10 +49,9 @@ async function main(): Promise<void> {
   warnOnInsecureSessionCookie(env, logger)
 
   // Malformed shipped data or operator overrides exit here, before migrations or the listener.
-  // Validates bootstrap + overrides upfront; after migrations, any published capability-intelligence
-  // snapshot in Postgres is layered beneath operator overrides (or falls back to this bootstrap
-  // catalog if none has been published or the read fails).
-  const bootstrapCapabilities = loadBootCapabilityCatalog(env, logger)
+  // Read and validate overrides once; that exact immutable input is reused for future snapshot
+  // refreshes so a file change cannot split the boot catalog from the running store.
+  const { catalog: bootstrapCapabilities, overrides } = loadBootCapabilityCatalog(env, logger)
 
   // Migrations run before the listener opens. A failure exits non-zero rather than serving
   // traffic on a half-migrated schema — docs/idea/09-deployment.md#migrations.
@@ -68,17 +68,12 @@ async function main(): Promise<void> {
   // in-memory snapshot, while a jittered timer (plus boot refresh) adopts newly published
   // capability-intelligence snapshots without restarting. A failed refresh retains the held
   // last-known-good catalog.
-  const overrides =
-    env.modelCapabilityOverridesPath === null
-      ? null
-      : readCapabilityOverridesFile(env.modelCapabilityOverridesPath)
+  const capabilityRepository = createCapabilityIntelligenceRepository(database.db)
   const capabilityStore = createCapabilityCatalogStore({
     initialCatalog: bootstrapCapabilities,
     overrides,
     loadPublishedSnapshot: async () => {
-      const published = await createCapabilityIntelligenceRepository(
-        database.db,
-      ).getPublishedSnapshot()
+      const published = await capabilityRepository.getPublishedSnapshot()
       return published === undefined
         ? undefined
         : { revision: published.revision, payload: published.payload }
@@ -300,15 +295,22 @@ function readEnv(): Env {
   }
 }
 
-function loadBootCapabilityCatalog(env: Env, logger: Logger): ModelCapabilityCatalog {
+function loadBootCapabilityCatalog(
+  env: Env,
+  logger: Logger,
+): { readonly catalog: ModelCapabilityCatalog; readonly overrides: unknown } {
   try {
-    const catalog = loadCapabilityCatalog(env.modelCapabilityOverridesPath)
+    const overrides =
+      env.modelCapabilityOverridesPath === null
+        ? null
+        : readCapabilityOverridesFile(env.modelCapabilityOverridesPath)
+    const catalog = buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG, overrides)
     logger.info("model capability catalog loaded", {
       component: "capabilities",
       profiles: catalog.list().length,
       ...catalog.revision(),
     })
-    return catalog
+    return { catalog, overrides }
   } catch (error) {
     if (error instanceof CapabilityCatalogError) {
       process.stderr.write(`${error.message}\n`)

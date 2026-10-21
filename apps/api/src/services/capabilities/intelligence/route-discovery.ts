@@ -267,9 +267,9 @@ export function deriveDiscoveredProfiles(
       aliases.push(alias)
     }
 
-    const first = group[0] as StoredRouteModel
     const embedding = group.some((r) => isEmbeddingRoute(r.descriptor))
-    const base = first.descriptor.baseModelId
+    const bases = new Set(group.map((r) => r.descriptor.baseModelId))
+    const base = bases.size === 1 ? (bases.values().next().value ?? null) : null
     const agree = (pick: (d: RouteModelDescriptor) => boolean | null | undefined) => {
       const values = group.map((r) => pick(r.descriptor) ?? null)
       return values.every((v) => v === values[0]) ? (values[0] ?? null) : null

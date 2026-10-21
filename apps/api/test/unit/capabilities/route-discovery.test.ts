@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { NoEligibleModelError } from "@multi-ai-router/core"
 import {
   applyPublishedSnapshotToBootstrap,
@@ -15,9 +15,11 @@ import {
   SHIPPED_CAPABILITY_CATALOG,
   syncCapabilityIntelligence,
 } from "../../../src/services/capabilities"
+import * as compiler from "../../../src/services/capabilities/intelligence/compiler"
 import { chooseModel } from "../../../src/services/dataplane"
 import { selectVirtualModel, virtualModels } from "../../../src/services/virtual-models"
-import { account, catalog as routingCatalog } from "../dataplane/fixtures"
+import { bearer, CRYPTOR, harness, post } from "../../integration/harness"
+import { account, jsonResponse, catalog as routingCatalog } from "../dataplane/fixtures"
 import { dockerlmDescriptors, dockerlmListing, NOW, storedRows } from "./fleet-fixture"
 import { createMemoryCapabilityRepo } from "./memory-repo"
 
@@ -185,6 +187,13 @@ describe("DockerLM / llama-swap discovery parsing", () => {
     expect(() =>
       parseLlamaSwapModelList(list({ object: "model" }, entry("x", "not-a-repo"))),
     ).toThrow(RouteDiscoveryError)
+  })
+  test("routes sharing a semantic id keep lineage unknown when base identities disagree", () => {
+    const result = parseLlamaSwapModelList(
+      list(entry("one", "acme/shared"), entry("two", "acme/shared", {}, "other/base")),
+    )
+    const catalog = compileOnly(result.descriptors)
+    expect(catalog.get("acme/shared")?.baseModel).toBeNull()
   })
 
   test.each([[null], [{}], [{ data: "nope" }], [list()]])(
@@ -385,6 +394,21 @@ describe("sync: discovery feeds the published catalog, last-known-good survives"
       expect(publishedCatalog(repo).resolve("alpha")?.id).toBe("acme/alpha")
     }
   })
+  test("an all-rejected listing fails sync and preserves its last-known-good catalog", async () => {
+    const repo = createMemoryCapabilityRepo()
+    const host = hostSource(list(entry("alpha", "acme/alpha")))
+    await run(repo, host)
+    const rowsBefore = JSON.stringify(await repo.listRouteModels())
+    const revisionBefore = (await repo.getPublishedSnapshot())?.revision
+
+    host.answer = list({ id: "alpha", meta: { llamaswap: { invalid: true } } })
+    const result = await run(repo, host)
+
+    expect(result.routeDiscovery[0]).toMatchObject({ ok: false })
+    expect(JSON.stringify(await repo.listRouteModels())).toBe(rowsBefore)
+    expect((await repo.getPublishedSnapshot())?.revision).toBe(revisionBefore)
+    expect(publishedCatalog(repo).resolve("alpha")?.id).toBe("acme/alpha")
+  })
 
   test("a malformed entry for a known route keeps its last-known-good profile", async () => {
     const repo = createMemoryCapabilityRepo()
@@ -481,10 +505,75 @@ describe("auto-local is driven by discovery, not by a hard-coded fleet", () => {
   })
 })
 
+describe("catalog refresh ordering", () => {
+  test("a mutation during an older read prevents that snapshot from replacing current", async () => {
+    const pending: Array<
+      (value: { readonly revision: string; readonly payload: unknown } | undefined) => void
+    > = []
+    const store = createCapabilityCatalogStore({
+      initialCatalog: applyPublishedSnapshotToBootstrap(SHIPPED_CAPABILITY_CATALOG, null),
+      loadPublishedSnapshot: () => {
+        const deferred = Promise.withResolvers<
+          { readonly revision: string; readonly payload: unknown } | undefined
+        >()
+        pending.push(deferred.resolve)
+        return deferred.promise
+      },
+      refreshIntervalMs: 3_600_000,
+    })
+    const stale = compileCapabilitySnapshot([], {
+      generatedAt: NOW,
+      routeModels: storedRows(
+        parseLlamaSwapModelList(list(entry("stale", "acme/stale"))).descriptors,
+      ),
+    }).snapshot
+    const fresh = compileCapabilitySnapshot([], {
+      generatedAt: NOW,
+      routeModels: storedRows(
+        parseLlamaSwapModelList(list(entry("fresh", "acme/fresh"))).descriptors,
+      ),
+    }).snapshot
+
+    const firstRefresh = store.refresh()
+    await Promise.resolve()
+    const afterMutation = store.refreshAfterMutation()
+    pending[0]?.({ revision: stale.revision, payload: stale })
+    for (let attempt = 0; attempt < 8 && pending.length < 2; attempt++) {
+      await Promise.resolve()
+    }
+    expect(pending).toHaveLength(2)
+    expect(store.resolve("stale")).toBeNull()
+    pending[1]?.({ revision: fresh.revision, payload: fresh })
+    await Promise.all([firstRefresh, afterMutation])
+
+    expect(store.resolve("stale")).toBeNull()
+    expect(store.resolve("fresh")?.id).toBe("acme/fresh")
+    expect(store.publishedSnapshotRevision()).toBe(fresh.revision)
+  })
+
+  test("an invalid snapshot cannot partially replace the held catalog", async () => {
+    const initial = applyPublishedSnapshotToBootstrap(SHIPPED_CAPABILITY_CATALOG, null)
+    const store = createCapabilityCatalogStore({
+      initialCatalog: initial,
+      loadPublishedSnapshot: async () => ({ revision: "invalid", payload: {} }),
+      refreshIntervalMs: 3_600_000,
+    })
+
+    await expect(store.refresh()).rejects.toThrow()
+    expect(store.list()).toEqual(initial.list())
+    expect(store.revision()).toEqual(initial.revision())
+    expect(store.publishedSnapshotRevision()).toBeNull()
+    store.stop()
+  })
+})
+
 describe("request-path isolation", () => {
   const realFetch = globalThis.fetch
+  let restoreCompile: (() => void) | undefined
   afterEach(() => {
     globalThis.fetch = realFetch
+    restoreCompile?.()
+    restoreCompile = undefined
   })
 
   test("serving inference and selection never touches discovery, the repository or the network", async () => {
@@ -543,6 +632,88 @@ describe("request-path isolation", () => {
     expect(discoveries).toBe(1)
     expect(repositoryReads).toBe(reads)
     expect(networkCalls).toBe(0)
+    store.stop()
+  })
+
+  test("a real inference request cannot discover, load, compile or fetch catalog state", async () => {
+    const repo = createMemoryCapabilityRepo()
+    let discoveries = 0
+    const host = createLlamaSwapDiscoverySource({
+      baseUrl: "http://host/v1",
+      fetch: (async () => {
+        discoveries += 1
+        return asJson(dockerlmListing())
+      }) as unknown as typeof fetch,
+    })
+    await syncCapabilityIntelligence({
+      repository: repo,
+      sources: [],
+      routeSources: [host],
+      now: () => NOW,
+    })
+
+    let repositoryReads = 0
+    let requestPhase = false
+    const store = createCapabilityCatalogStore({
+      initialCatalog: applyPublishedSnapshotToBootstrap(SHIPPED_CAPABILITY_CATALOG, null),
+      loadPublishedSnapshot: async () => {
+        if (requestPhase) throw new Error("repository access during inference")
+        repositoryReads += 1
+        const published = await repo.getPublishedSnapshot()
+        return published
+          ? {
+              revision: published.revision,
+              payload: published.payload as CompiledCapabilitySnapshotPayload,
+            }
+          : undefined
+      },
+      refreshIntervalMs: 3_600_000,
+    })
+    await store.refresh()
+    const readsBeforeRequest = repositoryReads
+    requestPhase = true
+    let unexpectedNetworkCalls = 0
+    globalThis.fetch = (async () => {
+      unexpectedNetworkCalls += 1
+      throw new Error("network access during inference")
+    }) as unknown as typeof fetch
+    const compile = spyOn(compiler, "compileCapabilitySnapshot").mockImplementation(() => {
+      throw new Error("catalog compilation during inference")
+    })
+    restoreCompile = () => compile.mockRestore()
+    const models = dockerlmDescriptors().map((descriptor) => descriptor.routeModelId)
+    const { app, upstream } = harness({
+      accounts: [
+        account("dockerlm", {
+          provider: "openai-api",
+          apiKey: "sk-test",
+          cipher: CRYPTOR,
+          snapshot: { supportedModels: models },
+        }),
+      ],
+      responses: [() => jsonResponse(200, { choices: [{ message: { content: "ok" } }] })],
+      capabilities: store,
+    })
+
+    const response = await app.request(
+      "/v1/chat/completions",
+      post(
+        JSON.stringify({
+          model: "auto-local",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+        bearer(),
+      ),
+    )
+    await response.text()
+
+    expect(response.status).toBe(200)
+    expect(upstream.calls).toHaveLength(1)
+    expect(JSON.parse(upstream.calls[0]?.body ?? "{}").model).not.toBe("auto-local")
+    expect(discoveries).toBe(1)
+    expect(repositoryReads).toBe(readsBeforeRequest)
+    expect(unexpectedNetworkCalls).toBe(0)
+    expect(compile).not.toHaveBeenCalled()
     store.stop()
   })
 })
