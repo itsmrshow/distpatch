@@ -309,12 +309,14 @@ publication aborts and the previously published snapshot (or static bootstrap ca
 first sync) remains active. Inference never queries Postgres or external HTTP endpoints on the
 request path.
 
-Ordering: reading the observations and route inventory, compiling, saving the candidate and
-publishing it all run in one transaction that holds the publication advisory lock, and every sync
-compiles only after its own evidence writes commit. The last publisher therefore always compiled
-from the newest committed evidence, so overlapping `sync`/`compile` processes cannot regress the
-published snapshot. `generatedAt` describes a snapshot; it is not the ordering primitive. A partial
-unique index allows at most one `published` row.
+Ordering: only one `sync` runs at a time — it holds a session advisory lock from discovery and
+evidence fetching through publication, and a second, overlapping `sync` fails fast without writing
+(so fetches that finish out of order cannot make an older reading the latest one). Evidence writes,
+identity re-binding and route reconciliation take the publication lock, and reading the
+observations and route inventory, compiling, saving the candidate and publishing run in one
+transaction holding it, so a `compile` always publishes from the newest committed evidence and
+cannot regress the published snapshot. `generatedAt` describes a snapshot; it is not the ordering
+primitive. A partial unique index allows at most one `published` row.
 
 ### Observation history semantics
 
