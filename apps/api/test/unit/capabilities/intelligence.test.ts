@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import type { CapabilitySnapshotInsert } from "@multi-ai-router/db"
 import { redact, redactValue } from "../../../src/logging/redact"
 import {
   ARTIFICIAL_ANALYSIS_SOURCE_ID,
@@ -493,7 +494,7 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     })
     expect(freshCompiled.summary.staleDimensions).toEqual([])
     expect(compiled.summary.staleDimensions).toContain("anthropic/claude-sonnet-4-6.general")
-    // Crossing the staleness boundary produces a new snapshot revision so saveSnapshot persists it.
+    // Crossing the staleness boundary changes the immutable snapshot revision.
     expect(compiled.snapshot.revision).not.toBe(freshCompiled.snapshot.revision)
     expect(compiled.snapshot.models["anthropic/claude-sonnet-4-6"]?.dimensions.general.stale).toBe(
       true,
@@ -513,44 +514,93 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     ).toBe(true)
   })
 
-  test("memory repository serializes publication and keeps published snapshots immutable", async () => {
+  test("snapshot revisions include retained evidence timestamps and source metadata", () => {
+    const originalObservedAt = new Date(NOW.getTime() - 2_000)
+    const parsed = parseArtificialAnalysisPayload(VALID_AA_PAGE_1, {
+      ingestedAt: originalObservedAt,
+      observedAt: originalObservedAt,
+    })
+    const generalObservation = parsed.observations.find(
+      (row) => row.metric === "intelligence_index",
+    )
+    if (!generalObservation) throw new Error("missing general capability observation")
+
+    const updatedObservedAt = new Date(NOW.getTime() - 1_000)
+    const updatedObservations = parsed.observations.map((row) =>
+      row.fingerprint === generalObservation.fingerprint
+        ? {
+            ...row,
+            observedAt: updatedObservedAt,
+            ingestedAt: updatedObservedAt,
+            sourceRef: `${row.sourceRef}/recurrent`,
+            provenance: { ...row.provenance, recurrence: true },
+          }
+        : row,
+    )
+    const original = compileCapabilitySnapshot(parsed.observations, { generatedAt: NOW })
+    const updated = compileCapabilitySnapshot(updatedObservations, { generatedAt: NOW })
+    const originalGeneral =
+      original.snapshot.models["anthropic/claude-sonnet-4-6"]?.dimensions.general
+    const updatedGeneral =
+      updated.snapshot.models["anthropic/claude-sonnet-4-6"]?.dimensions.general
+
+    expect(updated.snapshot.evidenceDigest).not.toBe(original.snapshot.evidenceDigest)
+    expect(updated.snapshot.revision).not.toBe(original.snapshot.revision)
+    expect(updatedGeneral?.observedAt).toBe(updatedObservedAt.toISOString())
+    expect(updatedGeneral?.sourceRefs).toContain(`${generalObservation.sourceRef}/recurrent`)
+    expect(updatedGeneral?.provenanceDigest).not.toBe(originalGeneral?.provenanceDigest)
+  })
+
+  test("memory repository serializes publication, rejects invalid snapshots, and ignores clock skew", async () => {
     const repo = createMemoryCapabilityRepo()
-    const candidate = {
+    const candidate: CapabilitySnapshotInsert = {
       revision: "memory-revision-a",
       generatedAt: NOW,
       compilerVersion: "compiler-v1",
       normalizerVersion: "normalizer-v1",
       evidenceDigest: "sha256:evidence-a",
-      publicationState: "candidate" as const,
+      publicationState: "candidate",
       payload: { value: "published" },
       summary: { observations: 1 },
     }
-    await repo.saveSnapshot(candidate)
-    await repo.publishSnapshot(candidate.revision, NOW)
+    const publish = (snapshot: CapabilitySnapshotInsert) =>
+      repo.publishSnapshotWithCurrentEvidence(async () => ({
+        snapshot,
+        result: undefined,
+      }))
+    await publish(candidate)
 
     await Promise.all([
-      repo.saveSnapshot({
+      publish({
         ...candidate,
-        publicationState: "candidate",
-        generatedAt: new Date(NOW.getTime() + 1),
-        payload: { value: "candidate overwrite" },
+        payload: { value: "candidate overwrite one" },
         summary: { observations: 2 },
       }),
-      repo.publishSnapshot(candidate.revision, new Date(NOW.getTime() + 2)),
+      publish({
+        ...candidate,
+        generatedAt: new Date(NOW.getTime() + 1),
+        payload: { value: "candidate overwrite two" },
+        summary: { observations: 3 },
+      }),
     ])
     expect(await repo.getPublishedSnapshot()).toMatchObject({
       revision: candidate.revision,
       payload: candidate.payload,
       summary: candidate.summary,
       publicationState: "published",
+      publishedAt: NOW,
     })
 
-    await repo.saveSnapshot({
-      ...candidate,
-      revision: "memory-revision-rejected",
-      publicationState: "rejected",
-    })
-    await expect(repo.publishSnapshot("memory-revision-rejected", NOW)).rejects.toThrow(/rejected/)
+    await expect(
+      publish({
+        ...candidate,
+        revision: "memory-revision-rejected",
+        publicationState: "rejected",
+      }),
+    ).rejects.toThrow(/rejected/)
+    expect(
+      repo.snapshots.some((snapshot) => snapshot.revision === "memory-revision-rejected"),
+    ).toBe(false)
     expect((await repo.getPublishedSnapshot())?.revision).toBe(candidate.revision)
 
     const olderCandidate = {
@@ -559,8 +609,7 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
       generatedAt: new Date(NOW.getTime() - 60_000),
       payload: { value: "newer evidence with an older clock" },
     }
-    await repo.saveSnapshot(olderCandidate)
-    await repo.publishSnapshot(olderCandidate.revision, olderCandidate.generatedAt)
+    await publish(olderCandidate)
     expect((await repo.getPublishedSnapshot())?.revision).toBe(olderCandidate.revision)
   })
 

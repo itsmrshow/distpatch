@@ -193,6 +193,9 @@ function buildSingleObservationEvidence(
     benchmark: obs.benchmark,
     benchmarkVersion: obs.benchmarkVersion,
     fingerprint: obs.fingerprint,
+    observedAt,
+    ingestedAt,
+    sourceRef: obs.sourceRef,
     stale,
   }
   const digest = createHash("sha256").update(JSON.stringify(payload)).digest("hex")
@@ -408,7 +411,21 @@ export function compileCapabilitySnapshot(
       JSON.stringify({
         compilerVersion: CAPABILITY_COMPILER_VERSION,
         normalizerVersion: CAPABILITY_NORMALIZER_VERSION,
-        fingerprints: resolvedObs.map((o) => o.fingerprint),
+        observations: resolvedObs.map((o) => ({
+          fingerprint: o.fingerprint,
+          source: o.source,
+          sourceModelId: o.sourceModelId,
+          canonicalModelId: o.canonicalModelId,
+          metric: o.metric,
+          rawValue: o.rawValue,
+          unit: o.unit,
+          benchmark: o.benchmark,
+          benchmarkVersion: o.benchmarkVersion,
+          observedAt: o.observedAt.toISOString(),
+          ingestedAt: o.ingestedAt.toISOString(),
+          sourceRef: o.sourceRef,
+          provenance: o.provenance,
+        })),
       }),
     )
     .digest("hex")}`

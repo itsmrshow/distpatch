@@ -3,7 +3,10 @@ import type { Database, DatabaseHandle } from "../../src/client"
 import { defaultMigrationsFolder, runMigrations } from "../../src/migrate"
 import { createAccountRepository } from "../../src/repositories/account-repository"
 import { createApiKeyRepository } from "../../src/repositories/api-key-repository"
-import { createCapabilityIntelligenceRepository } from "../../src/repositories/capability-intelligence-repository"
+import {
+  type CapabilitySnapshotInsert,
+  createCapabilityIntelligenceRepository,
+} from "../../src/repositories/capability-intelligence-repository"
 import { createOauthStateRepository } from "../../src/repositories/oauth-state-repository"
 import { createPriceOverrideRepository } from "../../src/repositories/price-override-repository"
 import { createScheduledTaskRepository } from "../../src/repositories/scheduled-task-repository"
@@ -405,7 +408,12 @@ describe.skipIf(!runnable)("migrations against a live database", () => {
     const unresolved = await repository.listUnresolvedObservations()
     expect(unresolved.some((r) => r.fingerprint === "fp-test-obs-unresolved")).toBe(true)
 
-    const snap1 = await repository.saveSnapshot({
+    const publish = (snapshot: CapabilitySnapshotInsert) =>
+      repository.publishSnapshotWithCurrentEvidence(async () => ({
+        snapshot,
+        result: undefined,
+      }))
+    const snapshot1: CapabilitySnapshotInsert = {
       revision: "sha256:test-rev-1",
       generatedAt: t1,
       compilerVersion: "distpatch-cap-compiler-v1",
@@ -414,41 +422,29 @@ describe.skipIf(!runnable)("migrations against a live database", () => {
       publicationState: "candidate",
       payload: { schemaVersion: 1, profiles: [] },
       summary: { models: 1 },
-    })
-    expect(snap1.publicationState).toBe("candidate")
-
-    const published1 = await repository.publishSnapshot("sha256:test-rev-1", t1)
+    }
+    const { publishedSnapshot: published1 } = await publish(snapshot1)
     expect(published1.publicationState).toBe("published")
     expect((await repository.getPublishedSnapshot())?.revision).toBe("sha256:test-rev-1")
 
-    await repository.saveSnapshot({
+    const snapshot2: CapabilitySnapshotInsert = {
+      ...snapshot1,
       revision: "sha256:test-rev-2",
       generatedAt: t2,
-      compilerVersion: "distpatch-cap-compiler-v1",
-      normalizerVersion: "distpatch-cap-norm-v1",
       evidenceDigest: "sha256:ev-2",
-      publicationState: "candidate",
-      payload: { schemaVersion: 1, profiles: [] },
       summary: { models: 2 },
-    })
-    const published2 = await repository.publishSnapshot("sha256:test-rev-2", t2)
+    }
+    const { publishedSnapshot: published2 } = await publish(snapshot2)
     expect(published2.publicationState).toBe("published")
     expect((await repository.getPublishedSnapshot())?.revision).toBe("sha256:test-rev-2")
 
-    await repository.saveSnapshot({
+    const snapshot3: CapabilitySnapshotInsert = {
+      ...snapshot2,
       revision: "sha256:test-rev-3",
-      generatedAt: t2,
-      compilerVersion: "distpatch-cap-compiler-v1",
-      normalizerVersion: "distpatch-cap-norm-v1",
       evidenceDigest: "sha256:ev-3",
-      publicationState: "candidate",
-      payload: { schemaVersion: 1, profiles: [] },
       summary: { models: 3 },
-    })
-    await Promise.all([
-      repository.publishSnapshot("sha256:test-rev-2", t2),
-      repository.publishSnapshot("sha256:test-rev-3", t2),
-    ])
+    }
+    await Promise.all([publish(snapshot2), publish(snapshot3)])
     const allSnapshots = await repository.listSnapshots(10)
     const publishedRows = allSnapshots.filter((s) => s.publicationState === "published")
     expect(publishedRows.length).toBe(1)
@@ -495,10 +491,11 @@ describe.skipIf(!runnable)("migrations against a live database", () => {
       lastSeenAt: t1,
       absentSince: null,
     }
-    await repository.saveRouteModels([row])
-    await repository.saveRouteModels([
-      { ...row, firstSeenAt: t2, lastSeenAt: t2, status: "absent", absentSince: t2 },
-    ])
+    await repository.reconcileRouteModels(() => ({ rows: [row], result: undefined }))
+    await repository.reconcileRouteModels(() => ({
+      rows: [{ ...row, firstSeenAt: t2, lastSeenAt: t2, status: "absent", absentSince: t2 }],
+      result: undefined,
+    }))
     const stored = (await repository.listRouteModels()).filter((r) => r.source === "test-host")
     expect(stored).toHaveLength(1)
     expect(stored[0]).toMatchObject({ status: "absent", firstSeenAt: t1, absentSince: t2 })

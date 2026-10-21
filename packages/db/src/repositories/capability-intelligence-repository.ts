@@ -22,8 +22,8 @@ import {
  * - Repeating a sync over identical upstream records inserts 0 new rows.
  * - A changed upstream score or new benchmark version produces a new `fingerprint` and inserts a
  *   new row, leaving earlier rows untouched.
- * - A value that *reappears* after an intermediate value re-stamps its existing row's timestamps,
- *   source ref and provenance (so it is current again); the intermediate span is not recorded.
+ * - A value that *reappears* after an intermediate value B re-stamps its existing row only when
+ *   its observation order advances; a delayed replay cannot move that fingerprint backwards.
  * - Identity resolution rewrites `canonical_model_id` in place.
  *
  * Snapshot publication is atomic: promoting a candidate snapshot demotes any previously
@@ -66,9 +66,7 @@ export interface CapabilitySnapshotInsert {
 }
 
 export interface CapabilityIntelligenceRepository {
-  /**
-   * Append observations idempotently by `fingerprint`. Never overwrites existing rows.
-   */
+  /** Record fingerprint-deduplicated observations; newer recurrences restamp historical fingerprints. */
   recordObservations(
     rows: readonly CapabilityObservationInsert[],
   ): Promise<CapabilityObservationInsertResult>
@@ -94,15 +92,6 @@ export interface CapabilityIntelligenceRepository {
   /** Observations whose external model id had no explicit mapping. */
   listUnresolvedObservations(): Promise<CapabilityObservationRow[]>
 
-  /** Store or update a candidate/rejected snapshot record (never modifies a published snapshot's payload). */
-  saveSnapshot(snapshot: CapabilitySnapshotInsert): Promise<CapabilitySnapshotRow>
-
-  /**
-   * Atomically publish a validated snapshot by revision: demotes any existing `published` snapshot
-   * to `superseded` and marks `revision` as `published` in one transaction.
-   */
-  publishSnapshot(revision: string, publishedAt: Date): Promise<CapabilitySnapshotRow>
-
   /**
    * Compile and publish from one evidence read while holding the publication lock. The callback
    * runs inside that transaction after observations and route models are read.
@@ -125,12 +114,6 @@ export interface CapabilityIntelligenceRepository {
 
   /** Every reconciled route-model row, present and absent, ordered by `(source, route_model_id)`. */
   listRouteModels(): Promise<RouteModelInventoryRow[]>
-
-  /**
-   * Upsert reconciled route-model rows in one transaction (`first_seen_at` is kept on conflict).
-   * Reconciliation itself (what is new, changed, absent) is pure and lives in the API layer.
-   */
-  saveRouteModels(rows: readonly RouteModelInventoryRow[]): Promise<void>
 
   /**
    * Reconcile a route listing against the latest stored inventory and write the result atomically.
@@ -219,6 +202,7 @@ async function publishSnapshotInTransaction(
   if (target.publicationState === "rejected") {
     throw new Error(`Cannot publish rejected capability snapshot revision ${revision}`)
   }
+  if (target.publicationState === "published") return target
 
   await tx
     .update(capabilitySnapshots)
@@ -266,6 +250,9 @@ export function createCapabilityIntelligenceRepository(
       let inserted = 0
       let deduplicated = 0
       await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
+        )
         for (const row of rows) {
           // Find the latest stored observation for this (source, sourceModelId, metric)
           const [latest] = await tx
@@ -297,14 +284,30 @@ export function createCapabilityIntelligenceRepository(
           }
 
           const [existingByFp] = await tx
-            .select({ id: capabilityObservations.id })
+            .select({
+              id: capabilityObservations.id,
+              observedAt: capabilityObservations.observedAt,
+              ingestedAt: capabilityObservations.ingestedAt,
+            })
             .from(capabilityObservations)
             .where(eq(capabilityObservations.fingerprint, row.fingerprint))
             .limit(1)
 
           if (existingByFp !== undefined) {
-            // Value reverted to an earlier historical fingerprint after an intermediate value B:
-            // advance observedAt / ingestedAt on that row so the compiler sees the reverted value as latest.
+            // A historical fingerprint may reappear, but a delayed replay must never move its
+            // timestamp backwards or make it appear newer than evidence already committed.
+            const observedAt = row.observedAt.getTime()
+            const existingObservedAt = existingByFp.observedAt.getTime()
+            const ingestedAt = row.ingestedAt.getTime()
+            const existingIngestedAt = existingByFp.ingestedAt.getTime()
+            if (
+              observedAt < existingObservedAt ||
+              (observedAt === existingObservedAt && ingestedAt <= existingIngestedAt)
+            ) {
+              deduplicated += 1
+              continue
+            }
+
             await tx
               .update(capabilityObservations)
               .set({
@@ -336,8 +339,7 @@ export function createCapabilityIntelligenceRepository(
               sourceRef: row.sourceRef,
               provenance: row.provenance,
             })
-            // Conflict-safe against a concurrent sync that inserted the same fingerprint after the
-            // preceding select: that process also advanced the timestamps, so deduplicate.
+            // Conflict-safe if an out-of-band insert races the preflight select.
             .onConflictDoNothing({ target: capabilityObservations.fingerprint })
             .returning({ id: capabilityObservations.id })
             .then((written) => {
@@ -352,6 +354,9 @@ export function createCapabilityIntelligenceRepository(
     resolveObservationIdentities: async (resolve) => {
       let updated = 0
       await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
+        )
         const existing = await tx
           .select({
             id: capabilityObservations.id,
@@ -406,22 +411,6 @@ export function createCapabilityIntelligenceRepository(
           asc(capabilityObservations.sourceModelId),
           asc(capabilityObservations.metric),
         ),
-
-    saveSnapshot: (snapshot) =>
-      db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
-        )
-        return saveSnapshotInTransaction(tx, snapshot)
-      }),
-
-    publishSnapshot: (revision, publishedAt) =>
-      db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
-        )
-        return publishSnapshotInTransaction(tx, revision, publishedAt)
-      }),
 
     publishSnapshotWithCurrentEvidence: (build) =>
       db.transaction(async (tx) => {
@@ -481,16 +470,6 @@ export function createCapabilityIntelligenceRepository(
         .select()
         .from(routeModelInventory)
         .orderBy(asc(routeModelInventory.source), asc(routeModelInventory.routeModelId)),
-
-    saveRouteModels: async (rows) => {
-      if (rows.length === 0) return
-      await db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
-        )
-        await saveRouteModelsInTransaction(tx, rows)
-      })
-    },
 
     reconcileRouteModels: (reconcile) =>
       db.transaction(async (tx) => {

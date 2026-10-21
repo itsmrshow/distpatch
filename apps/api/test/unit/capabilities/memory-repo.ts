@@ -66,21 +66,14 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     return created
   }
 
-  const publishSnapshotUnlocked = (
-    revision: string,
-    publishedAt: Date,
-    simulateFailure = true,
-  ): CapabilitySnapshotRow => {
-    if (simulateFailure && failNextPublish) {
-      failNextPublish = false
-      throw new Error("simulated atomic publish transaction failure")
-    }
+  const publishSnapshotUnlocked = (revision: string, publishedAt: Date): CapabilitySnapshotRow => {
     const targetIdx = snapshots.findIndex((s) => s.revision === revision)
     if (targetIdx === -1) throw new Error(`unknown snapshot ${revision}`)
     const target = snapshots[targetIdx]
     if (target?.publicationState === "rejected") {
       throw new Error(`Cannot publish rejected capability snapshot revision ${revision}`)
     }
+    if (target && target.publicationState === "published") return target
     for (let i = 0; i < snapshots.length; i++) {
       const snapshot = snapshots[i]
       if (snapshot && snapshot.publicationState === "published") {
@@ -130,66 +123,79 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     },
 
     async recordObservations(rows) {
-      if (failNextRecord) {
-        failNextRecord = false
-        throw new Error("simulated database write failure")
-      }
-      let inserted = 0
-      let deduplicated = 0
-      for (const row of rows) {
-        const latest = [...observations]
-          .filter(
-            (o) =>
-              o.source === row.source &&
-              o.sourceModelId === row.sourceModelId &&
-              o.metric === row.metric,
-          )
-          .sort(
-            (a, b) =>
-              b.observedAt.getTime() - a.observedAt.getTime() ||
-              b.ingestedAt.getTime() - a.ingestedAt.getTime(),
-          )[0]
-        if (latest?.fingerprint === row.fingerprint) {
-          deduplicated += 1
-          continue
+      return withPublicationLock(async () => {
+        if (failNextRecord) {
+          failNextRecord = false
+          throw new Error("simulated database write failure")
         }
-        const existingIdx = observations.findIndex((o) => o.fingerprint === row.fingerprint)
-        if (existingIdx !== -1) {
-          const existing = observations[existingIdx]
-          if (existing) {
-            observations[existingIdx] = {
-              ...existing,
-              canonicalModelId: row.canonicalModelId,
-              observedAt: row.observedAt,
-              ingestedAt: row.ingestedAt,
-              sourceRef: row.sourceRef,
-              provenance: row.provenance,
-            }
+        let inserted = 0
+        let deduplicated = 0
+        for (const row of rows) {
+          const latest = [...observations]
+            .filter(
+              (o) =>
+                o.source === row.source &&
+                o.sourceModelId === row.sourceModelId &&
+                o.metric === row.metric,
+            )
+            .sort(
+              (a, b) =>
+                b.observedAt.getTime() - a.observedAt.getTime() ||
+                b.ingestedAt.getTime() - a.ingestedAt.getTime() ||
+                (a.fingerprint < b.fingerprint ? 1 : a.fingerprint > b.fingerprint ? -1 : 0),
+            )[0]
+          if (latest?.fingerprint === row.fingerprint) {
+            deduplicated += 1
+            continue
           }
+          const existingIdx = observations.findIndex((o) => o.fingerprint === row.fingerprint)
+          if (existingIdx !== -1) {
+            const existing = observations[existingIdx]
+            if (
+              existing &&
+              (row.observedAt.getTime() < existing.observedAt.getTime() ||
+                (row.observedAt.getTime() === existing.observedAt.getTime() &&
+                  row.ingestedAt.getTime() <= existing.ingestedAt.getTime()))
+            ) {
+              deduplicated += 1
+              continue
+            }
+            if (existing) {
+              observations[existingIdx] = {
+                ...existing,
+                canonicalModelId: row.canonicalModelId,
+                observedAt: row.observedAt,
+                ingestedAt: row.ingestedAt,
+                sourceRef: row.sourceRef,
+                provenance: row.provenance,
+              }
+            }
+            inserted += 1
+            continue
+          }
+          observations.push({
+            id: crypto.randomUUID(),
+            ...row,
+          })
           inserted += 1
-          continue
         }
-        observations.push({
-          id: crypto.randomUUID(),
-          ...row,
-        })
-        inserted += 1
-      }
-      return { inserted, deduplicated }
+        return { inserted, deduplicated }
+      })
     },
-
     async resolveObservationIdentities(resolve) {
-      let updated = 0
-      for (let i = 0; i < observations.length; i++) {
-        const obs = observations[i]
-        if (!obs) continue
-        const next = resolve(obs.source, obs.sourceModelId, obs.provenance)
-        if (next !== obs.canonicalModelId) {
-          observations[i] = { ...obs, canonicalModelId: next }
-          updated += 1
+      return withPublicationLock(async () => {
+        let updated = 0
+        for (let i = 0; i < observations.length; i++) {
+          const obs = observations[i]
+          if (!obs) continue
+          const next = resolve(obs.source, obs.sourceModelId, obs.provenance)
+          if (next !== obs.canonicalModelId) {
+            observations[i] = { ...obs, canonicalModelId: next }
+            updated += 1
+          }
         }
-      }
-      return updated
+        return updated
+      })
     },
 
     async listObservations() {
@@ -204,14 +210,6 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
       return observations.filter((o) => o.canonicalModelId === null)
     },
 
-    async saveSnapshot(snap) {
-      return withPublicationLock(async () => saveSnapshotUnlocked(snap))
-    },
-
-    async publishSnapshot(revision, publishedAt) {
-      return withPublicationLock(async () => publishSnapshotUnlocked(revision, publishedAt))
-    },
-
     publishSnapshotWithCurrentEvidence: (build) =>
       withPublicationLock(async () => {
         const built = await build({
@@ -222,15 +220,19 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
           failNextPublish = false
           throw new Error("simulated atomic publish transaction failure")
         }
-        saveSnapshotUnlocked(built.snapshot)
-        const publishedSnapshot = publishSnapshotUnlocked(
-          built.snapshot.revision,
-          built.snapshot.generatedAt,
-          false,
-        )
-        return { publishedSnapshot, result: built.result }
+        const snapshotsBeforePublish = snapshots.slice()
+        try {
+          saveSnapshotUnlocked(built.snapshot)
+          const publishedSnapshot = publishSnapshotUnlocked(
+            built.snapshot.revision,
+            built.snapshot.generatedAt,
+          )
+          return { publishedSnapshot, result: built.result }
+        } catch (error) {
+          snapshots.splice(0, snapshots.length, ...snapshotsBeforePublish)
+          throw error
+        }
       }),
-
     async getPublishedSnapshot() {
       return snapshots.find((s) => s.publicationState === "published")
     },
@@ -247,10 +249,6 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
 
     async listRouteModels() {
       return sortedRouteRows()
-    },
-
-    async saveRouteModels(rows) {
-      await withPublicationLock(async () => saveRouteRows(rows))
     },
 
     reconcileRouteModels: (reconcile) =>

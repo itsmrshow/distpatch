@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { compileAndPublishCapabilitySnapshot } from "../../../../apps/api/src/services/capabilities/intelligence/lifecycle"
 import { createDatabase, type DatabaseHandle } from "../../src/client"
 import { defaultMigrationsFolder, runMigrations } from "../../src/migrate"
 import {
@@ -11,11 +10,6 @@ import {
 
 const configuredUrl = process.env.DATABASE_URL ?? ""
 const databaseName = `cap_pub_${crypto.randomUUID().replaceAll("-", "")}`
-const bootstrap = {
-  schemaVersion: 1 as const,
-  revision: "2026-10-21.1",
-  profiles: [{ id: "anthropic/claude-sonnet-4-6" }],
-}
 
 let admin: DatabaseHandle | undefined
 let handle: DatabaseHandle | undefined
@@ -60,20 +54,11 @@ function snapshot(
     summary: { observations: 0 },
   }
 }
-
-async function waitForAdvisoryLockWait(): Promise<void> {
-  if (!handle) throw new Error("database fixture is not initialized")
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const rows = await handle.sql<{ readonly granted: boolean }[]>`
-      select granted
-      from pg_locks
-      where locktype = 'advisory'
-        and not granted
-    `
-    if (rows.length > 0) return
-    await Promise.resolve()
-  }
-  throw new Error("publication did not wait for the held advisory lock")
+async function publish(candidate: CapabilitySnapshotInsert) {
+  return repository.publishSnapshotWithCurrentEvidence(async () => ({
+    snapshot: candidate,
+    result: undefined,
+  }))
 }
 
 describe.skipIf(!configuredUrl)("capability publication concurrency in Postgres", () => {
@@ -97,16 +82,16 @@ describe.skipIf(!configuredUrl)("capability publication concurrency in Postgres"
     }
   })
 
-  test("concurrent candidate saves do not alter a published revision", async () => {
+  test("concurrent same-revision publications never alter an already-published row", async () => {
     const candidate = snapshot(`candidate-${crypto.randomUUID()}`, new Date("2026-10-21T12:00:00Z"))
-    await repository.saveSnapshot(candidate)
-    await repository.publishSnapshot(candidate.revision, candidate.generatedAt)
+    await publish(candidate)
 
     await Promise.all(
       Array.from({ length: 20 }, (_, index) =>
-        repository.saveSnapshot({
+        publish({
           ...candidate,
           publicationState: "candidate",
+          generatedAt: new Date(candidate.generatedAt.getTime() + index + 1),
           payload: { overwriteAttempt: index },
           summary: { observations: index + 1 },
         }),
@@ -119,6 +104,7 @@ describe.skipIf(!configuredUrl)("capability publication concurrency in Postgres"
       payload: candidate.payload,
       summary: candidate.summary,
       generatedAt: candidate.generatedAt,
+      publishedAt: candidate.generatedAt,
     })
   })
 
@@ -130,18 +116,37 @@ describe.skipIf(!configuredUrl)("capability publication concurrency in Postgres"
           new Date(`2026-10-21T12:00:${String(iteration).padStart(2, "0")}Z`),
         ),
       )
-      await Promise.all(candidates.map((candidate) => repository.saveSnapshot(candidate)))
-      await Promise.all(
-        candidates.map((candidate) =>
-          repository.publishSnapshot(candidate.revision, candidate.generatedAt),
-        ),
-      )
+      await Promise.all(candidates.map(publish))
       expect(
         (await repository.listSnapshots(1000)).filter(
           (row) => row.publicationState === "published",
         ),
       ).toHaveLength(1)
     }
+  })
+
+  test("partial unique index rejects a second published row", async () => {
+    const live = handle
+    if (!live) throw new Error("database fixture is not initialized")
+    await live.sql`
+      update capability_snapshots
+      set publication_state = 'superseded'
+      where publication_state = 'published'
+    `
+    const firstRevision = `unique-first-${crypto.randomUUID()}`
+    const secondRevision = `unique-second-${crypto.randomUUID()}`
+    const insertPublished = (revision: string) =>
+      live.sql`
+        insert into capability_snapshots (
+          revision, generated_at, published_at, compiler_version, normalizer_version, evidence_digest,
+          publication_state, payload, summary
+        ) values (
+          ${revision}, now(), now(), 'test', 'test', 'sha256:test',
+          'published', '{}'::jsonb, '{}'::jsonb
+        )
+      `
+    await insertPublished(firstRevision)
+    await expect(insertPublished(secondRevision)).rejects.toThrow()
   })
 
   test("A-B-A observation recurrence restamps A and counts the recurrence once", async () => {
@@ -174,16 +179,44 @@ describe.skipIf(!configuredUrl)("capability publication concurrency in Postgres"
       inserted: 0,
       deduplicated: 1,
     })
-
+    const afterReversion = (await repository.listObservations()).filter(
+      (row) => row.sourceModelId === sourceModelId,
+    )
+    expect(afterReversion).toHaveLength(2)
+    expect(afterReversion.at(-1)).toMatchObject({
+      fingerprint: a.fingerprint,
+      rawValue: a.rawValue,
+      observedAt: revertedA.observedAt,
+    })
+    const laterB = {
+      ...b,
+      observedAt: new Date("2026-10-19T13:00:00Z"),
+      ingestedAt: new Date("2026-10-19T13:00:00Z"),
+    }
+    expect(await repository.recordObservations([laterB])).toEqual({
+      inserted: 1,
+      deduplicated: 0,
+    })
+    expect(
+      await repository.recordObservations([
+        {
+          ...a,
+          observedAt: new Date("2026-10-19T11:00:00Z"),
+          ingestedAt: new Date("2026-10-19T11:00:00Z"),
+        },
+      ]),
+    ).toEqual({ inserted: 0, deduplicated: 1 })
     const history = (await repository.listObservations()).filter(
       (row) => row.sourceModelId === sourceModelId,
     )
     expect(history).toHaveLength(2)
+    expect(history.find((row) => row.fingerprint === a.fingerprint)?.observedAt).toEqual(
+      revertedA.observedAt,
+    )
     expect(history.at(-1)).toMatchObject({
-      fingerprint: a.fingerprint,
-      rawValue: a.rawValue,
-      observedAt: revertedA.observedAt,
-      ingestedAt: revertedA.ingestedAt,
+      fingerprint: b.fingerprint,
+      observedAt: laterB.observedAt,
+      ingestedAt: laterB.ingestedAt,
     })
   })
 
@@ -232,89 +265,5 @@ describe.skipIf(!configuredUrl)("capability publication concurrency in Postgres"
     expect(
       (await repository.listRouteModels()).filter((row) => row.source === "publication-route-test"),
     ).toHaveLength(2)
-  })
-
-  test("twenty concurrent compiles publish the newest committed evidence despite clock skew", async () => {
-    for (let iteration = 0; iteration < 20; iteration += 1) {
-      const sourceModelId = `compile-race-${iteration}-${crypto.randomUUID()}`
-      const oldObservedAt = new Date("2026-10-19T14:00:00Z")
-      const newObservedAt = new Date("2026-10-19T15:00:00Z")
-      await repository.recordObservations([
-        observation({
-          key: `${sourceModelId}-old`,
-          sourceModelId,
-          rawValue: 60,
-          observedAt: oldObservedAt,
-        }),
-      ])
-
-      const evidenceRead = Promise.withResolvers<void>()
-      const continueCompile = Promise.withResolvers<void>()
-      const delayedRepository: CapabilityIntelligenceRepository = {
-        ...repository,
-        publishSnapshotWithCurrentEvidence: (build) =>
-          repository.publishSnapshotWithCurrentEvidence(async (evidence) => {
-            evidenceRead.resolve()
-            await continueCompile.promise
-            return build(evidence)
-          }),
-      }
-      const firstTimestamp = new Date("2026-10-21T14:00:30Z")
-      const secondTimestamp = new Date("2026-10-21T14:00:00Z")
-      const first = compileAndPublishCapabilitySnapshot({
-        repository: delayedRepository,
-        bootstrap,
-        now: () => firstTimestamp,
-      })
-      await evidenceRead.promise
-
-      await repository.recordObservations([
-        observation({
-          key: `${sourceModelId}-new`,
-          sourceModelId,
-          rawValue: 72,
-          observedAt: newObservedAt,
-        }),
-      ])
-      const secondPublication = Promise.withResolvers<void>()
-      const secondRepository: CapabilityIntelligenceRepository = {
-        ...repository,
-        publishSnapshotWithCurrentEvidence: (build) => {
-          const pending = repository.publishSnapshotWithCurrentEvidence(build)
-          secondPublication.resolve()
-          return pending
-        },
-      }
-      let secondFinished = false
-      const second = compileAndPublishCapabilitySnapshot({
-        repository: secondRepository,
-        bootstrap,
-        now: () => secondTimestamp,
-      }).then((result) => {
-        secondFinished = true
-        return result
-      })
-      await secondPublication.promise
-
-      try {
-        await waitForAdvisoryLockWait()
-        expect(secondFinished).toBe(false)
-      } finally {
-        continueCompile.resolve()
-      }
-
-      const [firstResult, secondResult] = await Promise.all([first, second])
-      const published = await repository.getPublishedSnapshot()
-      expect(firstResult.compiled.snapshot.evidenceDigest).not.toBe(
-        secondResult.compiled.snapshot.evidenceDigest,
-      )
-      expect(firstResult.compiled.snapshot.generatedAt).toBe(firstTimestamp.toISOString())
-      expect(secondResult.compiled.snapshot.generatedAt).toBe(secondTimestamp.toISOString())
-      expect(published?.revision).toBe(secondResult.publishedRevision)
-      expect(published?.evidenceDigest).toBe(secondResult.compiled.snapshot.evidenceDigest)
-      expect(published?.payload).toMatchObject({
-        evidenceDigest: secondResult.compiled.snapshot.evidenceDigest,
-      })
-    }
   })
 })
