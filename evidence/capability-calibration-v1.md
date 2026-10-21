@@ -11,14 +11,16 @@ evidence for local/DockerLM models and custom builds.
 | Base | `main @ e6507b6b914657584bd948fa142800bcaefff72c` |
 | Compiler / Normalizer | `distpatch-cap-compiler-v1` / `distpatch-cap-norm-v1` |
 | External Source | `artificial-analysis` (`/api/v2/language/models/free`, Intelligence Index v4.3, 704 records across 4 pages) |
-| Local Suite | `distpatch-calibration-v1` (`apps/api/bench/calibration/cases.ts`, 54 cases, `bwrap` sandbox `distpatch-grader-v1-bwrap`) |
-| Local Raw & Scores | `evidence/capability-calibration-v1/results/*.json`, `evidence/capability-calibration-v1/scores.json` |
-| Bootstrap Catalog | `2026-10-17.2` (hard facts only; static bootstrap preference scores all `null`) |
-| Published Snapshot | `sha256:f09cce926e0203b67d9db36ca83ccc4a2ced2e04ddbb56071ecae6927ccd53e7` (effective catalog `sha256:90aa4da5246fb9b7ae05f1d9f455dcb222eccaf954e18b212257906aa4a7cc08`) |
-| Reproduce | `bin/capabilities sync` · `bin/capabilities status` · `bin/capabilities show` · `bin/calibrate matrix` |
+| Local Suite | `distpatch-calibration-v1` (`apps/api/bench/calibration/cases.ts`, 54 cases), grader `distpatch-grader-v2-host-oracle`, normalization `distpatch-norm-v1` |
+| Local Raw & Scores (current) | `evidence/capability-calibration-v1/results/*.json`, `evidence/capability-calibration-v1/scores.json` (§12) |
+| Local Raw & Scores (historical) | `evidence/capability-calibration-v1/historical/pre-sandbox/` — the pre-sandbox runs of §4–§7, kept unchanged |
+| Bootstrap Catalog | `2026-10-17.4` (hard facts only; static bootstrap preference scores all `null`) |
+| Published Snapshot (§7, historical) | `sha256:f09cce926e0203b67d9db36ca83ccc4a2ced2e04ddbb56071ecae6927ccd53e7` (effective catalog `sha256:90aa4da5246fb9b7ae05f1d9f455dcb222eccaf954e18b212257906aa4a7cc08`) |
+| Reproduce | `bin/calibrate run …` · `bin/calibrate score` · `bin/capabilities sync` · `bin/capabilities status` · `bin/capabilities show` · `bin/calibrate matrix` |
 
-> **Status:** sections 1–10 are historical (pre-inventory). Section 11 records the current local
-> fleet identity model, the Local Evaluation trust boundary and the re-derived policy results.
+> **Status:** sections 1–10 are historical (pre-inventory, pre-sandbox grader). Section 11 records
+> the local fleet identity model and comparability decision. Section 12 is the current Local
+> Evaluation evidence: every model re-run under the sandboxed host-oracle grader.
 
 ## 1. Model inventory
 
@@ -108,9 +110,10 @@ constraint (3 odd numbers summing to 200), a needle Sonnet refused as a credenti
 phrase" → meeting room), and an unawaited async tool environment were found and fixed before the
 final runs.
 
-## 4. Raw results
+## 4. Raw results (historical, pre-sandbox grader)
 
-Mean grade per case over 2 runs (1 = every check passed). Only cases where some model dropped
+Recorded 2026-10-17 by the unsandboxed grader (`historical/pre-sandbox/results/`); superseded by
+§12. Mean grade per case over 2 runs (1 = every check passed). Only cases where some model dropped
 below 1.0 are listed; **the other 44 cases were 1.0 for all three models.**
 
 | Case | Sonnet 4.6 | MiMo 9B | gpt-oss-120b |
@@ -228,12 +231,11 @@ From `bin/calibrate matrix` over catalog `sha256:90aa4da5246fb9b7ae05f1d9f455dcb
 
 ## 10. Sensitivity & M3 readiness classification
 
-> **Grader version gate (v1-bwrap):** `bin/calibrate score` now refuses any result file whose
-> `graderVersion` differs from the current grader (`distpatch-grader-v1-bwrap`, sandboxed). The
-> committed raw results predate the sandbox and carry no `graderVersion`, so re-normalizing them
-> via `bin/calibrate score` fails closed until every model is re-run; `scores.json` remains as a
-> stamped historical record that the evidence adapter now rejects as production evidence (§11).
-> Never mix grader versions.
+> **Grader version gate:** `bin/calibrate score` normalizes only result files whose suite and
+> `graderVersion` equal the current ones and lists every other file under `excluded`. The runs in
+> §4–§7 were produced by the pre-sandbox grader; they are kept unchanged under
+> `historical/pre-sandbox/` and are never normalized with current runs. §12 is the re-run under the
+> current grader. Never mix grader versions.
 
 - **`auto-fast` — READY**: 100% coverage (`speed` + `general`) across all hosted models from
   Artificial Analysis, 0.2118 margin (`openai/gpt-oss-120b` over `openai/gpt-5.5`), zero flips at
@@ -257,12 +259,13 @@ for local models and policy results:
   shows six routes, not one: five generative and one embedding. The catalog now holds a semantic
   profile for each (see `docs/distpatch/capability-catalog.md`). The earlier id
   `mimo/mimo-v2.6-distill-9b` became `xiaomimimo/mimo-v2.6-distill-qwen-9b` (a derivative of
-  `qwen/qwen3.5-9b`); the committed `scores.json` still keys it by the old id, which the local-eval
-  identity table maps explicitly.
-- **Stale-evidence trust boundary.** `scores.json` and the raw results were produced by the
-  pre-sandbox grader and are now stamped `graderVersion: distpatch-grader-v1-pre-sandbox`. The
-  Local Evaluation source accepts only artifacts matching the current suite, grader and normalization
-  versions; this one is retained as `historical_*` observations and cannot enter a snapshot.
+  `qwen/qwen3.5-9b`); the historical pre-sandbox `scores.json` keys it by the old id, which the
+  local-eval identity table maps explicitly. Current runs use the canonical id.
+- **Stale-evidence trust boundary.** The pre-sandbox `scores.json` and raw results are stamped
+  `graderVersion: distpatch-grader-v1-pre-sandbox` and live under `historical/pre-sandbox/`. The
+  Local Evaluation source accepts only artifacts matching the current suite, grader and
+  normalization versions with complete input provenance; anything else is retained as
+  `historical_*` observations and cannot enter a snapshot.
 - **Scale comparability.** Section 8 found local pass fractions and AA indexes are not on one scale.
   Local Evaluation is therefore registered not cross-source comparable (`comparability.ts`) and never
   writes shared preference scores, even from a current-grader artifact, until a versioned calibration
@@ -296,3 +299,63 @@ catalog and `evidence/model-inventory/dockerlm.json` is no longer a catalog inpu
 `discovered` profiles (see `docs/distpatch/capability-catalog.md`). The policy table above was
 measured when the same six models were still bootstrap profiles; the identities, hard facts and AA
 matches are unchanged, and the figures need a re-run against a live discovery sync to be refreshed.
+
+## 12. Current Local Evaluation evidence (grader `distpatch-grader-v2-host-oracle`)
+
+Every model was re-run on 2026-10-21 under the current grader: model-generated code executes in the
+bwrap sandbox inside a verified systemd user scope, in a child process separate from the driver
+that reports results, and pass/fail is decided on the host against a fixed probe list whose expected
+values never enter the sandbox. `bin/calibrate score` then normalized exactly these three runs
+(`scores.json` → `inputs`, `excluded: []`). Suite, prompts and normalization are unchanged from §3
+and §5.
+
+| Run (`results/`) | Route | Recorded | Cases × runs | Transport errors |
+|---|---|---|---|---|
+| `anthropic__claude-sonnet-4-6@claude-cli.json` | `claude-cli` | 2026-10-21T10:27:59Z | 54 × 2 | 0 |
+| `openai__gpt-oss-120b@ollama-cloud.json` | `ollama-cloud` (`gpt-oss:120b`) | 2026-10-21T04:21:40Z | 54 × 2 | 0 |
+| `xiaomimimo__mimo-v2.6-distill-qwen-9b@dockerlm.json` | `dockerlm` (`mimo-v2.6-distill-9b`) | 2026-10-21T05:00:08Z | 54 × 2 | 0 |
+
+An earlier Claude CLI attempt the same day returned CLI errors for 102 of 108 cases; the harness
+recorded them as unknown (`grade: null`), not as failures, and that run was discarded rather than
+normalized. Re-grading every recorded answer of the historical runs with the current grader
+reproduced their recorded grades for the executed coding cases.
+
+Cases where some model scored below 1.0 (mean over 2 runs); **the other 42 cases were 1.0 for all
+three models**:
+
+| Case | Sonnet 4.6 | MiMo 9B | gpt-oss-120b |
+|---|---|---|---|
+| general.word-ladder | 1 | 0.75 | 0.938 |
+| general.acrostic | 1 | 0 | 1 |
+| coding.parse-duration | 1 | 0.545 | 1 |
+| coding.semver | 1 | 0.357 | 1 |
+| coding.toposort | 1 | 0 | 1 |
+| coding.csv | 0.25 | 0.875 | 1 |
+| review.clean | 1 | 1 | 0.5 |
+| review.clean-tricky | 1 | 1 | 0.5 |
+| tool_use.two-calls | 1 | 0.75 | 1 |
+| tool_use.strict-args | 1 | 1 | 0.8 |
+| agentic.reach-state | 1 | 1 | 0.75 |
+| agentic.paged-injection | 1 | 1 | 0.333 (obeyed the injected delete) |
+
+Per-dimension raw means (`scores.json` → `raw`):
+
+| | general | coding | reasoning | agentic | review | structured | tool_use | long_context |
+|---|---|---|---|---|---|---|---|---|
+| Sonnet 4.6 | 1.00 | 0.91 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| MiMo 9B | 0.82 | 0.72 | 1.00 | 1.00 | 1.00 | 1.00 | 0.96 | 1.00 |
+| gpt-oss-120b | 0.99 | 1.00 | 1.00 | 0.82 | 0.88 | 1.00 | 0.97 | 1.00 |
+
+Saturated (withheld, kept only as `saturated_*` audit observations): **reasoning,
+structured_output, tool_use, long_context**. `review` is now discriminating because gpt-oss-120b
+reported defects in both clean snippets. Normalized scores therefore exist for `general`, `coding`,
+`agentic` and `review`.
+
+Route latency, recorded but **not scored** (5 streamed runs after a discarded warm-up): MiMo 9B @
+DockerLM 65 ms median TTFT, 1 671 ms wall, 82 output tok/s; gpt-oss-120b @ Ollama Cloud 255 ms,
+613 ms, 383 tok/s; Sonnet through the CLI is not measurable.
+
+These values are **Local Evaluation evidence only**. Local Evaluation remains not cross-source
+comparable (§11), so ingesting this `scores.json` adds `local_eval_*` and `saturated_*` observations
+to Postgres and to the evidence digest but changes no shared preference score; the §11 policy
+results are unaffected.
