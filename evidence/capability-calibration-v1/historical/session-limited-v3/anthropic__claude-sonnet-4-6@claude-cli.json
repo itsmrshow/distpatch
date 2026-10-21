@@ -1,0 +1,885 @@
+{
+  "suite": "distpatch-calibration-v1",
+  "graderVersion": "distpatch-grader-v3-host-oracle",
+  "profileId": "anthropic/claude-sonnet-4-6",
+  "semanticModelId": "anthropic/claude-sonnet-4-6",
+  "route": "claude-cli",
+  "routeId": "claude-cli",
+  "runtime": "claude-code-cli",
+  "settings": {
+    "temperature": "cli-default",
+    "builtInTools": false,
+    "mcpTools": true
+  },
+  "wireModel": "claude-sonnet-4-6",
+  "recordedAt": "2026-10-21T11:02:37.715Z",
+  "cases": [
+    {
+      "id": "general.bullets",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "exactly 3 lines",
+          "pass": true
+        },
+        {
+          "name": "all start with '- '",
+          "pass": true
+        },
+        {
+          "name": "each <= 12 words",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4800,
+      "answer": "- Unit tests catch bugs early before they reach production code.\n- Tests document expected behavior for future developers reading the code.\n- Refactoring becomes safer when tests verify nothing has been broken."
+    },
+    {
+      "id": "general.synthesis",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "owner Priya",
+          "pass": true
+        },
+        {
+          "name": "date 2026-03-14",
+          "pass": true
+        },
+        {
+          "name": "cutover June",
+          "pass": true
+        },
+        {
+          "name": "omits Bob",
+          "pass": true
+        },
+        {
+          "name": "one sentence",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4280,
+      "answer": "Priya is the sole owner of the billing migration, which was approved by the steering group on 2026-03-14, with cutover planned for June."
+    },
+    {
+      "id": "general.facts",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "format",
+          "pass": true
+        },
+        {
+          "name": "tungsten W",
+          "pass": true
+        },
+        {
+          "name": "Canberra",
+          "pass": true
+        },
+        {
+          "name": "1989",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4169,
+      "answer": "W; Canberra; 1989"
+    },
+    {
+      "id": "general.sort",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "exact",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4089,
+      "answer": "apple, banana, cherry, date, fig, pear"
+    },
+    {
+      "id": "general.timezone",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "tokyo 23:30",
+          "pass": true
+        },
+        {
+          "name": "new york 10:30",
+          "pass": true
+        }
+      ],
+      "latencyMs": 4939,
+      "answer": "Tokyo 23:30, New York 10:30"
+    },
+    {
+      "id": "general.word-ladder",
+      "dimension": "general",
+      "run": 0,
+      "grade": 1,
+      "checks": [
+        {
+          "name": "5 lines",
+          "pass": true
+        },
+        {
+          "name": "sentence 1 has 5 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 2 has 6 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 3 has 7 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 4 has 8 words",
+          "pass": true
+        },
+        {
+          "name": "sentence 5 has 9 words",
+          "pass": true
+        },
+        {
+          "name": "all end with period",
+          "pass": true
+        },
+        {
+          "name": "no letter e",
+          "pass": true
+        }
+      ],
+      "latencyMs": 90887,
+      "answer": "Broad flows rush into basins.\nRushing rapids crash along canyon walls.\nWild frogs hop through cold, murky shallows.\nSpring floods carry rich silt into low plains.\nAnimals along wild banks always find abundant aquatic food."
+    },
+    {
+      "id": "general.acrostic",
+      "dimension": "general",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.parse-duration",
+      "dimension": "coding",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.fix-chunk",
+      "dimension": "coding",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.lru",
+      "dimension": "coding",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.with-timeout",
+      "dimension": "coding",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.comprehension",
+      "dimension": "coding",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.semver",
+      "dimension": "coding",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.toposort",
+      "dimension": "coding",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.csv",
+      "dimension": "coding",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.line-up",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.tank",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.timeouts",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.dice",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.critical-path",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.knaves",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.inclusion-exclusion",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.calendar",
+      "dimension": "reasoning",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.injection-await",
+      "dimension": "review",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.pagination",
+      "dimension": "review",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.design-payments",
+      "dimension": "review",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.race",
+      "dimension": "review",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.clean",
+      "dimension": "review",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.median",
+      "dimension": "review",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.cache-key",
+      "dimension": "review",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.clean-tricky",
+      "dimension": "review",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.extract",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.array",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.nullable",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.escaping",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.conditional",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.numeric-constraints",
+      "dimension": "structured_output",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.select-args",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.two-calls",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.date-args",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.no-tool",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.chained",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.strict-args",
+      "dimension": "tool_use",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "agentic.fix-and-verify",
+      "dimension": "agentic",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "agentic.recover-error",
+      "dimension": "agentic",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "agentic.reach-state",
+      "dimension": "agentic",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "agentic.iterate-to-green",
+      "dimension": "agentic",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "agentic.paged-injection",
+      "dimension": "agentic",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.needle",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.multi-hop",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.aggregate",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.superseded",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.three-hop",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.first-appearance",
+      "dimension": "long_context",
+      "run": 0,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "general.bullets",
+      "dimension": "general",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "general.synthesis",
+      "dimension": "general",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "general.facts",
+      "dimension": "general",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "general.sort",
+      "dimension": "general",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "general.timezone",
+      "dimension": "general",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "general.word-ladder",
+      "dimension": "general",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "general.acrostic",
+      "dimension": "general",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.parse-duration",
+      "dimension": "coding",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.fix-chunk",
+      "dimension": "coding",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.lru",
+      "dimension": "coding",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.with-timeout",
+      "dimension": "coding",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.comprehension",
+      "dimension": "coding",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.semver",
+      "dimension": "coding",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.toposort",
+      "dimension": "coding",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "coding.csv",
+      "dimension": "coding",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.line-up",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.tank",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.timeouts",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.dice",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.critical-path",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.knaves",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.inclusion-exclusion",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "reasoning.calendar",
+      "dimension": "reasoning",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.injection-await",
+      "dimension": "review",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.pagination",
+      "dimension": "review",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.design-payments",
+      "dimension": "review",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.race",
+      "dimension": "review",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.clean",
+      "dimension": "review",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.median",
+      "dimension": "review",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.cache-key",
+      "dimension": "review",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "review.clean-tricky",
+      "dimension": "review",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.extract",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.array",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.nullable",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.escaping",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.conditional",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "structured.numeric-constraints",
+      "dimension": "structured_output",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.select-args",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.two-calls",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.date-args",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.no-tool",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.chained",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "tool_use.strict-args",
+      "dimension": "tool_use",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "agentic.fix-and-verify",
+      "dimension": "agentic",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "agentic.recover-error",
+      "dimension": "agentic",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "agentic.reach-state",
+      "dimension": "agentic",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "agentic.iterate-to-green",
+      "dimension": "agentic",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "agentic.paged-injection",
+      "dimension": "agentic",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.needle",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.multi-hop",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.aggregate",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.superseded",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.three-hop",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    },
+    {
+      "id": "long_context.first-appearance",
+      "dimension": "long_context",
+      "run": 1,
+      "grade": null,
+      "error": "claude-cli: success: You've hit your session limit · resets 3pm (UTC)"
+    }
+  ],
+  "speed": []
+}

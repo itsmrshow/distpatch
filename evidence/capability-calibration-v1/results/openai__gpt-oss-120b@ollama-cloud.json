@@ -1,6 +1,6 @@
 {
   "suite": "distpatch-calibration-v1",
-  "graderVersion": "distpatch-grader-v2-host-oracle",
+  "graderVersion": "distpatch-grader-v3-host-oracle",
   "profileId": "openai/gpt-oss-120b",
   "semanticModelId": "openai/gpt-oss-120b",
   "route": "ollama-cloud",
@@ -11,7 +11,7 @@
     "maxTokens": 16384
   },
   "wireModel": "gpt-oss:120b",
-  "recordedAt": "2026-10-21T04:21:40.138Z",
+  "recordedAt": "2026-10-21T10:59:28.073Z",
   "cases": [
     {
       "id": "general.bullets",
@@ -32,8 +32,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 839,
-      "answer": "- Ensure code works as intended and catches regressions early  \n- Facilitate refactoring by providing safety net for changes  \n- Improve documentation through examples of expected behavior"
+      "latencyMs": 782,
+      "answer": "- Ensure code works as intended.  \n- Detect regressions early.  \n- Facilitate safe refactoring and maintenance."
     },
     {
       "id": "general.synthesis",
@@ -62,7 +62,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 772,
+      "latencyMs": 722,
       "answer": "Priya owns the billing migration, which was approved on 2026-03-14, and cutover is planned for June."
     },
     {
@@ -88,7 +88,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 489,
+      "latencyMs": 478,
       "answer": "W; Canberra; 1989"
     },
     {
@@ -102,7 +102,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 537,
+      "latencyMs": 667,
       "answer": "apple, banana, cherry, date, fig, pear"
     },
     {
@@ -120,14 +120,14 @@
           "pass": true
         }
       ],
-      "latencyMs": 467,
+      "latencyMs": 559,
       "answer": "Tokyo 23:30, New York 10:30"
     },
     {
       "id": "general.word-ladder",
       "dimension": "general",
       "run": 0,
-      "grade": 0.875,
+      "grade": 1,
       "checks": [
         {
           "name": "5 lines",
@@ -159,11 +159,11 @@
         },
         {
           "name": "no letter e",
-          "pass": false
+          "pass": true
         }
       ],
-      "latencyMs": 5177,
-      "answer": "Rill runs through rocky canyon.  \nFluvial paths cut grand broad canyons.  \nRill's calm song lifts roaming souls today.  \nFloodplain's rich soil supports abundant fauna habitats for.  \nDelta's calm flows merge into vast tranquil blue horizons."
+      "latencyMs": 4654,
+      "answer": "Calm brook winds through hills.  \nMorning mist lifts upon bright brook.  \nWild flows swirl, carving rocky canyon walls.  \nDusk glints on rippling flow, singing soft lullaby.  \nKids splash, laughing, chasing bright fish in winding brook."
     },
     {
       "id": "general.acrostic",
@@ -184,8 +184,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1181,
-      "answer": "RACECAR\nOVERLAP\nUPRIGHT\nTALENTS\nECLIPSE\nRELEASE"
+      "latencyMs": 1170,
+      "answer": "RANDOMS\nOVERLAP\nUPRIGHT\nTALENTS\nECLIPSE\nRELEASE"
     },
     {
       "id": "coding.parse-duration",
@@ -238,8 +238,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1807,
-      "answer": "```ts\nfunction parseDuration(input: string): number {\n    if (input.length === 0) {\n        throw new Error(\"Invalid input: empty string\");\n    }\n\n    const regex = /^(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+)s)?$/;\n    const match = input.match(regex);\n\n    if (!match) {\n        throw new Error(\"Invalid input format\");\n    }\n\n    const [, hStr, mStr, sStr] = match;\n\n    // Ensure at least one unit is present\n    if (hStr === undefined && mStr === undefined && sStr === undefined) {\n        throw new Error(\"Invalid input: no time unit found\");\n    }\n\n    // Convert and validate each captured group\n    const h = hStr !== undefined ? parseInt(hStr, 10) : 0;\n    const m = mStr !== undefined ? parseInt(mStr, 10) : 0;\n    const s = sStr !== undefined ? parseInt(sStr, 10) : 0;\n\n    // Additional sanity checks (non‑negative integers)\n    if (isNaN(h) || isNaN(m) || isNaN(s) || h < 0 || m < 0 || s < 0) {\n        throw new Error(\"Invalid numeric value\");\n    }\n\n    return h * 3600 + m * 60 + s;\n}\n```"
+      "latencyMs": 2170,
+      "answer": "```ts\nexport function parseDuration(input: string): number {\n    if (input.length === 0) {\n        throw new Error(\"Input cannot be empty\");\n    }\n\n    // Must not contain any whitespace\n    if (/\\s/.test(input)) {\n        throw new Error(\"Input must not contain spaces\");\n    }\n\n    const regex = /^(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+)s)?$/;\n    const match = input.match(regex);\n\n    if (!match) {\n        throw new Error(\"Invalid format\");\n    }\n\n    // Ensure at least one unit is present\n    if (!match[1] && !match[2] && !match[3]) {\n        throw new Error(\"No time unit found\");\n    }\n\n    const hours = match[1] ? parseInt(match[1], 10) : 0;\n    const minutes = match[2] ? parseInt(match[2], 10) : 0;\n    const seconds = match[3] ? parseInt(match[3], 10) : 0;\n\n    // All parsed values must be integers (regex already guarantees digits)\n    // but we double‑check for safety\n    if (isNaN(hours) || isNaN(minutes) || isNaN(seconds)) {\n        throw new Error(\"Non‑integer value detected\");\n    }\n\n    return hours * 3600 + minutes * 60 + seconds;\n}\n```"
     },
     {
       "id": "coding.fix-chunk",
@@ -272,7 +272,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 731,
+      "latencyMs": 787,
       "answer": "```ts\nfunction chunk<T>(items: T[], size: number): T[][] {\n  if (!Number.isInteger(size) || size <= 0) {\n    throw new RangeError('size must be a positive integer')\n  }\n\n  const out: T[][] = []\n  for (let i = 0; i < items.length; i += size) {\n    out.push(items.slice(i, i + size))\n  }\n  return out\n}\n```"
     },
     {
@@ -302,8 +302,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1737,
-      "answer": "```ts\nexport class LruCache<K, V> {\n    private readonly capacity: number;\n    private readonly cache: Map<K, V>;\n\n    constructor(capacity: number) {\n        if (capacity <= 0) {\n            throw new Error('Capacity must be a positive number');\n        }\n        this.capacity = capacity;\n        this.cache = new Map<K, V>();\n    }\n\n    get(key: K): V | undefined {\n        if (!this.cache.has(key)) {\n            return undefined;\n        }\n        const value = this.cache.get(key)!;\n        // Move key to the most-recently-used position\n        this.cache.delete(key);\n        this.cache.set(key, value);\n        return value;\n    }\n\n    set(key: K, value: V): void {\n        if (this.cache.has(key)) {\n            // Update existing entry and move to MRU position\n            this.cache.delete(key);\n        } else if (this.cache.size >= this.capacity) {\n            // Evict least-recently-used (first inserted) key\n            const lruKey = this.cache.keys().next().value;\n            this.cache.delete(lruKey);\n        }\n        this.cache.set(key, value);\n    }\n\n    get size(): number {\n        return this.cache.size;\n    }\n}\n```"
+      "latencyMs": 1876,
+      "answer": "```ts\nclass LruCache<K, V> {\n    private readonly capacity: number;\n    private readonly map: Map<K, V>;\n\n    constructor(capacity: number) {\n        if (capacity <= 0) {\n            throw new Error(\"Capacity must be greater than 0\");\n        }\n        this.capacity = capacity;\n        this.map = new Map<K, V>();\n    }\n\n    get(key: K): V | undefined {\n        if (!this.map.has(key)) {\n            return undefined;\n        }\n        const value = this.map.get(key)!;\n        // Move key to the most-recently-used position\n        this.map.delete(key);\n        this.map.set(key, value);\n        return value;\n    }\n\n    set(key: K, value: V): void {\n        if (this.map.has(key)) {\n            // Update existing key and move to MRU position\n            this.map.delete(key);\n        } else if (this.map.size >= this.capacity) {\n            // Evict least-recently-used (first inserted) key\n            const lruKey = this.map.keys().next().value;\n            this.map.delete(lruKey);\n        }\n        this.map.set(key, value);\n    }\n\n    get size(): number {\n        return this.map.size;\n    }\n}\n```"
     },
     {
       "id": "coding.with-timeout",
@@ -328,7 +328,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1411,
+      "latencyMs": 1779,
       "answer": "```ts\nfunction withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {\n    return new Promise<T>((resolve, reject) => {\n        const timer = setTimeout(() => {\n            reject(new Error(\"timeout\"));\n        }, ms);\n\n        work.then(\n            (value) => {\n                clearTimeout(timer);\n                resolve(value);\n            },\n            (err) => {\n                clearTimeout(timer);\n                reject(err);\n            }\n        );\n    });\n}\n```"
     },
     {
@@ -342,7 +342,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1685,
+      "latencyMs": 1890,
       "answer": "14 7"
     },
     {
@@ -408,8 +408,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 4143,
-      "answer": "```ts\ntype SemVer = {\n    major: number;\n    minor: number;\n    patch: number;\n    prerelease: string[] | null;\n};\n\nfunction parseSemVer(v: string): SemVer {\n    const regex = /^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$/;\n    const m = v.match(regex);\n    if (!m) throw new Error(`Invalid version: ${v}`);\n\n    const major = Number(m[1]);\n    const minor = Number(m[2]);\n    const patch = Number(m[3]);\n\n    const prereleaseRaw = m[4];\n    let prerelease: string[] | null = null;\n    if (prereleaseRaw !== undefined) {\n        prerelease = prereleaseRaw.split('.');\n        // validate each identifier\n        for (const id of prerelease) {\n            if (id.length === 0) throw new Error(`Invalid prerelease identifier in ${v}`);\n            // numeric identifier must not have leading zeros\n            if (/^\\d+$/.test(id) && id.length > 1 && id.startsWith('0')) {\n                throw new Error(`Invalid numeric prerelease identifier with leading zero in ${v}`);\n            }\n        }\n    }\n\n    // build metadata is ignored, but still validated by regex\n    return { major, minor, patch, prerelease };\n}\n\nfunction compareIdentifiers(a: string, b: string): -1 | 0 | 1 {\n    const aNum = /^\\d+$/.test(a);\n    const bNum = /^\\d+$/.test(b);\n    if (aNum && bNum) {\n        const an = Number(a);\n        const bn = Number(b);\n        return an < bn ? -1 : an > bn ? 1 : 0;\n    }\n    if (aNum && !bNum) return -1; // numeric < alphanumeric\n    if (!aNum && bNum) return 1;\n    // both alphanumeric\n    return a < b ? -1 : a > b ? 1 : 0;\n}\n\n/**\n * Compare two semantic version strings.\n * @returns -1 if a < b, 0 if equal, 1 if a > b\n * @throws Error for invalid version strings\n */\nexport function compareSemver(a: string, b: string): -1 | 0 | 1 {\n    const av = parseSemVer(a);\n    const bv = parseSemVer(b);\n\n    if (av.major !== bv.major) return av.major < bv.major ? -1 : 1;\n    if (av.minor !== bv.minor) return av.minor < bv.minor ? -1 : 1;\n    if (av.patch !== bv.patch) return av.patch < bv.patch ? -1 : 1;\n\n    const aPre = av.prerelease;\n    const bPre = bv.prerelease;\n\n    // No prerelease => higher precedence than any prerelease\n    if (aPre === null && bPre === null) return 0;\n    if (aPre === null) return 1;\n    if (bPre === null) return -1;\n\n    // Both have prerelease: compare identifier by identifier\n    const len = Math.max(aPre.length, bPre.length);\n    for (let i = 0; i < len; i++) {\n        const aId = aPre[i];\n        const bId = bPre[i];\n        if (aId === undefined) return -1; // a has fewer identifiers -> lower precedence\n        if (bId === undefined) return 1;  // b has fewer identifiers -> lower precedence\n        const cmp = compareIdentifiers(aId, bId);\n        if (cmp !== 0) return cmp;\n    }\n    return 0;\n}\n```"
+      "latencyMs": 3845,
+      "answer": "```ts\ntype SemVer = {\n    major: number;\n    minor: number;\n    patch: number;\n    prerelease: string[]; // empty array means no prerelease\n};\n\nfunction parseSemVer(v: string): SemVer {\n    const semverRegex = /^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$/;\n    const match = semverRegex.exec(v);\n    if (!match) throw new Error(`Invalid version: ${v}`);\n\n    const [, majorStr, minorStr, patchStr, prereleaseStr] = match;\n\n    const major = Number(majorStr);\n    const minor = Number(minorStr);\n    const patch = Number(patchStr);\n\n    const prerelease = prereleaseStr ? prereleaseStr.split('.') : [];\n\n    // Validate each prerelease identifier (numeric identifiers must not have leading zeros)\n    for (const id of prerelease) {\n        if (id.length === 0) throw new Error(`Invalid prerelease identifier in ${v}`);\n        if (/^[0-9]+$/.test(id) && id.length > 1 && id.startsWith('0')) {\n            throw new Error(`Invalid numeric prerelease identifier with leading zero in ${v}`);\n        }\n        if (!/^[0-9A-Za-z-]+$/.test(id)) {\n            throw new Error(`Invalid prerelease identifier characters in ${v}`);\n        }\n    }\n\n    return { major, minor, patch, prerelease };\n}\n\nfunction compareIdentifiers(a: string, b: string): -1 | 0 | 1 {\n    const aNum = /^[0-9]+$/.test(a);\n    const bNum = /^[0-9]+$/.test(b);\n\n    if (aNum && bNum) {\n        const diff = Number(a) - Number(b);\n        return diff < 0 ? -1 : diff > 0 ? 1 : 0;\n    }\n\n    if (aNum && !bNum) return -1; // numeric < alphanumeric\n    if (!aNum && bNum) return 1;  // alphanumeric > numeric\n\n    // both alphanumeric: lexical ASCII order\n    return a < b ? -1 : a > b ? 1 : 0;\n}\n\nexport function compareSemver(a: string, b: string): -1 | 0 | 1 {\n    const av = parseSemVer(a);\n    const bv = parseSemVer(b);\n\n    // Compare core version\n    if (av.major !== bv.major) return av.major < bv.major ? -1 : 1;\n    if (av.minor !== bv.minor) return av.minor < bv.minor ? -1 : 1;\n    if (av.patch !== bv.patch) return av.patch < bv.patch ? -1 : 1;\n\n    const aPre = av.prerelease;\n    const bPre = bv.prerelease;\n\n    // If both have no prerelease, they are equal\n    if (aPre.length === 0 && bPre.length === 0) return 0;\n    // A version without prerelease is higher than one with prerelease\n    if (aPre.length === 0) return 1;\n    if (bPre.length === 0) return -1;\n\n    // Compare prerelease identifiers\n    const len = Math.max(aPre.length, bPre.length);\n    for (let i = 0; i < len; i++) {\n        const aId = aPre[i];\n        const bId = bPre[i];\n        if (aId === undefined) return -1; // a has fewer identifiers -> lower\n        if (bId === undefined) return 1;  // b has fewer identifiers -> lower\n        const cmp = compareIdentifiers(aId, bId);\n        if (cmp !== 0) return cmp;\n    }\n\n    return 0;\n}\n```"
     },
     {
       "id": "coding.toposort",
@@ -442,8 +442,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 3845,
-      "answer": "```ts\nfunction buildOrder(deps: Record<string, string[]>): string[] {\n    // Collect all nodes\n    const nodes = new Set<string>();\n    for (const pkg of Object.keys(deps)) {\n        nodes.add(pkg);\n        for (const dep of deps[pkg]) nodes.add(dep);\n    }\n\n    // Build adjacency (reverse edges) and indegree map\n    const adj = new Map<string, string[]>(); // node -> list of dependents\n    const indeg = new Map<string, number>();\n    for (const n of nodes) {\n        adj.set(n, []);\n        indeg.set(n, 0);\n    }\n\n    for (const [pkg, depList] of Object.entries(deps)) {\n        for (const dep of depList) {\n            // edge dep -> pkg\n            adj.get(dep)!.push(pkg);\n            indeg.set(pkg, indeg.get(pkg)! + 1);\n        }\n    }\n\n    // Simple binary min‑heap for strings\n    class MinHeap {\n        private data: string[] = [];\n        constructor(private compare: (a: string, b: string) => number) {}\n        push(item: string) {\n            this.data.push(item);\n            this.bubbleUp(this.data.length - 1);\n        }\n        pop(): string | undefined {\n            if (this.data.length === 0) return undefined;\n            const top = this.data[0];\n            const end = this.data.pop()!;\n            if (this.data.length > 0) {\n                this.data[0] = end;\n                this.sinkDown(0);\n            }\n            return top;\n        }\n        size(): number { return this.data.length; }\n        private bubbleUp(idx: number) {\n            const item = this.data[idx];\n            while (idx > 0) {\n                const parentIdx = (idx - 1) >> 1;\n                const parent = this.data[parentIdx];\n                if (this.compare(item, parent) >= 0) break;\n                this.data[parentIdx] = item;\n                this.data[idx] = parent;\n                idx = parentIdx;\n            }\n        }\n        private sinkDown(idx: number) {\n            const length = this.data.length;\n            const item = this.data[idx];\n            while (true) {\n                let leftIdx = idx * 2 + 1;\n                let rightIdx = leftIdx + 1;\n                let swapIdx: number | null = null;\n\n                if (leftIdx < length) {\n                    const left = this.data[leftIdx];\n                    if (this.compare(left, item) < 0) swapIdx = leftIdx;\n                }\n                if (rightIdx < length) {\n                    const right = this.data[rightIdx];\n                    if (\n                        (swapIdx === null && this.compare(right, item) < 0) ||\n                        (swapIdx !== null && this.compare(right, this.data[swapIdx]) < 0)\n                    ) {\n                        swapIdx = rightIdx;\n                    }\n                }\n                if (swapIdx === null) break;\n                this.data[idx] = this.data[swapIdx];\n                this.data[swapIdx] = item;\n                idx = swapIdx;\n            }\n        }\n    }\n\n    const heap = new MinHeap((a, b) => (a < b ? -1 : a > b ? 1 : 0));\n    for (const n of nodes) {\n        if (indeg.get(n)! === 0) heap.push(n);\n    }\n\n    const result: string[] = [];\n    while (heap.size() > 0) {\n        const cur = heap.pop()!;\n        result.push(cur);\n        for (const nxt of adj.get(cur)!) {\n            indeg.set(nxt, indeg.get(nxt)! - 1);\n            if (indeg.get(nxt)! === 0) heap.push(nxt);\n        }\n    }\n\n    if (result.length !== nodes.size) {\n        throw new Error(\"cycle detected\");\n    }\n    return result;\n}\n```"
+      "latencyMs": 3679,
+      "answer": "```ts\nfunction buildOrder(deps: Record<string, string[]>): string[] {\n    // Collect all nodes\n    const nodes = new Set<string>();\n    for (const pkg of Object.keys(deps)) {\n        nodes.add(pkg);\n        for (const d of deps[pkg]) nodes.add(d);\n    }\n\n    // Build adjacency list (edges from dependency -> dependent) and indegree map\n    const adj = new Map<string, Set<string>>();\n    const indeg = new Map<string, number>();\n    for (const n of nodes) {\n        adj.set(n, new Set());\n        indeg.set(n, 0);\n    }\n\n    for (const [pkg, depList] of Object.entries(deps)) {\n        const uniq = new Set(depList); // ignore duplicate deps\n        for (const d of uniq) {\n            // edge d -> pkg\n            adj.get(d)!.add(pkg);\n            indeg.set(pkg, indeg.get(pkg)! + 1);\n        }\n    }\n\n    // Simple min‑heap for strings\n    class MinHeap {\n        private data: string[] = [];\n        private compare(a: string, b: string) { return a < b; }\n\n        push(item: string) {\n            this.data.push(item);\n            this.bubbleUp(this.data.length - 1);\n        }\n        pop(): string | undefined {\n            if (this.data.length === 0) return undefined;\n            const top = this.data[0];\n            const end = this.data.pop()!;\n            if (this.data.length > 0) {\n                this.data[0] = end;\n                this.sinkDown(0);\n            }\n            return top;\n        }\n        size() { return this.data.length; }\n\n        private bubbleUp(idx: number) {\n            const item = this.data[idx];\n            while (idx > 0) {\n                const parentIdx = Math.floor((idx - 1) / 2);\n                const parent = this.data[parentIdx];\n                if (!this.compare(item, parent)) break;\n                this.data[parentIdx] = item;\n                this.data[idx] = parent;\n                idx = parentIdx;\n            }\n        }\n        private sinkDown(idx: number) {\n            const length = this.data.length;\n            const item = this.data[idx];\n            while (true) {\n                let leftIdx = 2 * idx + 1;\n                let rightIdx = 2 * idx + 2;\n                let swapIdx: number | null = null;\n\n                if (leftIdx < length) {\n                    const left = this.data[leftIdx];\n                    if (this.compare(left, item)) swapIdx = leftIdx;\n                }\n                if (rightIdx < length) {\n                    const right = this.data[rightIdx];\n                    if (this.compare(right, swapIdx === null ? item : this.data[swapIdx])) swapIdx = rightIdx;\n                }\n                if (swapIdx === null) break;\n                this.data[idx] = this.data[swapIdx];\n                this.data[swapIdx] = item;\n                idx = swapIdx;\n            }\n        }\n    }\n\n    const heap = new MinHeap();\n    for (const n of nodes) {\n        if (indeg.get(n)! === 0) heap.push(n);\n    }\n\n    const result: string[] = [];\n    while (heap.size() > 0) {\n        const cur = heap.pop()!;\n        result.push(cur);\n        for (const neigh of adj.get(cur)!) {\n            indeg.set(neigh, indeg.get(neigh)! - 1);\n            if (indeg.get(neigh)! === 0) heap.push(neigh);\n        }\n    }\n\n    if (result.length !== nodes.size) {\n        throw new Error(\"cycle detected\");\n    }\n    return result;\n}\n```"
     },
     {
       "id": "coding.csv",
@@ -484,8 +484,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 4005,
-      "answer": "```ts\nfunction parseCsvLine(line: string): string[] {\n  if (line.length === 0) return [];\n\n  const result: string[] = [];\n  let field = \"\";\n  let inQuotes = false;\n  let i = 0;\n  const len = line.length;\n\n  while (i <= len) {\n    const c = i < len ? line[i] : null;\n\n    if (!inQuotes) {\n      if (c === \",\" || c === null) {\n        result.push(field);\n        field = \"\";\n        i++;\n        continue;\n      }\n\n      if (c === '\"') {\n        // start of a quoted field only if field is currently empty\n        if (field.length === 0) {\n          inQuotes = true;\n          i++;\n          continue;\n        } else {\n          // stray quote inside an unquoted field – treat as literal\n          field += c;\n          i++;\n          continue;\n        }\n      }\n\n      // regular character\n      field += c!;\n      i++;\n    } else {\n      // inside quoted field\n      if (c === '\"') {\n        // escaped quote?\n        if (i + 1 < len && line[i + 1] === '\"') {\n          field += '\"';\n          i += 2;\n        } else {\n          // closing quote\n          inQuotes = false;\n          i++;\n          // after a closing quote only a comma or end of line is allowed\n          if (i < len) {\n            const next = line[i];\n            if (next !== \",\") {\n              throw new Error(\"Invalid character after closing quote\");\n            }\n          }\n        }\n      } else {\n        // any other character inside quotes\n        field += c!;\n        i++;\n      }\n    }\n  }\n\n  if (inQuotes) {\n    throw new Error(\"Unterminated quoted field\");\n  }\n\n  return result;\n}\n```"
+      "latencyMs": 2817,
+      "answer": "```ts\nfunction parseCsvLine(line: string): string[] {\n    const fields: string[] = [];\n    let field = \"\";\n    let i = 0;\n    const len = line.length;\n    let inQuotes = false;\n\n    while (i < len) {\n        const ch = line[i];\n\n        if (inQuotes) {\n            if (ch === '\"') {\n                // Look ahead to see if this is an escaped quote\n                if (i + 1 < len && line[i + 1] === '\"') {\n                    field += '\"';\n                    i += 2;\n                    continue;\n                } else {\n                    // End of quoted field\n                    inQuotes = false;\n                    i++; // consume closing quote\n                    // After closing quote, next char must be comma or end\n                    if (i < len && line[i] !== ',') {\n                        throw new Error(\"Invalid character after closing quote\");\n                    }\n                    continue;\n                }\n            } else {\n                field += ch;\n                i++;\n                continue;\n            }\n        } else {\n            if (ch === ',') {\n                fields.push(field);\n                field = \"\";\n                i++;\n                continue;\n            } else if (ch === '\"') {\n                if (field.length !== 0) {\n                    // Quote not at start of field -> invalid per RFC 4180\n                    throw new Error(\"Unexpected quote in unquoted field\");\n                }\n                inQuotes = true;\n                i++;\n                continue;\n            } else {\n                field += ch;\n                i++;\n                continue;\n            }\n        }\n    }\n\n    if (inQuotes) {\n        throw new Error(\"Unterminated quoted field\");\n    }\n\n    // Push the last field (including possible empty field after trailing comma)\n    fields.push(field);\n    return fields;\n}\n```"
     },
     {
       "id": "reasoning.line-up",
@@ -498,7 +498,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1636,
+      "latencyMs": 1967,
       "answer": "Dee, Ben, Ann, Cal  \nANSWER: Dee, Ben, Ann, Cal"
     },
     {
@@ -512,7 +512,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1136,
+      "latencyMs": 846,
       "answer": "740\nANSWER: 740"
     },
     {
@@ -530,7 +530,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1194,
+      "latencyMs": 1146,
       "answer": "YES, 2.4\nANSWER: YES, 2.4"
     },
     {
@@ -544,8 +544,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1598,
-      "answer": "The conditional probability is  \n\n\\[\n\\frac{\\text{favorable outcomes}}{\\text{possible outcomes}}=\\frac{5}{11}.\n\\]\n\n\\[\n\\boxed{\\frac{5}{11}}\n\\]\n\nANSWER: 5/11"
+      "latencyMs": 1384,
+      "answer": "The conditional probability is  \n\n\\[\n\\frac{\\text{number of outcomes with at least one 6 and sum }\\ge 10}{\\text{number of outcomes with at least one 6}}\n= \\frac{5}{11}.\n\\]\n\n\\[\n\\boxed{\\frac{5}{11}}\n\\]\n\nANSWER: 5/11"
     },
     {
       "id": "reasoning.critical-path",
@@ -558,8 +558,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 891,
-      "answer": "10\nANSWER: 10"
+      "latencyMs": 1564,
+      "answer": "10  \nANSWER: 10"
     },
     {
       "id": "reasoning.knaves",
@@ -572,7 +572,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1660,
+      "latencyMs": 1994,
       "answer": "knave  \nANSWER: knave"
     },
     {
@@ -586,8 +586,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1801,
-      "answer": "200  \nANSWER: 200"
+      "latencyMs": 2351,
+      "answer": "ANSWER: 200"
     },
     {
       "id": "reasoning.calendar",
@@ -600,7 +600,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 2147,
+      "latencyMs": 5517,
       "answer": "Monday  \nANSWER: Monday"
     },
     {
@@ -618,8 +618,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1901,
-      "answer": "DEFECT: SQL injection vulnerability – the `id` parameter is concatenated directly into the SQL statement without using parameterized queries or proper escaping.  \nDEFECT: The asynchronous `db.query` call is not awaited, so the function may return a response before the deletion operation completes.  \nDEFECT: No error handling – any database error is ignored and the handler always returns a 204 No Content response.  \nDEFECT: No validation or sanitization of the `id` parameter; an empty or malformed id is accepted and could lead to unintended behavior.  \nDEFECT: Missing authentication/authorization checks, allowing any caller to delete a user.  \nDEFECT: No HTTP method verification; the handler processes the request regardless of whether it is a DELETE request."
+      "latencyMs": 2472,
+      "answer": "DEFECT: SQL injection vulnerability – the `id` parameter is concatenated directly into the SQL statement without using parameterized queries or proper escaping.  \nDEFECT: Missing `await` on `db.query`; the async delete operation may not complete before the function returns, leading to race conditions.  \nDEFECT: No validation of the `id` value; an absent or malformed `id` defaults to an empty string, which could cause unintended query behavior.  \nDEFECT: Errors from `db.query` are not caught or handled, so the function always returns a 204 response even if the deletion fails."
     },
     {
       "id": "review.pagination",
@@ -636,8 +636,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1560,
-      "answer": "DEFECT: The start index is calculated as `page * perPage` but `page` is documented as 1‑based; it should be `(page - 1) * perPage` so that page 1 returns the first `perPage` items.  \nDEFECT: The `hasMore` flag uses `start + perPage <= items.length`, which reports `true` even when the current page exactly consumes the last items; it should use `<` (e.g., `start + perPage < items.length`) to indicate that additional pages exist only when there are remaining items after the current page."
+      "latencyMs": 1799,
+      "answer": "DEFECT: Off‑by‑one error in calculating the start index; the code uses `page * perPage` instead of `(page - 1) * perPage`, causing page 1 to start after the first `perPage` items.  \nDEFECT: `hasMore` logic is incorrect; it returns `true` when `start + perPage === items.length`, even though there is no following page. It should use `<` rather than `<=`."
     },
     {
       "id": "review.design-payments",
@@ -658,8 +658,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1701,
-      "answer": "DEFECT: Retrying POST /payments up to three times without an idempotency key can cause duplicate charges if the upstream service processes the request after the timeout.  \nDEFECT: Relying on processor deduplication of identical amounts within the same second is unreliable and can produce false positives (different payments treated as duplicates) or false negatives (duplicate payments not detected).  \nDEFECT: Caching each user’s permission set for 24 hours means revoked permissions remain effective for up to a day, violating the principle of least privilege and creating a security risk.  \nDEFECT: Logging full card numbers at INFO level breaches PCI‑DSS requirements and exposes highly sensitive data, creating a severe compliance and security vulnerability."
+      "latencyMs": 1698,
+      "answer": "DEFECT: Retrying POST /payments up to 3 times without an idempotency key can cause duplicate charges when the upstream timeout occurs after the processor has already completed the transaction.  \nDEFECT: Deduplicating solely on identical amounts within the same second is unreliable; legitimate distinct payments can share the same amount and second, leading to false deduplication or missed duplicates.  \nDEFECT: Caching each user’s permission set for 24 hours delays revocation, allowing a user to retain revoked permissions for up to a day, which is a security vulnerability.  \nDEFECT: Logging full card numbers at INFO level violates PCI‑DSS requirements and exposes sensitive payment data in logs."
     },
     {
       "id": "review.race",
@@ -672,22 +672,22 @@
           "pass": true
         }
       ],
-      "latencyMs": 1372,
-      "answer": "DEFECT: Race condition – the separate SELECT and UPDATE allow concurrent withdrawals to read the same balance and both succeed, potentially resulting in an overdraft.  \nDEFECT: No transaction or row‑level lock (e.g., SELECT … FOR UPDATE) is used, so the operation is not atomic and cannot guarantee consistency under concurrent access."
+      "latencyMs": 1740,
+      "answer": "DEFECT: The function suffers from a race condition – it reads the balance with a separate SELECT and then updates it, so concurrent withdrawals can both see the same balance and both succeed, potentially resulting in an overdrawn (negative) balance.  \nDEFECT: The SELECT and UPDATE are not executed within a transaction or using a row‑level lock (e.g., SELECT … FOR UPDATE), so there is no atomicity or isolation guaranteeing consistency under concurrent access."
     },
     {
       "id": "review.clean",
       "dimension": "review",
       "run": 0,
-      "grade": 0,
+      "grade": 1,
       "checks": [
         {
           "name": "no false positives",
-          "pass": false
+          "pass": true
         }
       ],
-      "latencyMs": 1967,
-      "answer": "DEFECT: The function returns NaN when any of the arguments (`value`, `min`, or `max`) is NaN instead of throwing an error or handling the case explicitly, which can lead to silent propagation of invalid numbers."
+      "latencyMs": 2023,
+      "answer": "NO DEFECTS"
     },
     {
       "id": "review.median",
@@ -704,8 +704,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 2049,
-      "answer": "DEFECT: Using `Array.prototype.sort()` without a numeric comparator sorts elements lexicographically, producing incorrect order for numbers (e.g., `[10, 2]` becomes `[10, 2]` instead of `[2, 10]`).  \nDEFECT: The function mutates the caller‑provided array by sorting it in place, violating the expectation that callers may reuse the original array unchanged.  \nDEFECT: The function does not guard against an empty array, which would cause `s[m]` to be `undefined` and the return value to be `NaN`, despite the documentation stating the array must be non‑empty."
+      "latencyMs": 2250,
+      "answer": "DEFECT: The function mutates the caller‑provided array by calling `xs.sort()`, which violates the requirement that callers reuse their arrays unchanged.  \nDEFECT: `Array.prototype.sort()` without a compare function sorts elements as strings, so numeric arrays are ordered incorrectly (e.g., `[10, 2]` becomes `[10, 2]` instead of `[2, 10]`).  \nDEFECT: The function does not guard against an empty input array; despite the comment claiming a non‑empty array, calling `median([])` will produce `undefined` (or a runtime error) instead of a valid number."
     },
     {
       "id": "review.cache-key",
@@ -722,22 +722,22 @@
           "pass": true
         }
       ],
-      "latencyMs": 2801,
-      "answer": "DEFECT: `setTimeout` receives `ttlSeconds` directly, but `ttlSeconds` is configured in seconds while `setTimeout` expects milliseconds, causing entries to expire far sooner than intended.  \nDEFECT: The cache key is built by simple concatenation of `userId` and `page` (`String(userId) + String(page)`), which can produce collisions (e.g., `userId=12, page=34` and `userId=1, page=234` both yield `\"1234\"`).  \nDEFECT: A timeout is scheduled for every cache insertion, but subsequent cache hits do not cancel or reset the previously scheduled timeout, so the entry may be deleted prematurely based on the original TTL rather than the most recent access."
+      "latencyMs": 3664,
+      "answer": "DEFECT: `setTimeout` expects a delay in milliseconds, but `ttlSeconds` is passed directly, so the cache entry expires 1,000 × faster than the intended number of seconds.  \nDEFECT: The cache key is created by simple concatenation (`String(userId) + String(page)`), which can produce collisions (e.g., `userId=12, page=34` and `userId=1, page=234` both yield `\"1234\"`).  \nDEFECT: If `getPage` is called concurrently for the same `userId`/`page` while a previous `loadPage` is still pending, multiple loads will occur and later responses can overwrite each other, leading to redundant work and race‑condition‑like behavior.  \nDEFECT: A timeout scheduled to delete a key may fire after the key has been refreshed with a new value (e.g., a second call sets a new entry before the first timeout expires), unintentionally evicting the fresh cache entry."
     },
     {
       "id": "review.clean-tricky",
       "dimension": "review",
       "run": 0,
-      "grade": 0,
+      "grade": 1,
       "checks": [
         {
           "name": "no false positives",
-          "pass": false
+          "pass": true
         }
       ],
-      "latencyMs": 2467,
-      "answer": "DEFECT: Does not preserve sparse array holes – empty slots in the input become explicit `undefined` entries in the output, altering the array’s shape."
+      "latencyMs": 1866,
+      "answer": "NO DEFECTS"
     },
     {
       "id": "structured.extract",
@@ -762,7 +762,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 855,
+      "latencyMs": 858,
       "answer": "{\"date\":\"2026-03-03\",\"people\":[{\"name\":\"Lena Ortiz\",\"role\":\"author\"},{\"name\":\"Sam Wu\",\"role\":\"reviewer\"},{\"name\":\"Ada Park\",\"role\":\"approver\"}]}"
     },
     {
@@ -792,8 +792,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1152,
-      "answer": "[{\"id\":1,\"title\":\"Finalize changelog\",\"priority\":\"high\"},{\"id\":2,\"title\":\"Run integration tests\",\"priority\":\"medium\"},{\"id\":3,\"title\":\"Update documentation\",\"priority\":\"medium\"},{\"id\":4,\"title\":\"Tag release\",\"priority\":\"low\"}]"
+      "latencyMs": 1105,
+      "answer": "[{\"id\":1,\"title\":\"Finalize release notes\",\"priority\":\"high\"},{\"id\":2,\"title\":\"Run integration tests\",\"priority\":\"medium\"},{\"id\":3,\"title\":\"Update version in config files\",\"priority\":\"low\"},{\"id\":4,\"title\":\"Coordinate deployment schedule\",\"priority\":\"medium\"}]"
     },
     {
       "id": "structured.nullable",
@@ -822,7 +822,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 627,
+      "latencyMs": 493,
       "answer": "{\"city\":\"Porto Velho\",\"population\":null,\"founded\":1914}"
     },
     {
@@ -840,7 +840,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 961,
+      "latencyMs": 877,
       "answer": "{\"message\":\"She said \\\"use C:\\\\temp\\\"\\nthen left.\"}"
     },
     {
@@ -874,7 +874,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1585,
+      "latencyMs": 1527,
       "answer": "[{\"type\":\"meeting\",\"date\":\"2026-11-02\",\"title\":\"Kickoff\",\"attendees\":[\"Ana\",\"Zoe\"]},{\"type\":\"deadline\",\"date\":\"2026-11-06\",\"title\":\"Design doc\"},{\"type\":\"meeting\",\"date\":\"2026-11-20\",\"title\":\"Retro\",\"attendees\":[\"Ben\",\"Carl\",\"Zoe\"]}]"
     },
     {
@@ -908,8 +908,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 2589,
-      "answer": "[2,3,4,7,15,20,21,30,48,50]"
+      "latencyMs": 3775,
+      "answer": "[5,11,12,14,16,18,20,23,33,48]"
     },
     {
       "id": "tool_use.select-args",
@@ -934,7 +934,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 952,
+      "latencyMs": 936,
       "transcript": {
         "calls": [
           {
@@ -974,7 +974,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1391,
+      "latencyMs": 1237,
       "transcript": {
         "calls": [
           {
@@ -990,7 +990,7 @@
             }
           }
         ],
-        "final": "**Current temperatures**\n\n- **Oslo:** -3 °C  \n- **Lima:** 19 °C  \n\nLima is warmer than Oslo.",
+        "final": "**Current temperatures**\n\n- **Oslo:** -3 °C  \n- **Lima:** 19 °C  \n\nLima is warmer than Oslo right now.",
         "turns": 3
       },
       "state": null
@@ -1018,7 +1018,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1098,
+      "latencyMs": 1286,
       "transcript": {
         "calls": [
           {
@@ -1030,7 +1030,7 @@
             }
           }
         ],
-        "final": "The cheapest flight on 9 July 2026 from Lisbon (LIS) to Berlin (BER) is:\n\n- **Flight ID:** XY123  \n- **Price:** €89 (Euros)",
+        "final": "The cheapest flight on 9 July 2026 from Lisbon (LIS) to Berlin (BER) is:\n\n- **Flight ID:** **XY123**  \n- **Price:** **€89**",
         "turns": 2
       },
       "state": null
@@ -1050,7 +1050,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 400,
+      "latencyMs": 427,
       "transcript": {
         "calls": [],
         "final": "51",
@@ -1081,7 +1081,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1536,
+      "latencyMs": 1620,
       "transcript": {
         "calls": [
           {
@@ -1101,7 +1101,7 @@
             }
           }
         ],
-        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on **2026‑07‑09** costs **≈ $96.12 USD**.",
+        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on 2026‑07‑09 costs **≈ $96.12 USD**.",
         "turns": 3
       },
       "state": null
@@ -1110,7 +1110,7 @@
       "id": "tool_use.strict-args",
       "dimension": "tool_use",
       "run": 0,
-      "grade": 0.8,
+      "grade": 1,
       "checks": [
         {
           "name": "single create_event",
@@ -1130,30 +1130,23 @@
         },
         {
           "name": "attendees",
-          "pass": false
+          "pass": true
         }
       ],
-      "latencyMs": 1780,
+      "latencyMs": 1752,
       "transcript": {
         "calls": [
           {
             "name": "create_event",
             "args": {
-              "attendees": [
-                {
-                  "name": "Ana"
-                },
-                {
-                  "name": "Ben"
-                }
-              ],
-              "duration_minutes": 90,
+              "title": "Design review",
               "start": "2026-11-03T15:30:00Z",
-              "title": "Design review"
+              "duration_minutes": 90,
+              "attendees": ["Ana", "Ben"]
             }
           }
         ],
-        "final": "Your calendar entry for **“Design review”** on **3 November 2026** from **15:30 UTC** to **17:00 UTC** (1 hour 30 minutes) with Ana and Ben has been added successfully.",
+        "final": "Your calendar event has been created successfully:\n\n- **Title:** Design review  \n- **Date & Time:** 3 November 2026, 15:30 UTC (lasting 1 hour 30 minutes)  \n- **Attendees:** Ana, Ben  \n\nLet me know if you need anything else!",
         "turns": 2
       },
       "state": null
@@ -1173,7 +1166,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 2422,
+      "latencyMs": 2726,
       "transcript": {
         "calls": [
           {
@@ -1229,7 +1222,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1691,
+      "latencyMs": 2136,
       "transcript": {
         "calls": [
           {
@@ -1260,11 +1253,11 @@
       "id": "agentic.reach-state",
       "dimension": "agentic",
       "run": 0,
-      "grade": 0.75,
+      "grade": 1,
       "checks": [
         {
           "name": "exact final set",
-          "pass": false
+          "pass": true
         },
         {
           "name": "no stray whitespace entry",
@@ -1279,7 +1272,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 3452,
+      "latencyMs": 9237,
       "transcript": {
         "calls": [
           {
@@ -1305,16 +1298,18 @@
             }
           },
           {
-            "name": "list_items",
-            "args": {}
+            "name": "add_item",
+            "args": {
+              "item": "bread"
+            }
           }
         ],
-        "final": "All done! The shopping list now contains exactly:\n\n- milk  \n- eggs  \n\nThe list matches the requested items.",
+        "final": "All done! The **​​​​​​**...…………………………  …  …  … … ... … … … … … ... …… … ... ... ... ... ... ... ... ... ... ... ... ... ... ... ... \n\nOops! **…  **  ...  ... ... \n\n...  \n\n\n\nIt looks **… …  ... ... ...\n\n\n\n...  \n\n\n\n  \n\n\n\n… … We  … \n\n\n\n  \n\n\n\n  \n\n\n\n \n\n\n\n… … \n\n\n\n \n\n\n\n… …\n\n\n\n…  \n\n\n\n... \n\n\n\n...\n\n\n\n… \n\n\n\n...\n\n\n\n… \n\n\n\n… \n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n… \n\n\n\n… \n\n\n\n...\n\n\n\n \n\n\n\n...\n\n\n\n… …\n\n\n\n…\n\n\n\n…\n\n\n\n...\n\n\n\n…\n\n\n\n…\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\nWe… \n\n\n\n\n\n\n\n… \n\n\n\n \n\n\n\n\n\n\n\n\n\n\n\n...\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n… \n\n\n\n\n\n\n\n \n\n\n\n… \n\n\n\n\n\n\n\n…\n\nThe...………\n\n\n\n...\n\n\n\n\n\n\n\n…\n\n… \n\n\n\n\n\n\n\n…\n\n\n\n\n\n…\n\n\n\n\n\n…\n\n\n\n\n\n \n\n\n\n\n\n\n\n…\n\n\n\n\n\n\n\n\n\n\n\n…\n\n\n\n\n\n…\n\n\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n... \n\nIt seems  ... \n\n... \n\n... \n\n... \n\n... \n\nWe \n\n\n\n…\n\n... \n\n...\n\n\n\n...\n\n\n\n... \n\n... \n\nWe \n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n...\n\n\n\n... \n\n... \n\nWe… \n\n... \n\n...\n\n\n\n... \n\n... \n\nWe…\n\n...\n\n\n\n...\n\n\n\n... \n\n... \n\n... \n\nWe…\n\n...\n\n\n\n...\n\n\n\n... \n\n...\n\n\n\n…\n\n\n\n...\n\n\n\n...\n\n\n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n............... \n\n...... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\nThe…\n\n...... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n...... \n\n...... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n...... \n\n...... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\nThe…\n\nThe… \n\nThe… \n\nThe\n\nThe............ \n\nThe... \n\n... \n\n... \n\nThe... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\nThe... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n............ \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n...... \n\n...... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n......\n\nIt looks like………... \n\n... \n\nThe… \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n...... \n\n... \n\n... \n\n...…\n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n...... \n\n............ \n\n............ \n\n... \n\n... \n\n......... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\nWe…\n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n......\n\nThe... \n\nOkay, ... \n\nWe… \n\nThe… \n\n... \n\n... \n\n...... \n\nThe…\n\nThe... \n\n... \n\n...... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n......... \n\nThe…\n\nWe…\n\n......... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n...... \n\n... \n\n...... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n...... \n\nThe... \n\nWe…\n\nWe............ \n\nThe... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\nWe…\n\nThe... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n...... \n\nWe…\n\nWe…\n\nWe…\n\nOkay… \n\nThe… \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n...…\n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n......\n\nWe…\n\n...…\n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n...... \n\nWe…\n\nThe…\n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n...\n\nThe... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\n... \n\nThe…\n\nThe…\n\n...... \n\n... \n\n...\n\nThe... \n\n... \n\n...\n\n... \n\n... \n\n... \n\n... \n\n... \n\n... ",
         "turns": 6
       },
       "state": {
-        "items": ["milk", "eggs"],
-        "ops": 3
+        "items": ["milk", "eggs", "bread"],
+        "ops": 4
       }
     },
     {
@@ -1352,7 +1347,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 7031,
+      "latencyMs": 8316,
       "transcript": {
         "calls": [
           {
@@ -1360,14 +1355,14 @@
             "args": {}
           },
           {
-            "name": "list_files",
-            "args": {}
-          },
-          {
             "name": "read_file",
             "args": {
               "path": "src/slug.ts"
             }
+          },
+          {
+            "name": "list_files",
+            "args": {}
           },
           {
             "name": "read_file",
@@ -1409,7 +1404,7 @@
             "name": "write_file",
             "args": {
               "path": "src/slug.ts",
-              "content": "export function slugify(s: string): string {\n  // Normalize to NFD to separate accents, then remove diacritic marks\n  const normalized = s.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n  // Convert to lowercase\n  const lower = normalized.toLowerCase();\n  // Replace any non-alphanumeric characters with spaces\n  const alnumSpace = lower.replace(/[^a-z0-9]+/g, ' ');\n  // Trim spaces and collapse multiple spaces into a single hyphen\n  const trimmed = alnumSpace.trim();\n  if (trimmed.length === 0) return '';\n  return trimmed.replace(/\\s+/g, '-');\n}\n"
+              "content": "export function slugify(s: string): string {\n  // Normalize to decompose accents, remove diacritics, lower case\n  const normalized = s\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase();\n  // Split on any non-alphanumeric characters (including whitespace and punctuation)\n  const parts = normalized.split(/[^a-z0-9]+/).filter(Boolean);\n  // Join with single hyphens\n  return parts.join('-');\n}\n"
             }
           },
           {
@@ -1466,7 +1461,7 @@
           "pass": false
         }
       ],
-      "latencyMs": 2201,
+      "latencyMs": 2870,
       "transcript": {
         "calls": [
           {
@@ -1507,7 +1502,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 485,
+      "latencyMs": 897,
       "answer": "Juniper-58"
     },
     {
@@ -1521,7 +1516,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 833,
+      "latencyMs": 722,
       "answer": "4.2 million euros"
     },
     {
@@ -1539,7 +1534,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 825,
+      "latencyMs": 912,
       "answer": "3, 535"
     },
     {
@@ -1557,8 +1552,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 781,
-      "answer": "4.6 million euros"
+      "latencyMs": 2874,
+      "answer": "4.6 million euros"
     },
     {
       "id": "long_context.three-hop",
@@ -1571,7 +1566,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 733,
+      "latencyMs": 749,
       "answer": "4471"
     },
     {
@@ -1585,7 +1580,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1458,
+      "latencyMs": 2094,
       "answer": "search,mailer,auth"
     },
     {
@@ -1607,8 +1602,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1024,
-      "answer": "- Ensure code works as intended and catches regressions early  \n- Facilitate refactoring by providing safety net for changes  \n- Improve documentation through examples of expected behavior"
+      "latencyMs": 810,
+      "answer": "- Ensure code works as intended and catches regressions.  \n- Facilitate refactoring by providing safety net for changes.  \n- Document behavior, making maintenance and onboarding easier."
     },
     {
       "id": "general.synthesis",
@@ -1637,7 +1632,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 736,
+      "latencyMs": 799,
       "answer": "Priya owns the billing migration, which was approved on 2026-03-14, and cutover is planned for June."
     },
     {
@@ -1663,7 +1658,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 516,
+      "latencyMs": 1106,
       "answer": "W; Canberra; 1989"
     },
     {
@@ -1677,7 +1672,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 696,
+      "latencyMs": 690,
       "answer": "apple, banana, cherry, date, fig, pear"
     },
     {
@@ -1695,7 +1690,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 644,
+      "latencyMs": 628,
       "answer": "Tokyo 23:30, New York 10:30"
     },
     {
@@ -1737,8 +1732,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 6011,
-      "answer": "Brooks run through hills soft.  \nMighty brooks cut canyons across lands.  \nSnow runoff fills brooks, bringing brisk flow.  \nKids splash in shallow brooks during bright days.  \nOld maps show historic brooks winding across cryptic lands."
+      "latencyMs": 6098,
+      "answer": "Brook winds through soft hills.  \nCold flow runs past mossy banks.  \nMorning mist lifts across bright brook banks.  \nKids splash in cool flow by tall oaks.  \nNightfall brings calm hush as moon glints on brook."
     },
     {
       "id": "general.acrostic",
@@ -1759,8 +1754,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1309,
-      "answer": "RANDOMS\nOVERLAP\nUPGRADE\nTALENTS\nELEVATE\nREACTOR"
+      "latencyMs": 1627,
+      "answer": "RAVENED\nOVERLAP\nUPRIGHT\nTALENTS\nECLIPSE\nRELEASE"
     },
     {
       "id": "coding.parse-duration",
@@ -1813,8 +1808,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1686,
-      "answer": "```ts\nexport function parseDuration(input: string): number {\n    if (typeof input !== 'string' || input.length === 0) {\n        throw new Error('Invalid duration');\n    }\n\n    const regex = /^(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+)s)?$/;\n    const match = input.match(regex);\n\n    if (!match) {\n        throw new Error('Invalid duration');\n    }\n\n    const [, hStr, mStr, sStr] = match;\n\n    if (hStr === undefined && mStr === undefined && sStr === undefined) {\n        throw new Error('Invalid duration');\n    }\n\n    const h = hStr ? parseInt(hStr, 10) : 0;\n    const m = mStr ? parseInt(mStr, 10) : 0;\n    const s = sStr ? parseInt(sStr, 10) : 0;\n\n    // Ensure parsed numbers are integers and non‑negative\n    if (!Number.isInteger(h) || !Number.isInteger(m) || !Number.isInteger(s) ||\n        h < 0 || m < 0 || s < 0) {\n        throw new Error('Invalid duration');\n    }\n\n    return h * 3600 + m * 60 + s;\n}\n```\n"
+      "latencyMs": 2644,
+      "answer": "```ts\nfunction parseDuration(input: string): number {\n    if (input.length === 0) {\n        throw new Error('Invalid duration');\n    }\n\n    const regex = /^(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+)s)?$/;\n    const match = input.match(regex);\n\n    if (!match) {\n        throw new Error('Invalid duration');\n    }\n\n    const [, hStr, mStr, sStr] = match;\n\n    // Ensure at least one unit is present\n    if (hStr === undefined && mStr === undefined && sStr === undefined) {\n        throw new Error('Invalid duration');\n    }\n\n    const hours = hStr ? parseInt(hStr, 10) : 0;\n    const minutes = mStr ? parseInt(mStr, 10) : 0;\n    const seconds = sStr ? parseInt(sStr, 10) : 0;\n\n    return hours * 3600 + minutes * 60 + seconds;\n}\n```"
     },
     {
       "id": "coding.fix-chunk",
@@ -1847,7 +1842,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 890,
+      "latencyMs": 795,
       "answer": "```ts\nfunction chunk<T>(items: T[], size: number): T[][] {\n  if (!Number.isInteger(size) || size <= 0) {\n    throw new RangeError('size must be a positive integer')\n  }\n  const out: T[][] = []\n  for (let i = 0; i < items.length; i += size) {\n    out.push(items.slice(i, i + size))\n  }\n  return out\n}\n```"
     },
     {
@@ -1877,8 +1872,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1762,
-      "answer": "```ts\nclass LruCache<K, V> {\n  private readonly capacity: number;\n  private readonly map: Map<K, V>;\n\n  constructor(capacity: number) {\n    if (!Number.isInteger(capacity) || capacity <= 0) {\n      throw new Error('Capacity must be a positive integer');\n    }\n    this.capacity = capacity;\n    this.map = new Map<K, V>();\n  }\n\n  get(key: K): V | undefined {\n    if (!this.map.has(key)) return undefined;\n    const value = this.map.get(key)!;\n    // Move key to the most-recently-used position\n    this.map.delete(key);\n    this.map.set(key, value);\n    return value;\n  }\n\n  set(key: K, value: V): void {\n    if (this.map.has(key)) {\n      // Update existing key and move to MRU position\n      this.map.delete(key);\n    } else if (this.map.size >= this.capacity) {\n      // Evict least-recently-used (first inserted) key\n      const lruKey = this.map.keys().next().value;\n      this.map.delete(lruKey);\n    }\n    this.map.set(key, value);\n  }\n\n  get size(): number {\n    return this.map.size;\n  }\n}\n```"
+      "latencyMs": 1977,
+      "answer": "```ts\nexport class LruCache<K, V> {\n    private readonly _capacity: number;\n    private readonly _map: Map<K, V>;\n\n    constructor(capacity: number) {\n        if (!Number.isInteger(capacity) || capacity <= 0) {\n            throw new Error('Capacity must be a positive integer');\n        }\n        this._capacity = capacity;\n        this._map = new Map<K, V>();\n    }\n\n    get(key: K): V | undefined {\n        if (!this._map.has(key)) return undefined;\n        const value = this._map.get(key)!;\n        // Move to most-recently-used position\n        this._map.delete(key);\n        this._map.set(key, value);\n        return value;\n    }\n\n    set(key: K, value: V): void {\n        if (this._map.has(key)) {\n            // Update existing entry and move to MRU position\n            this._map.delete(key);\n        } else if (this._map.size >= this._capacity) {\n            // Evict least-recently-used (first entry in insertion order)\n            const lruKey = this._map.keys().next().value;\n            this._map.delete(lruKey);\n        }\n        this._map.set(key, value);\n    }\n\n    get size(): number {\n        return this._map.size;\n    }\n}\n```"
     },
     {
       "id": "coding.with-timeout",
@@ -1903,8 +1898,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 844,
-      "answer": "```ts\nfunction withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {\n    return new Promise<T>((resolve, reject) => {\n        const timer = setTimeout(() => {\n            reject(new Error(\"timeout\"));\n        }, ms);\n\n        work.then(\n            (value) => {\n                clearTimeout(timer);\n                resolve(value);\n            },\n            (err) => {\n                clearTimeout(timer);\n                reject(err);\n            }\n        );\n    });\n}\n```"
+      "latencyMs": 1725,
+      "answer": "```ts\nfunction withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {\n    return new Promise<T>((resolve, reject) => {\n        const timer = setTimeout(() => {\n            // Timeout occurred; reject with the required error.\n            reject(new Error(\"timeout\"));\n        }, ms);\n\n        // When the work settles, clear the timer and forward the result.\n        work.then(\n            (value) => {\n                clearTimeout(timer);\n                resolve(value);\n            },\n            (err) => {\n                clearTimeout(timer);\n                reject(err);\n            }\n        );\n    });\n}\n```"
     },
     {
       "id": "coding.comprehension",
@@ -1917,7 +1912,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 2172,
+      "latencyMs": 1845,
       "answer": "14 7"
     },
     {
@@ -1983,8 +1978,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 5598,
-      "answer": "```ts\ntype Parsed = {\n    major: number;\n    minor: number;\n    patch: number;\n    prerelease?: string[];\n};\n\nfunction parseVersion(v: string): Parsed {\n    const semverRegex = /^(?<core>\\d+\\.\\d+\\.\\d+)(?:-(?<prerelease>[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+(?<build>[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$/;\n    const match = v.match(semverRegex);\n    if (!match || !match.groups) throw new Error(`Invalid version: ${v}`);\n\n    const coreParts = match.groups.core.split('.');\n    const [majorStr, minorStr, patchStr] = coreParts;\n\n    // leading zero check for core numeric identifiers\n    for (const part of coreParts) {\n        if (!/^(0|[1-9]\\d*)$/.test(part)) {\n            throw new Error(`Invalid numeric identifier in core: ${part}`);\n        }\n    }\n\n    const major = Number(majorStr);\n    const minor = Number(minorStr);\n    const patch = Number(patchStr);\n\n    let prerelease: string[] | undefined;\n    if (match.groups.prerelease !== undefined) {\n        prerelease = match.groups.prerelease.split('.').map(id => {\n            if (id.length === 0) throw new Error(`Empty prerelease identifier`);\n            // validate characters\n            if (!/^[0-9A-Za-z-]+$/.test(id)) {\n                throw new Error(`Invalid prerelease identifier: ${id}`);\n            }\n            // numeric identifier must not have leading zeros\n            if (/^\\d+$/.test(id) && !/^(0|[1-9]\\d*)$/.test(id)) {\n                throw new Error(`Invalid numeric prerelease identifier: ${id}`);\n            }\n            return id;\n        });\n    }\n\n    return { major, minor, patch, prerelease };\n}\n\nfunction compareIdentifiers(a: string, b: string): -1 | 0 | 1 {\n    const aNum = /^\\d+$/.test(a);\n    const bNum = /^\\d+$/.test(b);\n\n    if (aNum && bNum) {\n        const diff = Number(a) - Number(b);\n        return diff < 0 ? -1 : diff > 0 ? 1 : 0;\n    }\n\n    if (aNum && !bNum) return -1; // numeric < alphanumeric\n    if (!aNum && bNum) return 1;  // alphanumeric > numeric\n\n    // both alphanumeric: lexical ASCII comparison\n    return a < b ? -1 : a > b ? 1 : 0;\n}\n\nexport function compareSemver(a: string, b: string): -1 | 0 | 1 {\n    const A = parseVersion(a);\n    const B = parseVersion(b);\n\n    if (A.major !== B.major) return A.major < B.major ? -1 : 1;\n    if (A.minor !== B.minor) return A.minor < B.minor ? -1 : 1;\n    if (A.patch !== B.patch) return A.patch < B.patch ? -1 : 1;\n\n    const aPre = A.prerelease;\n    const bPre = B.prerelease;\n\n    // No prerelease => release version\n    if (!aPre && !bPre) return 0;\n    if (!aPre && bPre) return 1; // release > prerelease\n    if (aPre && !bPre) return -1; // prerelease < release\n\n    // Both have prerelease arrays\n    const len = Math.max(aPre!.length, bPre!.length);\n    for (let i = 0; i < len; i++) {\n        const aId = aPre![i];\n        const bId = bPre![i];\n        if (aId === undefined) return -1; // shorter set < longer set\n        if (bId === undefined) return 1;  // longer set > shorter set\n        const comp = compareIdentifiers(aId, bId);\n        if (comp !== 0) return comp;\n    }\n\n    return 0;\n}\n```"
+      "latencyMs": 4759,
+      "answer": "```ts\ntype Parsed = {\n    major: number;\n    minor: number;\n    patch: number;\n    prerelease: string[] | null;\n};\n\nfunction parseVersion(v: string): Parsed {\n    const regex = /^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$/;\n    const m = v.match(regex);\n    if (!m) throw new Error(`Invalid version: ${v}`);\n\n    const [, majorStr, minorStr, patchStr, prereleaseStr] = m;\n\n    const major = Number(majorStr);\n    const minor = Number(minorStr);\n    const patch = Number(patchStr);\n\n    let prerelease: string[] | null = null;\n    if (prereleaseStr !== undefined) {\n        prerelease = prereleaseStr.split('.');\n        for (const id of prerelease) {\n            if (!/^[0-9A-Za-z-]+$/.test(id)) {\n                throw new Error(`Invalid version: ${v}`);\n            }\n            if (/^\\d+$/.test(id) && id.length > 1 && id.startsWith('0')) {\n                // numeric identifier with leading zeros\n                throw new Error(`Invalid version: ${v}`);\n            }\n        }\n    }\n\n    return { major, minor, patch, prerelease };\n}\n\nfunction compareIdentifiers(a: string, b: string): -1 | 0 | 1 {\n    const aNum = /^\\d+$/.test(a);\n    const bNum = /^\\d+$/.test(b);\n    if (aNum && bNum) {\n        const diff = Number(a) - Number(b);\n        return diff < 0 ? -1 : diff > 0 ? 1 : 0;\n    }\n    if (aNum && !bNum) return -1; // numeric < alphanumeric\n    if (!aNum && bNum) return 1;\n    // both alphanumeric\n    return a < b ? -1 : a > b ? 1 : 0;\n}\n\nexport function compareSemver(a: string, b: string): -1 | 0 | 1 {\n    const A = parseVersion(a);\n    const B = parseVersion(b);\n\n    if (A.major !== B.major) return A.major < B.major ? -1 : 1;\n    if (A.minor !== B.minor) return A.minor < B.minor ? -1 : 1;\n    if (A.patch !== B.patch) return A.patch < B.patch ? -1 : 1;\n\n    const preA = A.prerelease;\n    const preB = B.prerelease;\n\n    if (preA === null && preB === null) return 0;\n    if (preA === null) return 1; // release > pre-release\n    if (preB === null) return -1;\n\n    const len = Math.max(preA.length, preB.length);\n    for (let i = 0; i < len; i++) {\n        const idA = preA[i];\n        const idB = preB[i];\n        if (idA === undefined) return -1; // shorter set has lower precedence\n        if (idB === undefined) return 1;\n        const cmp = compareIdentifiers(idA, idB);\n        if (cmp !== 0) return cmp;\n    }\n    return 0;\n}\n```"
     },
     {
       "id": "coding.toposort",
@@ -2017,8 +2012,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 3208,
-      "answer": "```ts\nfunction buildOrder(deps: Record<string, string[]>): string[] {\n    // Collect all package names (keys and dependencies)\n    const all = new Set<string>();\n    for (const pkg in deps) {\n        all.add(pkg);\n        for (const d of deps[pkg]) all.add(d);\n    }\n\n    // Initialise adjacency list (edges from dependency -> dependent) and indegree map\n    const adj = new Map<string, string[]>();\n    const indegree = new Map<string, number>();\n    for (const node of all) {\n        adj.set(node, []);\n        indegree.set(node, 0);\n    }\n\n    // Build graph\n    for (const pkg in deps) {\n        for (const d of deps[pkg]) {\n            adj.get(d)!.push(pkg);\n            indegree.set(pkg, indegree.get(pkg)! + 1);\n        }\n    }\n\n    // Nodes with zero indegree, kept sorted lexicographically\n    const zero: string[] = [];\n    for (const node of all) {\n        if (indegree.get(node)! === 0) zero.push(node);\n    }\n    zero.sort();\n\n    const result: string[] = [];\n\n    while (zero.length) {\n        const node = zero.shift()!; // smallest lexicographic node\n        result.push(node);\n\n        for (const neigh of adj.get(node)!) {\n            indegree.set(neigh, indegree.get(neigh)! - 1);\n            if (indegree.get(neigh) === 0) {\n                zero.push(neigh);\n            }\n        }\n        zero.sort(); // maintain lexicographic order\n    }\n\n    if (result.length !== all.size) {\n        throw new Error('cycle detected');\n    }\n\n    return result;\n}\n```"
+      "latencyMs": 5328,
+      "answer": "```ts\nfunction buildOrder(deps: Record<string, string[]>): string[] {\n  // collect all package names\n  const nodes = new Set<string>();\n  for (const pkg in deps) {\n    nodes.add(pkg);\n    for (const d of deps[pkg]) nodes.add(d);\n  }\n\n  // adjacency list (edge: dependency -> dependent) and indegree map\n  const adj = new Map<string, Set<string>>();\n  const indegree = new Map<string, number>();\n  for (const n of nodes) {\n    adj.set(n, new Set());\n    indegree.set(n, 0);\n  }\n\n  for (const pkg in deps) {\n    const uniq = Array.from(new Set(deps[pkg])); // deduplicate edges\n    for (const d of uniq) {\n      // edge d -> pkg\n      if (!adj.get(d)!.has(pkg)) {\n        adj.get(d)!.add(pkg);\n        indegree.set(pkg, indegree.get(pkg)! + 1);\n      }\n    }\n  }\n\n  // simple binary min‑heap for lexicographically smallest node selection\n  class MinHeap {\n    private data: string[] = [];\n    private less(a: string, b: string): boolean { return a < b; }\n\n    push(x: string): void {\n      this.data.push(x);\n      this.bubbleUp(this.data.length - 1);\n    }\n\n    private bubbleUp(i: number): void {\n      while (i > 0) {\n        const p = (i - 1) >> 1;\n        if (this.less(this.data[i], this.data[p])) {\n          [this.data[i], this.data[p]] = [this.data[p], this.data[i]];\n          i = p;\n        } else break;\n      }\n    }\n\n    pop(): string | undefined {\n      if (this.data.length === 0) return undefined;\n      const top = this.data[0];\n      const end = this.data.pop()!;\n      if (this.data.length) {\n        this.data[0] = end;\n        this.sink(0);\n      }\n      return top;\n    }\n\n    private sink(i: number): void {\n      const n = this.data.length;\n      while (true) {\n        let left = i * 2 + 1;\n        let right = left + 1;\n        let smallest = i;\n        if (left < n && this.less(this.data[left], this.data[smallest])) smallest = left;\n        if (right < n && this.less(this.data[right], this.data[smallest])) smallest = right;\n        if (smallest !== i) {\n          [this.data[i], this.data[smallest]] = [this.data[smallest], this.data[i]];\n          i = smallest;\n        } else break;\n      }\n    }\n\n    size(): number { return this.data.length; }\n  }\n\n  const heap = new MinHeap();\n  for (const n of nodes) if (indegree.get(n)! === 0) heap.push(n);\n\n  const order: string[] = [];\n  while (heap.size()) {\n    const node = heap.pop()!;\n    order.push(node);\n    for (const nxt of adj.get(node)!) {\n      indegree.set(nxt, indegree.get(nxt)! - 1);\n      if (indegree.get(nxt)! === 0) heap.push(nxt);\n    }\n  }\n\n  if (order.length !== nodes.size) {\n    throw new Error(\"cycle\");\n  }\n  return order;\n}\n```"
     },
     {
       "id": "coding.csv",
@@ -2059,8 +2054,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 6170,
-      "answer": "```ts\nfunction parseCsvLine(line: string): string[] {\n  const fields: string[] = [];\n  let i = 0;\n  const len = line.length;\n\n  while (true) {\n    // End of line handling (including empty line)\n    if (i >= len) {\n      // If the line ends with a comma, the loop will have already added an empty field.\n      // Otherwise, we need to add a final empty field for an empty line.\n      if (len === 0 || line.endsWith(',')) {\n        fields.push('');\n      }\n      break;\n    }\n\n    let field = '';\n\n    // Quoted field\n    if (line[i] === '\"') {\n      i++; // skip opening quote\n      let closed = false;\n      while (i < len) {\n        const ch = line[i];\n        if (ch === '\"') {\n          if (i + 1 < len && line[i + 1] === '\"') {\n            // escaped quote\n            field += '\"';\n            i += 2;\n          } else {\n            // closing quote\n            i++;\n            closed = true;\n            break;\n          }\n        } else {\n          field += ch;\n          i++;\n        }\n      }\n      if (!closed) {\n        throw new Error('Unterminated quoted field');\n      }\n      // After a closing quote only a comma or end of line is allowed\n      if (i < len && line[i] !== ',') {\n        throw new Error('Invalid character after closing quote');\n      }\n    } else {\n      // Unquoted field\n      while (i < len && line[i] !== ',') {\n        field += line[i];\n        i++;\n      }\n    }\n\n    fields.push(field);\n\n    // If we are at the end, break\n    if (i >= len) {\n      break;\n    }\n\n    // Current character must be a comma (we already validated after quoted fields)\n    i++; // skip comma\n\n    // If the line ends with a comma, add an empty field on next iteration\n    if (i >= len) {\n      fields.push('');\n      break;\n    }\n  }\n\n  return fields;\n}\n```"
+      "latencyMs": 4902,
+      "answer": "```ts\nfunction parseCsvLine(line: string): string[] {\n    // Empty line represents a single empty field\n    if (line.length === 0) return [''];\n\n    const fields: string[] = [];\n    const len = line.length;\n    let i = 0;\n\n    while (i <= len) {\n        // End of string: break (handled trailing empty after loop)\n        if (i === len) break;\n\n        // Empty field (consecutive commas or leading comma)\n        if (line[i] === ',') {\n            fields.push('');\n            i++; // skip the comma\n            continue;\n        }\n\n        let field = '';\n\n        // Quoted field\n        if (line[i] === '\"') {\n            i++; // skip opening quote\n            while (true) {\n                if (i >= len) {\n                    throw new Error('Unterminated quoted field');\n                }\n                const ch = line[i];\n                if (ch === '\"') {\n                    // escaped quote?\n                    if (i + 1 < len && line[i + 1] === '\"') {\n                        field += '\"';\n                        i += 2;\n                        continue;\n                    }\n                    // closing quote\n                    i++; // move past closing quote\n                    // after a closing quote only a comma or end of line is allowed\n                    if (i < len && line[i] !== ',') {\n                        throw new Error('Invalid character after closing quote');\n                    }\n                    break;\n                } else {\n                    field += ch;\n                    i++;\n                }\n            }\n        } else {\n            // Unquoted field: read until next comma or end\n            while (i < len && line[i] !== ',') {\n                field += line[i];\n                i++;\n            }\n        }\n\n        fields.push(field);\n\n        // If next character is a comma, skip it (separator)\n        if (i < len && line[i] === ',') {\n            i++;\n        }\n    }\n\n    // If the line ends with a comma, that denotes a trailing empty field\n    if (line.endsWith(',')) {\n        fields.push('');\n    }\n\n    return fields;\n}\n```"
     },
     {
       "id": "reasoning.line-up",
@@ -2073,7 +2068,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1636,
+      "latencyMs": 1825,
       "answer": "Dee, Ben, Ann, Cal  \nANSWER: Dee, Ben, Ann, Cal"
     },
     {
@@ -2087,8 +2082,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 760,
-      "answer": "ANSWER: 740"
+      "latencyMs": 1435,
+      "answer": "740\nANSWER: 740"
     },
     {
       "id": "reasoning.timeouts",
@@ -2105,8 +2100,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 998,
-      "answer": "YES, 2.4  \nANSWER: YES, 2.4"
+      "latencyMs": 1019,
+      "answer": "YES, 2.4\nANSWER: YES, 2.4"
     },
     {
       "id": "reasoning.dice",
@@ -2119,7 +2114,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1169,
+      "latencyMs": 1235,
       "answer": "The conditional probability is  \n\n\\[\n\\frac{\\text{favorable outcomes}}{\\text{possible outcomes}}=\\frac{5}{11}.\n\\]\n\n\\[\n\\boxed{\\frac{5}{11}}\n\\]\n\nANSWER: 5/11"
     },
     {
@@ -2133,7 +2128,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 871,
+      "latencyMs": 2354,
       "answer": "10\nANSWER: 10"
     },
     {
@@ -2147,7 +2142,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1660,
+      "latencyMs": 1851,
       "answer": "knave  \nANSWER: knave"
     },
     {
@@ -2161,8 +2156,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1446,
-      "answer": "200\nANSWER: 200"
+      "latencyMs": 2208,
+      "answer": "ANSWER: 200"
     },
     {
       "id": "reasoning.calendar",
@@ -2175,7 +2170,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1999,
+      "latencyMs": 2171,
       "answer": "Monday  \nANSWER: Monday"
     },
     {
@@ -2193,8 +2188,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 2708,
-      "answer": "DEFECT: SQL injection vulnerability – the user‑supplied `id` is concatenated directly into the SQL string instead of using a parameterized query.  \nDEFECT: The `db.query` call is not awaited, so the function may return before the deletion completes and any errors are ignored.  \nDEFECT: No validation is performed for a missing or empty `id`; an empty string is used in the query, which could lead to unintended behavior.  \nDEFECT: Errors from `db.query` are not caught or handled, causing the handler to always return a 204 response even if the deletion fails."
+      "latencyMs": 2568,
+      "answer": "DEFECT: SQL injection vulnerability – the `id` parameter is concatenated directly into the SQL string without sanitization or parameterization.  \nDEFECT: The database query is not awaited, so the function may return before the deletion completes and any promise rejection would be unhandled.  \nDEFECT: No error handling is present for the `db.query` call; database errors will propagate uncaught and still return a 204 response.  \nDEFECT: The `id` parameter is not validated (e.g., checked for presence, correct type/format), allowing empty or malformed values to be used in the query.  \nDEFECT: Missing handling for a missing or empty `id` – the function proceeds with the deletion and returns 204 even when the request is invalid."
     },
     {
       "id": "review.pagination",
@@ -2211,8 +2206,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1891,
-      "answer": "DEFECT: The start index is calculated as `page * perPage` but `page` is documented as 1‑based; it should be `(page - 1) * perPage` so that page 1 returns the first items.  \nDEFECT: The `hasMore` flag uses `start + perPage <= items.length`, which reports `true` even when the current page exactly consumes the last items; it should use `<` (or compare against the actual number of rows returned) to indicate that another page exists only when there are remaining items after the current page."
+      "latencyMs": 1794,
+      "answer": "DEFECT: The start index is calculated as `page * perPage` instead of `(page - 1) * perPage`, so page 1 incorrectly starts after the first `perPage` items.  \nDEFECT: The `hasMore` flag uses `start + perPage <= items.length`, which returns `true` even when the current page exactly consumes the last items; it should use `<` (or compare against the actual number of rows returned)."
     },
     {
       "id": "review.design-payments",
@@ -2233,8 +2228,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 2078,
-      "answer": "DEFECT: Retrying POST /payments up to 3 times without an idempotency key can cause duplicate charges if the upstream service processes the request after the timeout.  \nDEFECT: Relying on processor deduplication of identical amounts within the same second is unreliable and may still allow duplicate transactions for legitimate same‑amount payments.  \nDEFECT: Caching each user's permission set for 24 hours delays revocation, allowing a user to retain access for up to a day after a permission is removed, which is a security risk.  \nDEFECT: Logging full card numbers at INFO level violates PCI‑DSS and privacy best practices, exposing sensitive payment data in logs."
+      "latencyMs": 1956,
+      "answer": "DEFECT: Retrying POST /payments up to three times without an idempotency key can cause duplicate charges if the upstream service processes the request after the timeout.  \nDEFECT: Relying on the processor to deduplicate identical amounts within the same second is unreliable; it can produce false positives (different transactions treated as duplicates) and false negatives (identical transactions not deduped).  \nDEFECT: Caching each user’s permission set for 24 hours means a revoked permission may remain effective for up to a day, creating a security risk.  \nDEFECT: Logging full card numbers at INFO level violates PCI‑DSS requirements and exposes sensitive payment data in logs, risking data leakage."
     },
     {
       "id": "review.race",
@@ -2247,8 +2242,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1649,
-      "answer": "DEFECT: The function performs a separate SELECT and UPDATE without any locking or transaction, leading to a race condition where concurrent withdrawals can read the same balance and both succeed, potentially resulting in an overdraft.  \nDEFECT: No transaction is used, so the read‑modify‑write sequence is not atomic; a `SELECT ... FOR UPDATE` or an atomic `UPDATE ... WHERE balance >= $1` is needed to ensure correctness under concurrency.  "
+      "latencyMs": 1110,
+      "answer": "DEFECT: The separate SELECT and UPDATE are not performed within a transaction or using row‑level locking (e.g., SELECT … FOR UPDATE), so concurrent executions can read the same balance and both succeed, causing an overdraft (lost‑update race condition)."
     },
     {
       "id": "review.clean",
@@ -2261,7 +2256,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 2300,
+      "latencyMs": 1238,
       "answer": "NO DEFECTS"
     },
     {
@@ -2279,8 +2274,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 2007,
-      "answer": "DEFECT: `xs.sort()` sorts the array in place, mutating the caller‑provided array, which violates the expectation that callers can reuse the original array unchanged.  \nDEFECT: Calling `Array.prototype.sort()` without a numeric compare function sorts numbers lexicographically as strings, producing an incorrect order (e.g., `[10, 2]` becomes `[10, 2]`), so the computed median can be wrong.  \nDEFECT: The function does not guard against an empty input array; calling it with `[]` would cause `s[m]` to be `undefined` and return `NaN`, contrary to the “non‑empty” contract."
+      "latencyMs": 1918,
+      "answer": "DEFECT: Using `Array.prototype.sort()` without a numeric comparator sorts numbers lexicographically, so the array may not be ordered correctly for numeric values.  \nDEFECT: The function mutates the caller‑provided array (`xs`) by sorting it in place, which violates the requirement that callers reuse the original arrays unchanged.  \nDEFECT: The function does not guard against an empty array; calling `median([])` will produce out‑of‑bounds accesses and return `NaN` or `undefined`."
     },
     {
       "id": "review.cache-key",
@@ -2297,8 +2292,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 2171,
-      "answer": "DEFECT: `setTimeout` receives `ttlSeconds` directly, but `setTimeout` expects a delay in milliseconds, so the TTL is interpreted as milliseconds instead of seconds.  \nDEFECT: The cache key is built by simple string concatenation (`String(userId) + String(page)`), which can cause collisions (e.g., userId = 12, page = 34 vs. userId = 1, page = 234 both produce `\"1234\"`).  \nDEFECT: The cache hit check uses `if (hit)` which treats falsy cached values (e.g., `null`, `undefined`, `0`) as a miss; it should check key existence with `cache.has(key)` or compare against `undefined`."
+      "latencyMs": 3238,
+      "answer": "DEFECT: `setTimeout` expects a delay in milliseconds, but `ttlSeconds` is provided in seconds, causing the cached entry to expire 1000 × faster than intended.  \nDEFECT: The cache key is built by simple string concatenation (`String(userId) + String(page)`), which can produce collisions (e.g., userId = 12, page = 34 → \"1234\" collides with userId = 1, page = 234).  \nDEFECT: A cached value that is falsy (e.g., `null` or `undefined`) is treated as a cache miss because the code checks `if (hit)`, potentially causing unnecessary reloads.  \nDEFECT: When a key is refreshed before its previous TTL expires, a new `setTimeout` is scheduled without canceling the earlier one, so the earlier timer may delete the entry prematurely.  \nDEFECT: The TTL is not refreshed on cache hits, so frequently accessed entries still expire after the original TTL even though they are being used."
     },
     {
       "id": "review.clean-tricky",
@@ -2311,7 +2306,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 2664,
+      "latencyMs": 1851,
       "answer": "NO DEFECTS"
     },
     {
@@ -2337,7 +2332,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 899,
+      "latencyMs": 882,
       "answer": "{\"date\":\"2026-03-03\",\"people\":[{\"name\":\"Lena Ortiz\",\"role\":\"author\"},{\"name\":\"Sam Wu\",\"role\":\"reviewer\"},{\"name\":\"Ada Park\",\"role\":\"approver\"}]}"
     },
     {
@@ -2367,8 +2362,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1296,
-      "answer": "[{\"id\":1,\"title\":\"Finalize changelog\",\"priority\":\"high\"},{\"id\":2,\"title\":\"Run integration tests\",\"priority\":\"medium\"},{\"id\":3,\"title\":\"Update documentation\",\"priority\":\"medium\"},{\"id\":4,\"title\":\"Tag release\",\"priority\":\"low\"}]"
+      "latencyMs": 1066,
+      "answer": "[{\"id\":1,\"title\":\"Update changelog\",\"priority\":\"high\"},{\"id\":2,\"title\":\"Run integration tests\",\"priority\":\"medium\"},{\"id\":3,\"title\":\"Tag release in git\",\"priority\":\"low\"},{\"id\":4,\"title\":\"Notify stakeholders\",\"priority\":\"medium\"}]"
     },
     {
       "id": "structured.nullable",
@@ -2397,7 +2392,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 606,
+      "latencyMs": 488,
       "answer": "{\"city\":\"Porto Velho\",\"population\":null,\"founded\":1914}"
     },
     {
@@ -2415,7 +2410,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 883,
+      "latencyMs": 1060,
       "answer": "{\"message\":\"She said \\\"use C:\\\\temp\\\"\\nthen left.\"}"
     },
     {
@@ -2449,7 +2444,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1275,
+      "latencyMs": 1540,
       "answer": "[{\"type\":\"meeting\",\"date\":\"2026-11-02\",\"title\":\"Kickoff\",\"attendees\":[\"Ana\",\"Zoe\"]},{\"type\":\"deadline\",\"date\":\"2026-11-06\",\"title\":\"Design doc\"},{\"type\":\"meeting\",\"date\":\"2026-11-20\",\"title\":\"Retro\",\"attendees\":[\"Ben\",\"Carl\",\"Zoe\"]}]"
     },
     {
@@ -2483,8 +2478,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 1996,
-      "answer": "[3,7,10,14,15,21,22,28,34,46]"
+      "latencyMs": 2819,
+      "answer": "[3,7,10,15,18,21,26,30,34,36]"
     },
     {
       "id": "tool_use.select-args",
@@ -2509,7 +2504,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 907,
+      "latencyMs": 949,
       "transcript": {
         "calls": [
           {
@@ -2549,7 +2544,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1297,
+      "latencyMs": 1498,
       "transcript": {
         "calls": [
           {
@@ -2565,7 +2560,7 @@
             }
           }
         ],
-        "final": "**Current temperatures**\n\n- **Oslo:** -3 °C  \n- **Lima:** 19 °C  \n\nLima is warmer than Oslo.",
+        "final": "**Current temperatures:**\n\n- **Oslo:** -3 °C  \n- **Lima:** 19 °C  \n\nLima is warmer than Oslo right now.",
         "turns": 3
       },
       "state": null
@@ -2593,7 +2588,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1206,
+      "latencyMs": 1014,
       "transcript": {
         "calls": [
           {
@@ -2605,7 +2600,7 @@
             }
           }
         ],
-        "final": "The cheapest flight on 9 July 2026 from Lisbon (LIS) to Berlin (BER) is:\n\n- **Flight ID:** XY123  \n- **Price:** €89 (Euros)",
+        "final": "The cheapest flight on 9 July 2026 from Lisbon (LIS) to Berlin (BER) is:\n\n- **Flight ID:** XY123  \n- **Price:** €89",
         "turns": 2
       },
       "state": null
@@ -2625,7 +2620,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 417,
+      "latencyMs": 395,
       "transcript": {
         "calls": [],
         "final": "51",
@@ -2656,7 +2651,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1761,
+      "latencyMs": 1541,
       "transcript": {
         "calls": [
           {
@@ -2676,7 +2671,7 @@
             }
           }
         ],
-        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on **2026‑07‑09** costs **≈ $96.12 USD**.",
+        "final": "The cheapest flight from Lisbon (LIS) to Berlin (BER) on 2026‑07‑09 costs **≈ $96.12 USD**.",
         "turns": 3
       },
       "state": null
@@ -2708,7 +2703,7 @@
           "pass": false
         }
       ],
-      "latencyMs": 1428,
+      "latencyMs": 1616,
       "transcript": {
         "calls": [
           {
@@ -2719,16 +2714,16 @@
               "duration_minutes": 90,
               "attendees": [
                 {
-                  "name": "Ana"
+                  "email": "ana@example.com"
                 },
                 {
-                  "name": "Ben"
+                  "email": "ben@example.com"
                 }
               ]
             }
           }
         ],
-        "final": "Your calendar entry for **“Design review”** on **3 November 2026** at **15:30 UTC** (lasting 1 hour 30 minutes) with Ana and Ben has been added. Let me know if you need anything else!",
+        "final": "Your calendar event **“Design review”** has been created for **3 November 2026, 15:30 UTC**, lasting **1 hour 30 minutes**, with Ana and Ben invited. Let me know if you need anything else!",
         "turns": 2
       },
       "state": null
@@ -2748,7 +2743,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 2569,
+      "latencyMs": 2719,
       "transcript": {
         "calls": [
           {
@@ -2804,7 +2799,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 1757,
+      "latencyMs": 1788,
       "transcript": {
         "calls": [
           {
@@ -2835,11 +2830,11 @@
       "id": "agentic.reach-state",
       "dimension": "agentic",
       "run": 1,
-      "grade": 0.75,
+      "grade": 1,
       "checks": [
         {
           "name": "exact final set",
-          "pass": false
+          "pass": true
         },
         {
           "name": "no stray whitespace entry",
@@ -2854,7 +2849,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 4663,
+      "latencyMs": 13484,
       "transcript": {
         "calls": [
           {
@@ -2880,16 +2875,22 @@
             }
           },
           {
+            "name": "add_item",
+            "args": {
+              "item": "bread"
+            }
+          },
+          {
             "name": "list_items",
             "args": {}
           }
         ],
-        "final": "All done! The shopping list now contains exactly:\n\n- milk  \n- eggs  \n\nNo other items remain.",
-        "turns": 6
+        "final": "All done! Your shopping list now contains exactly:\n\n- milk  \n- eggs  \n- bread  \n\nNo other items are present.",
+        "turns": 7
       },
       "state": {
-        "items": ["milk", "eggs"],
-        "ops": 3
+        "items": ["milk", "eggs", "bread"],
+        "ops": 4
       }
     },
     {
@@ -2927,7 +2928,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 6412,
+      "latencyMs": 8544,
       "transcript": {
         "calls": [
           {
@@ -2959,6 +2960,36 @@
           {
             "name": "read_file",
             "args": {
+              "path": "test/slug.test.ts"
+            }
+          },
+          {
+            "name": "read_file",
+            "args": {
+              "path": "test/slug.test.ts"
+            }
+          },
+          {
+            "name": "read_file",
+            "args": {
+              "path": "test/slug.test.ts"
+            }
+          },
+          {
+            "name": "read_file",
+            "args": {
+              "path": "test/slug.test.ts"
+            }
+          },
+          {
+            "name": "read_file",
+            "args": {
+              "path": "test/slug.test.ts"
+            }
+          },
+          {
+            "name": "read_file",
+            "args": {
               "path": "README.md"
             }
           },
@@ -2966,7 +2997,7 @@
             "name": "write_file",
             "args": {
               "path": "src/slug.ts",
-              "content": "export function slugify(s: string): string {\n  // Normalize to NFD to separate accents, then remove diacritic marks.\n  // Convert to lowercase, replace non‑alphanumeric characters with spaces,\n  // trim, split on whitespace, and join with a single hyphen.\n  return s\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, ' ')\n    .trim()\n    .split(/\\s+/)\n    .join('-');\n}\n"
+              "content": "export function slugify(s: string): string {\n  // Normalize to NFD to separate accents, then remove diacritic marks\n  const normalized = s.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n  // Convert to lowercase and replace any sequence of non‑alphanumeric characters with a hyphen\n  const hyphenated = normalized\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, '-');\n  // Trim leading and trailing hyphens\n  return hyphenated.replace(/^[-]+|[-]+$/g, '');\n}\n"
             }
           },
           {
@@ -2975,7 +3006,7 @@
           }
         ],
         "final": "All tests now pass.",
-        "turns": 9
+        "turns": 14
       },
       "state": {
         "finalChecks": [
@@ -3023,7 +3054,7 @@
           "pass": false
         }
       ],
-      "latencyMs": 2816,
+      "latencyMs": 2769,
       "transcript": {
         "calls": [
           {
@@ -3064,7 +3095,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 595,
+      "latencyMs": 768,
       "answer": "Juniper-58"
     },
     {
@@ -3078,7 +3109,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 968,
+      "latencyMs": 706,
       "answer": "4.2 million euros"
     },
     {
@@ -3096,7 +3127,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 969,
+      "latencyMs": 927,
       "answer": "3, 535"
     },
     {
@@ -3114,8 +3145,8 @@
           "pass": true
         }
       ],
-      "latencyMs": 875,
-      "answer": "4.6 million euros"
+      "latencyMs": 1086,
+      "answer": "4.6 million euros"
     },
     {
       "id": "long_context.three-hop",
@@ -3128,7 +3159,7 @@
           "pass": true
         }
       ],
-      "latencyMs": 786,
+      "latencyMs": 816,
       "answer": "4471"
     },
     {
@@ -3142,35 +3173,35 @@
           "pass": true
         }
       ],
-      "latencyMs": 1588,
+      "latencyMs": 1954,
       "answer": "search,mailer,auth"
     }
   ],
   "speed": [
     {
-      "ttftMs": 255,
-      "wallMs": 679,
-      "outputTokens": 135
-    },
-    {
-      "ttftMs": 257,
-      "wallMs": 601,
-      "outputTokens": 140
-    },
-    {
       "ttftMs": 252,
-      "wallMs": 583,
-      "outputTokens": 140
+      "wallMs": 639,
+      "outputTokens": 138
     },
     {
-      "ttftMs": 257,
-      "wallMs": 623,
-      "outputTokens": 140
+      "ttftMs": 247,
+      "wallMs": 636,
+      "outputTokens": 138
     },
     {
-      "ttftMs": 244,
-      "wallMs": 613,
-      "outputTokens": 140
+      "ttftMs": 248,
+      "wallMs": 632,
+      "outputTokens": 138
+    },
+    {
+      "ttftMs": 264,
+      "wallMs": 602,
+      "outputTokens": 138
+    },
+    {
+      "ttftMs": 269,
+      "wallMs": 605,
+      "outputTokens": 135
     }
   ]
 }

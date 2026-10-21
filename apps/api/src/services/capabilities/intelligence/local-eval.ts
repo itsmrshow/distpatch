@@ -32,10 +32,10 @@ import {
  * cross-source comparable (`comparability.ts`); that is the compiler's gate, not this adapter's.
  *
  * Role: supplemental evidence for local models, custom quantizations, models absent from external
- * indexes, and Distpatch-specific validation. Saturated dimensions (`reasoning`, `review`,
- * `structured_output`, `tool_use`, `long_context` in `distpatch-calibration-v1`) remain withheld
- * (`scores[model][dim] === null`), while their raw suite means (`raw[model][dim]`) are recorded
- * with `saturated_<dim>` metrics for audit provenance without being promoted into preference scores.
+ * indexes, and Distpatch-specific validation. Dimensions listed in `artifact.saturated` remain
+ * withheld (`scores[model][dim] === null`), while their raw suite means (`raw[model][dim]`) are
+ * recorded with `saturated_<dim>` metrics for audit provenance without being promoted into
+ * preference scores.
  */
 
 export const LOCAL_EVAL_SOURCE_ID = "distpatch-local-eval"
