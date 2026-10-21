@@ -119,10 +119,22 @@ jobs:
       # GitHub gates the job on the service's health check before any step runs,
       # so no wait-for-postgres loop is needed here. Migrations are applied by the
       # test bootstrap itself (idempotent, same code path as boot).
-      - name: install native test prerequisites
+      # This fork has not exercised the Actions setup yet; the calibration sandbox gate requires
+      # the user manager, delegated cgroup controllers, and bubblewrap on Ubuntu 24.04.
+      - name: install native and sandbox test prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc libc6-dev
+          sudo apt-get install -y --no-install-recommends gcc libc6-dev bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo loginctl enable-linger "$USER"
+          runtime_dir="/run/user/$(id -u)"
+          for _ in {1..60}; do
+            if [ -S "$runtime_dir/bus" ]; then break; fi
+            sleep 1
+          done
+          test -S "$runtime_dir/bus"
+          echo "XDG_RUNTIME_DIR=$runtime_dir" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=$runtime_dir/bus" >> "$GITHUB_ENV"
       - run: bin/test
 
   bench:
