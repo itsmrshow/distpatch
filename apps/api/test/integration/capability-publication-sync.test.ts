@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test"
 import {
+  AdvisoryLockSessionLostError,
   advisoryLockKey,
   createCapabilityIntelligenceRepository,
   createDatabase,
@@ -332,8 +333,7 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
       if (olderResult.status === "fulfilled") {
         throw new Error("older sync unexpectedly completed after losing its lock session")
       }
-      expect(olderResult.error).toBeInstanceOf(Error)
-      expect(String(olderResult.error)).toContain("no longer holds the sync lock")
+      expect(olderResult.error).toBeInstanceOf(AdvisoryLockSessionLostError)
 
       const routesAfterOlder = await repository.listRouteModels()
       expect(
@@ -349,6 +349,58 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
       releaseOlderDiscovery.resolve()
       await older
       await Promise.all([olderHandle.close(), newerHandle.close()])
+    }
+  })
+
+  test("an ordinary source failure after lock-session loss is delivered without hanging", async () => {
+    const control = admin
+    if (!control) throw new Error("database admin fixture is not initialized")
+    const testUrl = new URL(configuredUrl)
+    testUrl.pathname = `/${databaseName}`
+    const lostHandle = createDatabase({
+      url: testUrl.toString(),
+      maxConnections: 2,
+      closeTimeoutSeconds: 0,
+    })
+    const lostRepository = createCapabilityIntelligenceRepository(lostHandle.db, lostHandle.sql)
+    const sourceFailure = new Error("upstream fetch failed after lock-session loss")
+    const sync = syncCapabilityIntelligence({
+      repository: lostRepository,
+      bootstrap,
+      sources: [
+        {
+          id: `session-loss-fetch-${crypto.randomUUID()}`,
+          fetch: async () => {
+            await control.sql`
+              select pg_terminate_backend(pid)
+              from pg_locks
+              where locktype = ${"advisory"}
+                and granted
+                and objsubid = 2
+                and classid::text = ${String(0x726f_7574)}
+                and objid::text = ${String(advisoryLockKey("capability_intelligence_sync") >>> 0)}
+                and database = (select oid from pg_database where datname = ${databaseName})
+            `
+            throw sourceFailure
+          },
+        },
+      ],
+    }).then(
+      () => ({ status: "fulfilled" as const }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    )
+    const watchdogResult = Promise.withResolvers<{ readonly status: "timeout" }>()
+    // Bounds only the old failure mode, where unlocking the dead reservation never settled.
+    const watchdog = setTimeout(() => watchdogResult.resolve({ status: "timeout" }), 4_000)
+    try {
+      const outcome = await Promise.race([sync, watchdogResult.promise])
+      if (outcome.status !== "rejected") {
+        throw new Error(`sync did not reject promptly after lock-session loss (${outcome.status})`)
+      }
+      expect(outcome.error).toBe(sourceFailure)
+    } finally {
+      clearTimeout(watchdog)
+      await lostHandle.close()
     }
   })
 

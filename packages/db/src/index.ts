@@ -9,7 +9,13 @@
 export type { AdvisoryLockRun } from "./advisory-lock"
 
 // --- leader election --------------------------------------------------------
-export { advisoryLockKey, advisoryUnlock, tryAdvisoryLock, withAdvisoryLock } from "./advisory-lock"
+export {
+  AdvisoryLockSessionLostError,
+  advisoryLockKey,
+  advisoryUnlock,
+  tryAdvisoryLock,
+  withAdvisoryLock,
+} from "./advisory-lock"
 export type {
   Database,
   DatabaseExecutor,

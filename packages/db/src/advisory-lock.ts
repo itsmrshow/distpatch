@@ -36,8 +36,8 @@ const ROUTER_LOCK_CLASS = 0x726f_7574
  * Pure and deterministic across processes and restarts, which is the only
  * property the lock needs: two replicas naming the same task must compute the
  * same number. A collision between two *different* task names would serialize
- * them against each other, so the names are the four values of the
- * `scheduled_task` enum and nothing else.
+ * them against each other, so the names are the `scheduled_task` enum values and
+ * a few fixed internal lock names, and nothing else.
  */
 export function advisoryLockKey(name: string): number {
   let hash = 0x811c_9dc5
@@ -91,6 +91,28 @@ export class AdvisoryLockSessionLostError extends Error {
 }
 
 /**
+ * Whether backend `backendPid` still holds this router lock, asked over the pool
+ * rather than the reserved connection: when the reserved session has died,
+ * querying it never settles in postgres.js and its socket error escapes as an
+ * uncaught exception. A dead session has already released its locks.
+ */
+async function sessionStillHoldsLock(
+  sql: SqlConnection,
+  backendPid: number,
+  key: number,
+): Promise<boolean> {
+  const rows = await sql<{ held: boolean }[]>`
+    select exists (
+      select 1 from pg_locks
+      where locktype = 'advisory' and granted and pid = ${backendPid} and objsubid = 2
+        and classid::text = ${String(ROUTER_LOCK_CLASS)} and objid::text = ${String(key >>> 0)}
+        and database = (select oid from pg_database where datname = current_database())
+    ) as held
+  `
+  return rows[0]?.held === true
+}
+
+/**
  * Runs `work` under the lock, or returns `{ acquired: false }` if someone else
  * has it. The callback receives the reserved session's backend PID so callers
  * can fence database work against loss of this session.
@@ -107,25 +129,29 @@ export async function withAdvisoryLock<T>(
   const connection = await sql.reserve()
   try {
     if (!(await tryAdvisoryLock(connection, key))) return { acquired: false }
+    const pidRows = await connection<{ readonly backendPid: number }[]>`
+      select pg_backend_pid() as "backendPid"
+    `
+    const backendPid = pidRows[0]?.backendPid
+    if (backendPid === undefined) {
+      await advisoryUnlock(connection, key)
+      throw new Error("Failed to identify advisory lock session backend")
+    }
+    // Unlock on the reserved connection only while its session still holds the lock.
+    // A lost session has already released it, and querying that dead connection would
+    // never settle — whether the loss surfaced through a fence, another error or success.
+    const release = async () => {
+      if (await sessionStillHoldsLock(sql, backendPid, key)) await advisoryUnlock(connection, key)
+    }
     let value: T
     try {
-      const rows = await connection<{ readonly backendPid: number }[]>`
-        select pg_backend_pid() as "backendPid"
-      `
-      const backendPid = rows[0]?.backendPid
-      if (backendPid === undefined) {
-        throw new Error("Failed to identify advisory lock session backend")
-      }
       value = await work(backendPid)
     } catch (error) {
-      // Preserve the work failure. A lost session has already released its lock and
-      // cannot be explicitly unlocked, so only attempt the unlock otherwise.
-      if (!(error instanceof AdvisoryLockSessionLostError)) {
-        await advisoryUnlock(connection, key).catch(() => undefined)
-      }
+      // Preserve the work failure over any cleanup failure.
+      await release().catch(() => undefined)
       throw error
     }
-    await advisoryUnlock(connection, key)
+    await release()
     return { acquired: true, value }
   } finally {
     connection.release()
