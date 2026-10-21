@@ -3,7 +3,7 @@ import {
   LOCAL_EVAL_GRADER_VERSION,
   LOCAL_EVAL_SUITE_VERSION,
 } from "../../src/services/capabilities/intelligence/local-eval-versions"
-import { runBun } from "./sandbox"
+import { CalibrationSandboxUnavailableError, runBun } from "./sandbox"
 
 /**
  * The Distpatch capability calibration suite, `SUITE_VERSION`.
@@ -104,6 +104,8 @@ interface OracleProbe {
   readonly name: string
   /** Probe code only; expected results remain in the host process. */
   readonly source: string
+  /** Await only when the fixed host probe measures asynchronous settlement. */
+  readonly awaitResult?: boolean
   readonly passes: (observation: OracleObservation) => boolean
 }
 
@@ -111,6 +113,267 @@ interface OracleResult {
   readonly checks: Check[]
   readonly observations: readonly OracleObservation[] | null
 }
+
+const CANDIDATE_HOST_SOURCE = String.raw`
+const __Process = process
+const __stdout = __Process.stdout
+const __write = __stdout.write.bind(__stdout)
+const __json = JSON
+const __parse = __json.parse.bind(__json)
+const __stringify = __json.stringify.bind(__json)
+const __Array = Array
+const __Object = Object
+const __Function = Function
+const __Reflect = Reflect
+const __Map = Map
+const __mapSet = __Map.prototype.set
+const __mapGet = __Map.prototype.get
+const __mapHas = __Map.prototype.has
+const __apply = __Reflect.apply.bind(__Reflect)
+const __ownKeys = __Reflect.ownKeys.bind(__Reflect)
+const __deleteProperty = __Reflect.deleteProperty.bind(__Reflect)
+const __getOwnPropertyDescriptor = __Object.getOwnPropertyDescriptor.bind(__Object)
+const __defineProperty = __Object.defineProperty.bind(__Object)
+const __getPrototypeOf = __Object.getPrototypeOf.bind(__Object)
+const __setPrototypeOf = __Object.setPrototypeOf.bind(__Object)
+const __create = __Object.create.bind(__Object)
+const __arrayIsArray = __Array.isArray.bind(__Array)
+const __Promise = Promise
+const __promiseThen = __Promise.prototype.then
+const __Error = Error
+const __RangeError = RangeError
+const __ErrorPrototype = __Error.prototype
+const __RangeErrorPrototype = __RangeError.prototype
+const __now = performance.now.bind(performance)
+const __setTimeout = globalThis.setTimeout.bind(globalThis)
+const __clearTimeout = globalThis.clearTimeout.bind(globalThis)
+const __token = crypto.randomUUID()
+const __targets = [
+  __Array,
+  __Array.prototype,
+  __Function,
+  __Function.prototype,
+  __Object,
+  __Object.prototype,
+  __Error,
+  __Error.prototype,
+  __RangeError,
+  __RangeError.prototype,
+  __Promise,
+  __Promise.prototype,
+  __Map,
+  __Map.prototype,
+  Set,
+  Set.prototype,
+  String,
+  String.prototype,
+  Number,
+  Number.prototype,
+  Boolean,
+  Boolean.prototype,
+  RegExp,
+  RegExp.prototype,
+  Date,
+  Date.prototype,
+  Symbol,
+  Symbol.prototype,
+  BigInt,
+  BigInt.prototype,
+  __json,
+  __Reflect,
+  Math,
+  crypto,
+  __Process,
+  __stdout,
+  performance,
+  globalThis,
+]
+const __snapshots = new __Array(__targets.length)
+for (let i = 0; i < __targets.length; i++) {
+  const target = __targets[i]
+  const keys = __ownKeys(target)
+  const descriptors = new __Map()
+  for (let j = 0; j < keys.length; j++) {
+    __apply(__mapSet, descriptors, [keys[j], __getOwnPropertyDescriptor(target, keys[j])])
+  }
+  __snapshots[i] = { target, keys, descriptors, prototype: __getPrototypeOf(target) }
+}
+function __restoreRealm() {
+  let intact = true
+  for (let i = 0; i < __snapshots.length; i++) {
+    const snapshot = __snapshots[i]
+    const target = snapshot.target
+    const current = __ownKeys(target)
+    for (let j = 0; j < current.length; j++) {
+      const key = current[j]
+      if (!__apply(__mapHas, snapshot.descriptors, [key])) {
+        try {
+          if (!__deleteProperty(target, key)) intact = false
+        } catch {
+          intact = false
+        }
+      }
+    }
+    for (let j = 0; j < snapshot.keys.length; j++) {
+      const key = snapshot.keys[j]
+      try {
+        __defineProperty(target, key, __apply(__mapGet, snapshot.descriptors, [key]))
+      } catch {
+        intact = false
+      }
+    }
+    try {
+      if (__getPrototypeOf(target) !== snapshot.prototype)
+        __setPrototypeOf(target, snapshot.prototype)
+    } catch {
+      intact = false
+    }
+  }
+  return intact
+}
+function __isInstance(value, prototype) {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) return false
+  try {
+    let current = __getPrototypeOf(value)
+    while (current !== null) {
+      if (current === prototype) return true
+      current = __getPrototypeOf(current)
+    }
+  } catch {}
+  return false
+}
+function __safeObject() {
+  return __create(null)
+}
+function __safeArray() {
+  return __setPrototypeOf([], null)
+}
+function __encode(value, depth) {
+  if (value === undefined) {
+    const marker = __safeObject()
+    marker.__oracleType = "undefined"
+    return marker
+  }
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+    return value
+  if (__arrayIsArray(value) && depth < 32 && value.length <= 1024) {
+    const items = __safeArray()
+    for (let i = 0; i < value.length; i++) items[i] = __encode(value[i], depth + 1)
+    return items
+  }
+  const marker = __safeObject()
+  marker.__oracleType = "object"
+  return marker
+}
+function __returnObservation(value, elapsedMs) {
+  const observation = __safeObject()
+  observation.kind = "return"
+  observation.value = __encode(value, 0)
+  observation.elapsedMs = elapsedMs
+  return observation
+}
+function __throwObservation(error, elapsedMs) {
+  let isError = false
+  let isRangeError = false
+  let message = null
+  try {
+    isError = __isInstance(error, __ErrorPrototype)
+    isRangeError = __isInstance(error, __RangeErrorPrototype)
+    if (isError && typeof error.message === "string") message = error.message
+  } catch {}
+  const observation = __safeObject()
+  observation.kind = "throw"
+  observation.isError = isError
+  observation.isRangeError = isRangeError
+  observation.message = message
+  observation.elapsedMs = elapsedMs
+  return observation
+}
+function __emitObservation(index, observation) {
+  __write("__DISTPATCH_CALIBRATION_CHILD_OBSERVATION:" + __token + ":" + index + ":" + __stringify(observation) + "\n")
+}
+function __emitError(reason) {
+  __write("__DISTPATCH_CALIBRATION_CHILD_ERROR:" + __token + ":" + reason + "\n")
+}
+function __suppressRejection(value) {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) return
+  try {
+    __apply(__promiseThen, value, [undefined, () => {}])
+  } catch {}
+}
+__write("__DISTPATCH_CALIBRATION_CHILD_READY:" + __token + "\n")
+let __requestText = ""
+for await (const chunk of __Process.stdin) __requestText += chunk.toString()
+let __request
+try {
+  __request = __parse(__requestText)
+} catch {
+  __emitError("invalid request")
+}
+if (__request !== undefined) {
+  let __module
+  try {
+    __module = await import("file:///tmp/candidate.ts")
+  } catch {
+    __emitError("candidate module failed to load")
+  }
+  if (__module !== undefined) {
+    const __candidate = __module[__request.exportName]
+    if (typeof __candidate !== "function") {
+      __emitError("candidate export is not a function")
+    } else if (!__restoreRealm()) {
+      __emitError("candidate changed non-restorable runtime state")
+    } else {
+      const __trusted = __create(null)
+      __trusted.now = __now
+      __trusted.setTimeout = __setTimeout
+      __trusted.clearTimeout = __clearTimeout
+      for (let i = 0; i < __request.probes.length; i++) {
+        const spec = __request.probes[i]
+        const started = __now()
+        let value
+        let failure
+        let threw = false
+        try {
+          const invoke = new __Function(
+            "candidate",
+            "trusted",
+            "return (" + spec.source + ")(candidate, trusted)",
+          )
+          value = invoke(__module, __trusted)
+          if (spec.awaitResult === true) value = await value
+        } catch (error) {
+          failure = error
+          threw = true
+        }
+        const elapsedMs = __now() - started
+        if (!__restoreRealm()) {
+          __emitError("candidate changed non-restorable runtime state")
+          break
+        }
+        let observation
+        if (threw) {
+          observation = __throwObservation(failure, elapsedMs)
+        } else {
+          if (spec.awaitResult !== true) __suppressRejection(value)
+          try {
+            observation = __returnObservation(value, elapsedMs)
+          } catch {
+            __restoreRealm()
+            __emitError("candidate result could not be observed")
+            break
+          }
+        }
+        if (!__restoreRealm()) {
+          __emitError("candidate changed non-restorable runtime state")
+          break
+        }
+        __emitObservation(i, observation)
+      }
+    }
+  }
+}
+`
 
 const encoded = (value: unknown): unknown => {
   if (value === undefined) return { __oracleType: "undefined" }
@@ -143,81 +406,132 @@ async function execute(
     .replace(/^export\s+(?=(?:async\s+)?(?:function|class|const|let|var|interface|type)\b)/gm, "")
     .replace(/^export\s*\{[^}]*\}\s*;?\s*$/gm, "")
   const candidateModule = `${candidate}\nexport { ${exportName} }\n`
+  const probeSpecifications = probes.map((probe) => ({
+    source: probe.source,
+    awaitResult: probe.awaitResult === true,
+  }))
   const source = `
 const __open = ${JSON.stringify(ORACLE_FRAME_START)}
 const __close = ${JSON.stringify(ORACLE_FRAME_END)}
-const __now = performance.now.bind(performance)
-const __setTimeout = globalThis.setTimeout.bind(globalThis)
-const __clearTimeout = globalThis.clearTimeout.bind(globalThis)
-const __isArray = Array.isArray
-const __Error = Error
-const __RangeError = RangeError
-const __Promise = Promise
-const __JSON = JSON
-const __JSONstringify = JSON.stringify
 const __Process = process
 let __nonceInput = ""
 for await (const chunk of __Process.stdin) __nonceInput += chunk.toString()
 const __nonce = __nonceInput.trim()
-const __Stdout = process.stdout
-const __StdoutWrite = process.stdout.write
-const __performance = performance
-const __performanceNow = performance.now
-const __Function = Object.getPrototypeOf(async function () {}).constructor
-const __report = (() => {
-  const nonce = __nonce
-  const write = process.stdout.write.bind(process.stdout)
-  const stringify = JSON.stringify.bind(JSON)
-  return (payload) => write(__open + nonce + ":" + stringify(payload) + __close + "\\n")
-})()
-const __restore = () => {
-  try { globalThis.JSON = __JSON; __JSON.stringify = __JSONstringify } catch {}
-  try { globalThis.process = __Process; __Process.stdout = __Stdout; __Stdout.write = __StdoutWrite } catch {}
-  try { globalThis.setTimeout = __setTimeout; globalThis.clearTimeout = __clearTimeout } catch {}
-  try { globalThis.Error = __Error; globalThis.RangeError = __RangeError; globalThis.Promise = __Promise } catch {}
-  try { globalThis.performance = __performance; __performance.now = __performanceNow } catch {}
-}
-const __encode = (value) => {
-  if (value === undefined) return { __oracleType: "undefined" }
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value
-  if (__isArray(value)) {
-    const items = []
-    for (let i = 0; i < value.length; i++) items[i] = __encode(value[i])
-    return items
-  }
-  return { __oracleType: "object" }
-}
-const __probeSources = ${JSON.stringify(probes.map((probe) => probe.source))}
-const __trusted = { now: __now, setTimeout: __setTimeout, clearTimeout: __clearTimeout }
-let __candidate
+const __stdout = __Process.stdout
+const __write = __stdout.write.bind(__stdout)
+const __stringify = JSON.stringify.bind(JSON)
+const __report = (payload) => __write(__open + __nonce + ":" + __stringify(payload) + __close + "\\n")
+const __probeSpecifications = ${JSON.stringify(probeSpecifications)}
+const __childHostSource = ${JSON.stringify(CANDIDATE_HOST_SOURCE)}
+let __child
+let __spawnFailed = false
 try {
   await Bun.write("/tmp/candidate.ts", ${JSON.stringify(candidateModule)})
-  __candidate = await import("file:///tmp/candidate.ts")
+  await Bun.write("/tmp/candidate-host.ts", __childHostSource)
+  __child = Bun.spawn([process.execPath, "/tmp/candidate-host.ts"], {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "ignore",
+  })
 } catch {
-  __report({ valid: false, observations: [] })
+  __spawnFailed = true
 }
-if (__candidate !== undefined) {
-  __restore()
-  const observations = []
-  for (const source of __probeSources) {
-    const started = __now()
-    try {
-      const probe = new __Function("candidate", "trusted", "return await (" + source + ")(candidate, trusted)")
-      const value = await probe(__candidate, __trusted)
-      observations.push({ kind: "return", value: __encode(value), elapsedMs: __now() - started })
-    } catch (error) {
-      let isError = false
-      let isRangeError = false
-      let message = null
-      try {
-        isError = error instanceof __Error
-        isRangeError = error instanceof __RangeError
-        if (isError) message = error.message
-      } catch {}
-      observations.push({ kind: "throw", isError, isRangeError, message, elapsedMs: __now() - started })
+if (__spawnFailed || !__child?.stdin || !__child.stdout) {
+  try { __child?.kill("SIGKILL") } catch {}
+  __report({ launchFailed: true, valid: false, observations: [] })
+} else {
+  __child.stdin.write(JSON.stringify({ exportName: ${JSON.stringify(exportName)}, probes: __probeSpecifications }) + "\\n")
+  __child.stdin.end()
+  let __childOutput = ""
+  let __outputBytes = 0
+  let __overflowed = false
+  const __decoder = new TextDecoder()
+  for await (const chunk of __child.stdout) {
+    __outputBytes += chunk.byteLength
+    if (__outputBytes <= 65_536) __childOutput += __decoder.decode(chunk, { stream: true })
+    else __overflowed = true
+  }
+  __childOutput += __decoder.decode()
+  const __exitCode = await __child.exited
+  if (__overflowed) {
+    __report({ valid: false, observations: [] })
+  } else {
+    const __readyPrefix = "__DISTPATCH_CALIBRATION_CHILD_READY:"
+    const __readyAt = __childOutput.indexOf(__readyPrefix)
+    const __readyEnd = __childOutput.indexOf("\\n", __readyAt)
+    if (__readyAt === -1 || __readyEnd === -1) {
+      __report({ launchFailed: true, valid: false, observations: [] })
+    } else if (__exitCode !== 0) {
+      __report({ valid: false, observations: [] })
+    } else {
+      const __childNonce = __childOutput.slice(__readyAt + __readyPrefix.length, __readyEnd)
+      if (!/^[0-9a-f-]{36}$/i.test(__childNonce)) {
+        __report({ launchFailed: true, valid: false, observations: [] })
+      } else {
+        const __errorPrefix = "__DISTPATCH_CALIBRATION_CHILD_ERROR:" + __childNonce + ":"
+        const __observationPrefix =
+          "__DISTPATCH_CALIBRATION_CHILD_OBSERVATION:" + __childNonce + ":"
+        const __observations = new Array(__probeSpecifications.length)
+        const __seen = new Array(__probeSpecifications.length).fill(false)
+        let __received = 0
+        let __valid = !__childOutput.includes(__errorPrefix)
+        let __cursor = 0
+        while (__valid) {
+          const __start = __childOutput.indexOf(__observationPrefix, __cursor)
+          if (__start === -1) break
+          const __lineEnd = __childOutput.indexOf("\\n", __start)
+          if (__lineEnd === -1) {
+            __valid = false
+            break
+          }
+          const __record = __childOutput.slice(__start + __observationPrefix.length, __lineEnd)
+          const __separator = __record.indexOf(":")
+          const __index = Number(__record.slice(0, __separator))
+          if (
+            __separator <= 0 ||
+            !Number.isInteger(__index) ||
+            __index < 0 ||
+            __index >= __observations.length ||
+            __seen[__index]
+          ) {
+            __valid = false
+            break
+          }
+          try {
+            const __observation = JSON.parse(__record.slice(__separator + 1))
+            if (
+              __observation === null ||
+              typeof __observation !== "object" ||
+              (__observation.kind !== "return" && __observation.kind !== "throw") ||
+              typeof __observation.elapsedMs !== "number" ||
+              !Number.isFinite(__observation.elapsedMs) ||
+              ( __observation.kind === "return" && !("value" in __observation)) ||
+              ( __observation.kind === "throw" &&
+                (typeof __observation.isError !== "boolean" ||
+                  typeof __observation.isRangeError !== "boolean" ||
+                  !("message" in __observation) ||
+                  (__observation.message !== null && typeof __observation.message !== "string")))
+            ) {
+              __valid = false
+              break
+            }
+            __observations[__index] = __observation
+            __seen[__index] = true
+            __received++
+          } catch {
+            __valid = false
+            break
+          }
+          __cursor = __lineEnd + 1
+        }
+        if (__received !== __observations.length || __seen.some((seen) => !seen)) __valid = false
+        __report({
+          valid: __valid,
+          observations: __valid ? __observations : [],
+        })
+      }
     }
   }
-  __report({ valid: true, observations })
 }
 `
   const out = await runBun(source, { reportNonce })
@@ -233,8 +547,13 @@ if (__candidate !== undefined) {
   try {
     const report = JSON.parse(frame.slice(separator + 1)) as {
       valid?: unknown
+      launchFailed?: unknown
       observations?: unknown
     }
+    if (report.launchFailed === true)
+      throw new CalibrationSandboxUnavailableError(
+        "the calibration sandbox could not start the candidate host process",
+      )
     if (
       report.valid !== true ||
       !Array.isArray(report.observations) ||
@@ -272,7 +591,8 @@ if (__candidate !== undefined) {
         }
       }),
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof CalibrationSandboxUnavailableError) throw error
     return failedOracle(probes)
   }
 }
@@ -521,23 +841,27 @@ ${CODE_RULE}`,
           {
             name: "settled work resolves",
             source: "(c) => c.withTimeout(Promise.resolve(7), 50)",
+            awaitResult: true,
             passes: returns(7),
           },
           {
             name: "timeout rejects",
             source:
               "(c, t) => { const work = Promise.withResolvers(); t.setTimeout(() => work.resolve(undefined), 200); return c.withTimeout(work.promise, 20) }",
+            awaitResult: true,
             passes: throwsErrorMessage("timeout"),
           },
           {
             name: "work rejection preserved",
             source: '(c) => c.withTimeout(Promise.reject(new Error("boom")), 50)',
+            awaitResult: true,
             passes: throwsErrorMessage("boom"),
           },
           {
             name: "settled call resolves within one second",
             source:
               "(c, t) => { const start = t.now(); const work = Promise.withResolvers(); t.setTimeout(() => work.resolve(1), 5); return c.withTimeout(work.promise, 2000).then(() => t.now() - start) }",
+            awaitResult: true,
             passes: (o) => o.kind === "return" && typeof o.value === "number" && o.value < 1000,
           },
         ])

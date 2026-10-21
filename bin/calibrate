@@ -8,7 +8,8 @@
 #   bin/calibrate run ollama-cloud gpt-oss:120b openai/gpt-oss-120b
 #   bin/calibrate run claude-cli claude-sonnet-4-6 anthropic/claude-sonnet-4-6
 #   bin/calibrate score
-#   bin/calibrate matrix        # virtual-policy winners + sensitivity over the shipped catalog
+#   bin/calibrate matrix        # virtual-policy winners + sensitivity over the effective catalog
+#                               # (needs DATABASE_URL, or --bootstrap-only)
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -18,5 +19,9 @@ if [ "${1:-}" = matrix ]; then
   exec bun apps/api/bench/calibration/matrix.ts "$@"
 fi
 bun apps/api/bench/calibration/run.ts "$@"
-# Result files are committed evidence; keep them in the repository's formatter shape.
-bun run --silent biome format --write evidence/capability-calibration-v1 >/dev/null
+# Current result files and scores.json are committed evidence; keep them in the repository's
+# formatter shape. Historical artifacts are left byte-for-byte as recorded.
+case "${1:-}" in
+  run) bun run --silent biome format --write evidence/capability-calibration-v1/results >/dev/null ;;
+  score) bun run --silent biome format --write evidence/capability-calibration-v1/scores.json >/dev/null ;;
+esac

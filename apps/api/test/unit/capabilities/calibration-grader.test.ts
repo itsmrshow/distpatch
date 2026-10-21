@@ -480,6 +480,118 @@ function parseDuration(_input: string): number { return 5415 }
     expect(checks).toHaveLength(11)
     expect(checks.every((entry) => !entry.pass)).toBe(true)
   }, 30_000)
+  test("async functions do not satisfy synchronous duration probes", async () => {
+    const asyncAnswer = fenced(
+      parseDuration.replace("function parseDuration", "async function parseDuration"),
+    )
+    const checks = await textCase("coding.parse-duration").grade(asyncAnswer)
+    expect(checks).toHaveLength(11)
+    expect(checks.every((entry) => !entry.pass)).toBe(true)
+  }, 30_000)
+
+  test("prototype serialization hooks cannot forge oracle observations", async () => {
+    const toJsonSpoof = fenced(`
+const expected = [5415, 2700, 7200, 10, 3605]
+let index = 0
+Object.prototype.toJSON = function () {
+  if (this && (this.kind === "return" || this.kind === "throw")) {
+    const probe = index++
+    return probe < expected.length
+      ? { kind: "return", value: expected[probe], elapsedMs: 0 }
+      : { kind: "throw", isError: true, isRangeError: false, message: "invalid", elapsedMs: 0 }
+  }
+  return this
+}
+function parseDuration(_input: string): number { return 0 }
+`)
+    const durationChecks = await textCase("coding.parse-duration").grade(toJsonSpoof)
+    expect(durationChecks).toHaveLength(11)
+    expect(durationChecks.every((entry) => !entry.pass)).toBe(true)
+
+    const proxySpoof = fenced(`
+function parseDuration(input: string): number {
+  if (input === "") return new Proxy([], { get() { throw new Error("fake observation") } }) as unknown as number
+  return 0
+}
+`)
+    const proxyChecks = await textCase("coding.parse-duration").grade(proxySpoof)
+    expect(proxyChecks).toHaveLength(11)
+    expect(proxyChecks.every((entry) => !entry.pass)).toBe(true)
+
+    const pushSpoof = fenced(`
+const originalPush = Array.prototype.push
+const expected = [[[1, 2], [3, 4], [5]], [[1, 2], [3, 4]], [[1]], []]
+let index = 0
+Array.prototype.push = function (...items) {
+  const item = items[0]
+  if (items.length === 1 && item && item.kind === "return") {
+    const replacement = expected[index++]
+    return Reflect.apply(originalPush, this, [{ kind: "return", value: replacement, elapsedMs: 0 }])
+  }
+  return Reflect.apply(originalPush, this, items)
+}
+function chunk<T>(_items: T[], size: number): T[][] {
+  if (!Number.isInteger(size) || size <= 0) throw new RangeError("invalid size")
+  return []
+}
+`)
+    const chunkChecks = await textCase("coding.fix-chunk").grade(pushSpoof)
+    expect(chunkChecks).toHaveLength(6)
+    // Only "empty array" is genuinely right for an implementation that always returns [].
+    expect(chunkChecks.slice(0, 3).every((entry) => !entry.pass)).toBe(true)
+    expect(chunkChecks.slice(3).every((entry) => entry.pass)).toBe(true)
+
+    const errorSpoof = (textAnswers["coding.toposort"] as string)
+      .replace(
+        "function buildOrder",
+        "Object.defineProperty(Error, Symbol.hasInstance, " +
+          "{ value: () => true, configurable: true })\nfunction buildOrder",
+      )
+      .replace(
+        'throw new Error("cycle in dependencies")',
+        'throw { message: "cycle in dependencies" }',
+      )
+    const topoChecks = await textCase("coding.toposort").grade(errorSpoof)
+    expect(topoChecks.filter((entry) => entry.pass)).toHaveLength(5)
+    expect(topoChecks.find((entry) => entry.name === "cycle error")?.pass).toBe(false)
+  }, 90_000)
+
+  test("Object.prototype.toJSON cannot forge iterate-to-green success", async () => {
+    const c = CASES.find(
+      (candidate): candidate is ToolCase =>
+        candidate.kind === "tools" && candidate.id === "agentic.iterate-to-green",
+    )
+    if (!c) throw new Error("missing iterate-to-green tool case")
+    const env = c.environment()
+    const source = `
+let index = 0
+const expected = ["hello-world", "many-spaces", "already-slugged", "creme-brulee", "a-b"]
+Object.prototype.toJSON = function () {
+  if (this && this.kind === "return") {
+    return { kind: "return", value: expected[index++], elapsedMs: 0 }
+  }
+  return this
+}
+export function slugify(_input: string): string { return "wrong" }
+`
+    await env.call("write_file", { path: "src/slug.ts", content: source })
+    const runTestsOutput = await env.call("run_tests", {})
+    const state = await env.state?.()
+    const checks = c.grade(
+      {
+        calls: [
+          { name: "write_file", args: { path: "src/slug.ts", content: source } },
+          { name: "run_tests", args: {} },
+        ],
+        final: "done",
+        turns: 1,
+      },
+      state,
+    )
+    expect(runTestsOutput).not.toBe("5 passed, 0 failed")
+    expect(checks.slice(0, 5).every((entry) => !entry.pass)).toBe(true)
+    expect(checks.find((entry) => entry.name === "confirmed green")?.pass).toBe(false)
+  }, 60_000)
 })
 
 describe("calibration grading pipeline", () => {
@@ -588,6 +700,19 @@ describe("calibration grading pipeline", () => {
           speed: [],
         }),
       )
+      await Bun.write(
+        join(resultsDir, "invalid-date.json"),
+        JSON.stringify({
+          suite: SUITE_VERSION,
+          graderVersion: GRADER_VERSION,
+          profileId: "invalid/model",
+          route: "dockerlm",
+          wireModel: "wire-model",
+          recordedAt: "2026-02-30T10:00:00.000Z",
+          cases: [{ id: "general.bullets", dimension: "general", grade: 1 }],
+          speed: [],
+        }),
+      )
       const generatedAt = "2026-10-21T00:00:00.000Z"
       const result = JSON.parse(await score(resultsDir, scoresPath, generatedAt)) as {
         suite: string
@@ -633,6 +758,14 @@ describe("calibration grading pipeline", () => {
             suite: SUITE_VERSION,
             graderVersion: "distpatch-grader-v1-pre-sandbox",
             reason: "grader version mismatch",
+          },
+          {
+            file: "invalid-date.json",
+            profileId: "invalid/model",
+            recordedAt: "2026-02-30T10:00:00.000Z",
+            suite: SUITE_VERSION,
+            graderVersion: GRADER_VERSION,
+            reason: "invalid recordedAt",
           },
         ],
         cases: { "example/model": { "general.bullets": 1 } },

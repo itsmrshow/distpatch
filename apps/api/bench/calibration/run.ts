@@ -243,6 +243,41 @@ function isSpeedSample(value: unknown): value is SpeedSample {
   )
 }
 
+function isValidIsoDateTime(value: string): boolean {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|([+-])(\d{2}):(\d{2}))$/.exec(
+      value,
+    )
+  if (!match || !Number.isFinite(Date.parse(value))) return false
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const hour = Number(match[4])
+  const minute = Number(match[5])
+  const second = Number(match[6])
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59 ||
+    (match[8] !== undefined && (Number(match[9]) > 23 || Number(match[10]) > 59))
+  )
+    return false
+  const date = new Date(0)
+  date.setUTCFullYear(year, month - 1, day)
+  date.setUTCHours(hour, minute, second, 0)
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second
+  )
+}
+
 /** Normalizes only current-version results and records every included/excluded input. */
 export async function score(
   resultsDir = RESULTS,
@@ -310,6 +345,11 @@ export async function score(
     if (result === null) reasons.push("result must be a JSON object")
     if (profileId === null || routeName === null || wireModel === null || recordedAt === null)
       reasons.push("missing result provenance")
+    if (
+      recordedAtValue !== undefined &&
+      (typeof recordedAtValue !== "string" || !isValidIsoDateTime(recordedAtValue))
+    )
+      reasons.push("invalid recordedAt")
     if (!Array.isArray(caseValues) || !caseValues.every(isGradedCase))
       reasons.push("invalid case results")
     let speedSamples: SpeedSample[] = []
