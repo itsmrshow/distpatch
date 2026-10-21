@@ -595,6 +595,16 @@ export function slugify(_input: string): string { return "wrong" }
 })
 
 describe("calibration grading pipeline", () => {
+  test("markdown emphasis around a final answer does not fail a correct reasoning answer", async () => {
+    // gpt-oss-120b answered reasoning.dice with `**ANSWER: 5/11**` in a live run.
+    const dice = await textCase("reasoning.dice").grade("work…\n**ANSWER: 5/11**")
+    const tank = await textCase("reasoning.tank").grade("work…\nANSWER: **740**")
+    const wrong = await textCase("reasoning.dice").grade("work…\n**ANSWER: 5/12**")
+    expect(dice.every((entry) => entry.pass)).toBe(true)
+    expect(tank.every((entry) => entry.pass)).toBe(true)
+    expect(wrong.every((entry) => !entry.pass)).toBe(true)
+  })
+
   test("empty, huge, invalid JSON, and NUL-bearing outputs do not throw", async () => {
     const empty = await textCase("structured.extract").grade("")
     const huge = await textCase("structured.extract").grade("x".repeat(100_000))

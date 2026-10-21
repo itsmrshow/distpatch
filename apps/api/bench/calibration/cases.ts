@@ -890,7 +890,13 @@ console.log(out, seen.size)
 // ─── reasoning ──────────────────────────────────────────────────────────────────────────────
 
 const ANSWER = "End your reply with a final line of the form `ANSWER: <answer>`."
-const finalAnswer = (a: string) => /ANSWER:\s*(.+)\s*$/i.exec(a.trim())?.[1]?.trim() ?? ""
+/**
+ * The text after the last line's `ANSWER:`. Markdown emphasis or code marks around the line or the
+ * answer (`**ANSWER: 5/11**`, `ANSWER: **740**`) are presentation, not part of the answer, so they
+ * are removed before the case compares it.
+ */
+const finalAnswer = (a: string) =>
+  (/ANSWER:\s*(.+)\s*$/i.exec(a.trim())?.[1] ?? "").replace(/^[\s*_`]+|[\s*_`]+$/g, "")
 
 const reasoning: CalibrationCase[] = [
   {
