@@ -30,7 +30,7 @@ export const SATURATION_CEILING = 0.9
 export interface GradedCase {
   readonly id: string
   readonly dimension: CapabilityDimension
-  /** `null` = not run on this route (unsupported transport); errors grade 0, not null. */
+  /** `null` = not run or unknown after an infrastructure failure; never treated as zero. */
   readonly grade: number | null
 }
 

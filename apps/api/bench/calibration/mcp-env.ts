@@ -1,5 +1,6 @@
 import { writeFileSync } from "node:fs"
 import { CASES } from "./cases"
+import { CalibrationSandboxUnavailableError } from "./sandbox"
 
 /**
  * A minimal MCP stdio server exposing one calibration case's mock tools, so a route that cannot
@@ -15,16 +16,26 @@ const stateFile = process.env.CAL_STATE_FILE
 if (c?.kind !== "tools" || !stateFile) throw new Error("CAL_CASE / CAL_STATE_FILE missing")
 const env = c.environment()
 const calls: { name: string; args: Record<string, unknown> }[] = []
+let sandboxUnavailable: string | null = null
 
 async function persist() {
-  writeFileSync(
-    stateFile as string,
-    JSON.stringify({ calls, state: (await env.state?.()) ?? null }),
-  )
+  let state: unknown = null
+  try {
+    state = (await env.state?.()) ?? null
+  } catch (error) {
+    if (!(error instanceof CalibrationSandboxUnavailableError)) throw error
+    sandboxUnavailable = error.message
+  }
+  writeFileSync(stateFile, JSON.stringify({ calls, state, sandboxUnavailable }))
 }
 
 function reply(id: unknown, result: unknown) {
   process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`)
+}
+function replyError(id: unknown, message: string) {
+  process.stdout.write(
+    `${JSON.stringify({ jsonrpc: "2.0", id, error: { code: -32000, message } })}\n`,
+  )
 }
 
 async function handle(message: {
@@ -50,12 +61,24 @@ async function handle(message: {
           : [],
     })
   } else if (message.method === "tools/call") {
-    const name = String(message.params?.name)
-    const args = (message.params?.arguments ?? {}) as Record<string, unknown>
+    const name = typeof message.params?.name === "string" ? message.params.name : ""
+    const supplied = message.params?.arguments
+    const args =
+      typeof supplied === "object" && supplied !== null && !Array.isArray(supplied)
+        ? (supplied as Record<string, unknown>)
+        : {}
     calls.push({ name, args })
-    const text = await env.call(name, args)
+    let text = ""
+    try {
+      const result = await env.call(name, args)
+      text = typeof result === "string" ? result : "error: tool returned a non-text result"
+    } catch (error) {
+      if (error instanceof CalibrationSandboxUnavailableError) sandboxUnavailable = error.message
+      else text = "error: tool call failed"
+    }
     await persist()
-    reply(message.id, { content: [{ type: "text", text }] })
+    if (sandboxUnavailable !== null) replyError(message.id, "calibration sandbox unavailable")
+    else reply(message.id, { content: [{ type: "text", text }] })
   } else if (message.id !== undefined) {
     process.stdout.write(
       `${JSON.stringify({ jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "method not found" } })}\n`,

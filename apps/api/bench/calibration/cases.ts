@@ -88,45 +88,220 @@ function jsonOf(answer: string): unknown {
   }
 }
 
-const MAX_HARNESS_CHECKS = 64
+const ORACLE_FRAME_START = "\u001eDISTPATCH_CALIBRATION_ORACLE:"
+const ORACLE_FRAME_END = "\u001f"
 
-/**
- * Runs `code` + `harness` in the sandbox using a random per-invocation nonce so generated model
- * code cannot spoof a `RESULT` line or trigger an unbounded check array allocation.
- */
-async function execute(code: string, harness: string): Promise<Check[]> {
-  const nonce = `${crypto.randomUUID()}-${crypto.randomUUID()}`
-  const prelude = `
-let __p = 0, __n = 0
-const __write = process.stdout.write.bind(process.stdout)
-async function t(fn: () => unknown) { __n++; try { if (await fn()) __p++ } catch {} }
-function done() { __write(${JSON.stringify(nonce)} + " " + __p + " " + __n + "\\n") }
-`
-  const body = harness.replace("__HARNESS_PRELUDE__", prelude)
-  const out = await runBun(`${code}\n\n${body}\n`)
-  const pattern = new RegExp(`${nonce} (\\d+) (\\d+)`)
-  const match = pattern.exec(out)
-  if (match === null) return [check("executes", false)]
-  const passed = Number(match[1])
-  const total = Number(match[2])
-  // Structural bounds only. The result arrives through the unguessable per-run nonce channel, so
-  // the check *count* is not validated against a static source-level guess: loops like
-  // `coding.semver` legitimately report more runtime checks than textual `t(` call sites.
-  if (
-    !Number.isInteger(passed) ||
-    !Number.isInteger(total) ||
-    total <= 0 ||
-    total > MAX_HARNESS_CHECKS ||
-    passed < 0 ||
-    passed > total
-  ) {
-    return [check("executes", false)]
-  }
-  return Array.from({ length: total }, (_, i) => check(`test ${i + 1}`, i < passed))
+interface OracleObservation {
+  readonly kind: "return" | "throw"
+  readonly value?: unknown
+  readonly isError?: boolean
+  readonly isRangeError?: boolean
+  readonly message?: string | null
+  readonly elapsedMs: number
 }
 
-/** Harness prelude placeholder replaced per `execute()` call with a fresh unguessable nonce. */
-const T = "__HARNESS_PRELUDE__"
+interface OracleProbe {
+  readonly name: string
+  /** Probe code only; expected results remain in the host process. */
+  readonly source: string
+  readonly passes: (observation: OracleObservation) => boolean
+}
+
+interface OracleResult {
+  readonly checks: Check[]
+  readonly observations: readonly OracleObservation[] | null
+}
+
+const encoded = (value: unknown): unknown => {
+  if (value === undefined) return { __oracleType: "undefined" }
+  if (Array.isArray(value)) return value.map(encoded)
+  if (value === null || ["string", "number", "boolean"].includes(typeof value)) return value
+  return { __oracleType: "object" }
+}
+
+const sameValue = (actual: unknown, expected: unknown) =>
+  JSON.stringify(actual) === JSON.stringify(encoded(expected))
+const returns = (expected: unknown) => (o: OracleObservation) =>
+  o.kind === "return" && sameValue(o.value, expected)
+const throws = (o: OracleObservation) => o.kind === "throw"
+const throwsRangeError = (o: OracleObservation) => o.kind === "throw" && o.isRangeError === true
+const throwsErrorMessage = (message: string) => (o: OracleObservation) =>
+  o.kind === "throw" && o.isError === true && o.message === message
+
+/**
+ * Execute candidate code in its own module; the driver reports raw observations for a fixed host
+ * probe list. The nonce is generated at runtime inside a closure (not embedded in /work/case.ts),
+ * and expected values/pass logic never enter the sandbox.
+ */
+async function execute(
+  code: string,
+  exportName: string,
+  probes: readonly OracleProbe[],
+): Promise<OracleResult> {
+  const reportNonce = crypto.randomUUID()
+  const candidate = code
+    .replace(/^export\s+(?=(?:async\s+)?(?:function|class|const|let|var|interface|type)\b)/gm, "")
+    .replace(/^export\s*\{[^}]*\}\s*;?\s*$/gm, "")
+  const candidateModule = `${candidate}\nexport { ${exportName} }\n`
+  const source = `
+const __open = ${JSON.stringify(ORACLE_FRAME_START)}
+const __close = ${JSON.stringify(ORACLE_FRAME_END)}
+const __now = performance.now.bind(performance)
+const __setTimeout = globalThis.setTimeout.bind(globalThis)
+const __clearTimeout = globalThis.clearTimeout.bind(globalThis)
+const __isArray = Array.isArray
+const __Error = Error
+const __RangeError = RangeError
+const __Promise = Promise
+const __JSON = JSON
+const __JSONstringify = JSON.stringify
+const __Process = process
+let __nonceInput = ""
+for await (const chunk of __Process.stdin) __nonceInput += chunk.toString()
+const __nonce = __nonceInput.trim()
+const __Stdout = process.stdout
+const __StdoutWrite = process.stdout.write
+const __performance = performance
+const __performanceNow = performance.now
+const __Function = Object.getPrototypeOf(async function () {}).constructor
+const __report = (() => {
+  const nonce = __nonce
+  const write = process.stdout.write.bind(process.stdout)
+  const stringify = JSON.stringify.bind(JSON)
+  return (payload) => write(__open + nonce + ":" + stringify(payload) + __close + "\\n")
+})()
+const __restore = () => {
+  try { globalThis.JSON = __JSON; __JSON.stringify = __JSONstringify } catch {}
+  try { globalThis.process = __Process; __Process.stdout = __Stdout; __Stdout.write = __StdoutWrite } catch {}
+  try { globalThis.setTimeout = __setTimeout; globalThis.clearTimeout = __clearTimeout } catch {}
+  try { globalThis.Error = __Error; globalThis.RangeError = __RangeError; globalThis.Promise = __Promise } catch {}
+  try { globalThis.performance = __performance; __performance.now = __performanceNow } catch {}
+}
+const __encode = (value) => {
+  if (value === undefined) return { __oracleType: "undefined" }
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value
+  if (__isArray(value)) {
+    const items = []
+    for (let i = 0; i < value.length; i++) items[i] = __encode(value[i])
+    return items
+  }
+  return { __oracleType: "object" }
+}
+const __probeSources = ${JSON.stringify(probes.map((probe) => probe.source))}
+const __trusted = { now: __now, setTimeout: __setTimeout, clearTimeout: __clearTimeout }
+let __candidate
+try {
+  await Bun.write("/tmp/candidate.ts", ${JSON.stringify(candidateModule)})
+  __candidate = await import("file:///tmp/candidate.ts")
+} catch {
+  __report({ valid: false, observations: [] })
+}
+if (__candidate !== undefined) {
+  __restore()
+  const observations = []
+  for (const source of __probeSources) {
+    const started = __now()
+    try {
+      const probe = new __Function("candidate", "trusted", "return await (" + source + ")(candidate, trusted)")
+      const value = await probe(__candidate, __trusted)
+      observations.push({ kind: "return", value: __encode(value), elapsedMs: __now() - started })
+    } catch (error) {
+      let isError = false
+      let isRangeError = false
+      let message = null
+      try {
+        isError = error instanceof __Error
+        isRangeError = error instanceof __RangeError
+        if (isError) message = error.message
+      } catch {}
+      observations.push({ kind: "throw", isError, isRangeError, message, elapsedMs: __now() - started })
+    }
+  }
+  __report({ valid: true, observations })
+}
+`
+  const out = await runBun(source, { reportNonce })
+  const startCount = out.split(ORACLE_FRAME_START).length - 1
+  const endCount = out.split(ORACLE_FRAME_END).length - 1
+  if (startCount !== 1 || endCount !== 1) return failedOracle(probes)
+  const start = out.indexOf(ORACLE_FRAME_START) + ORACLE_FRAME_START.length
+  const end = out.indexOf(ORACLE_FRAME_END, start)
+  if (end === -1) return failedOracle(probes)
+  const frame = out.slice(start, end)
+  const separator = frame.indexOf(":")
+  if (separator === -1 || frame.slice(0, separator) !== reportNonce) return failedOracle(probes)
+  try {
+    const report = JSON.parse(frame.slice(separator + 1)) as {
+      valid?: unknown
+      observations?: unknown
+    }
+    if (
+      report.valid !== true ||
+      !Array.isArray(report.observations) ||
+      report.observations.length !== probes.length
+    )
+      return failedOracle(probes)
+    const observations: OracleObservation[] = []
+    for (const value of report.observations) {
+      if (
+        value === null ||
+        typeof value !== "object" ||
+        (value.kind !== "return" && value.kind !== "throw") ||
+        typeof value.elapsedMs !== "number" ||
+        !Number.isFinite(value.elapsedMs)
+      )
+        return failedOracle(probes)
+      if (value.kind === "return" && !("value" in value)) return failedOracle(probes)
+      if (
+        value.kind === "throw" &&
+        (typeof value.isError !== "boolean" ||
+          typeof value.isRangeError !== "boolean" ||
+          !("message" in value) ||
+          (value.message !== null && typeof value.message !== "string"))
+      )
+        return failedOracle(probes)
+      observations.push(value as OracleObservation)
+    }
+    return {
+      observations,
+      checks: probes.map((probe, i) => {
+        try {
+          return check(probe.name, probe.passes(observations[i] as OracleObservation))
+        } catch {
+          return check(probe.name, false)
+        }
+      }),
+    }
+  } catch {
+    return failedOracle(probes)
+  }
+}
+
+function failedOracle(probes: readonly OracleProbe[]): OracleResult {
+  return { checks: probes.map((probe) => check(probe.name, false)), observations: null }
+}
+
+function displayedObservation(observation: OracleObservation | undefined): unknown {
+  if (observation === undefined) return undefined
+  if (observation.kind === "return") {
+    return isObj(observation.value) && observation.value.__oracleType === "undefined"
+      ? undefined
+      : observation.value
+  }
+  const type = observation.isRangeError ? "RangeError" : observation.isError ? "Error" : "Error"
+  return `threw ${type}${observation.message ? `: ${observation.message}` : ""}`
+}
+
+function testSummary(result: OracleResult, tests: readonly (readonly [string, string])[]): string {
+  // No authenticated report: the module failed to load, crashed or hung before reporting.
+  if (result.observations === null) return "error: test file failed to compile"
+  const passed = result.checks.filter((c) => c.pass).length
+  const failed = result.checks.findIndex((c) => !c.pass)
+  const summary = `${passed} passed, ${result.checks.length - passed} failed`
+  if (failed === -1) return summary
+  const [input, expected] = tests[failed] as readonly [string, string]
+  return `${summary}\nFAIL slugify(${JSON.stringify(input)}) expected ${JSON.stringify(expected)}, received ${JSON.stringify(displayedObservation(result.observations?.[failed]))}`
+}
 
 // ─── general ────────────────────────────────────────────────────────────────────────────────
 
@@ -218,24 +393,30 @@ const coding: CalibrationCase[] = [
     dimension: "coding",
     kind: "text",
     prompt: `Implement \`function parseDuration(input: string): number\` in TypeScript. It converts strings like "1h30m15s", "45m", "2h", "10s" into total seconds. Units appear at most once each and always in h, m, s order. Any other input (empty string, unknown unit, wrong order, repeated unit, non-integer, spaces) must throw an Error. ${CODE_RULE}`,
-    grade: (a) =>
-      execute(
-        codeOf(a),
-        `${T}
-const bad = (s: string) => { try { parseDuration(s); return false } catch { return true } }
-await t(() => parseDuration("1h30m15s") === 5415)
-await t(() => parseDuration("45m") === 2700)
-await t(() => parseDuration("2h") === 7200)
-await t(() => parseDuration("10s") === 10)
-await t(() => parseDuration("1h5s") === 3605)
-await t(() => bad(""))
-await t(() => bad("5x"))
-await t(() => bad("10s5m"))
-await t(() => bad("1h1h"))
-await t(() => bad("1.5h"))
-await t(() => bad("1h 5m"))
-done()`,
-      ),
+    grade: async (a) =>
+      (
+        await execute(codeOf(a), "parseDuration", [
+          { name: "1h30m15s", source: '(c) => c.parseDuration("1h30m15s")', passes: returns(5415) },
+          { name: "45m", source: '(c) => c.parseDuration("45m")', passes: returns(2700) },
+          { name: "2h", source: '(c) => c.parseDuration("2h")', passes: returns(7200) },
+          { name: "10s", source: '(c) => c.parseDuration("10s")', passes: returns(10) },
+          { name: "1h5s", source: '(c) => c.parseDuration("1h5s")', passes: returns(3605) },
+          { name: "empty input throws", source: '(c) => c.parseDuration("")', passes: throws },
+          { name: "unknown unit throws", source: '(c) => c.parseDuration("5x")', passes: throws },
+          { name: "wrong order throws", source: '(c) => c.parseDuration("10s5m")', passes: throws },
+          {
+            name: "repeated unit throws",
+            source: '(c) => c.parseDuration("1h1h")',
+            passes: throws,
+          },
+          {
+            name: "fractional unit throws",
+            source: '(c) => c.parseDuration("1.5h")',
+            passes: throws,
+          },
+          { name: "spaces throw", source: '(c) => c.parseDuration("1h 5m")', passes: throws },
+        ])
+      ).checks,
   },
   {
     id: "coding.fix-chunk",
@@ -253,54 +434,114 @@ function chunk<T>(items: T[], size: number): T[][] {
 }
 \`\`\`
 ${CODE_RULE}`,
-    grade: (a) =>
-      execute(
-        codeOf(a),
-        `${T}
-const eq = (x: unknown, y: unknown) => JSON.stringify(x) === JSON.stringify(y)
-await t(() => eq(chunk([1,2,3,4,5], 2), [[1,2],[3,4],[5]]))
-await t(() => eq(chunk([1,2,3,4], 2), [[1,2],[3,4]]))
-await t(() => eq(chunk([1], 3), [[1]]))
-await t(() => eq(chunk([], 3), []))
-await t(() => { try { chunk([1], 0); return false } catch (e) { return e instanceof RangeError } })
-await t(() => { try { chunk([1], 1.5); return false } catch (e) { return e instanceof RangeError } })
-done()`,
-      ),
+    grade: async (a) =>
+      (
+        await execute(codeOf(a), "chunk", [
+          {
+            name: "chunks final remainder",
+            source: "(c) => c.chunk([1,2,3,4,5], 2)",
+            passes: returns([[1, 2], [3, 4], [5]]),
+          },
+          {
+            name: "exact chunks",
+            source: "(c) => c.chunk([1,2,3,4], 2)",
+            passes: returns([
+              [1, 2],
+              [3, 4],
+            ]),
+          },
+          {
+            name: "chunk larger than array",
+            source: "(c) => c.chunk([1], 3)",
+            passes: returns([[1]]),
+          },
+          { name: "empty array", source: "(c) => c.chunk([], 3)", passes: returns([]) },
+          {
+            name: "zero size RangeError",
+            source: "(c) => c.chunk([1], 0)",
+            passes: throwsRangeError,
+          },
+          {
+            name: "fractional size RangeError",
+            source: "(c) => c.chunk([1], 1.5)",
+            passes: throwsRangeError,
+          },
+        ])
+      ).checks,
   },
   {
     id: "coding.lru",
     dimension: "coding",
     kind: "text",
     prompt: `Implement \`class LruCache<K, V>\` in TypeScript with \`constructor(capacity: number)\`, \`get(key: K): V | undefined\` (a hit makes the key most recently used), \`set(key: K, value: V): void\` (inserting beyond capacity evicts the least recently used key; updating an existing key makes it most recently used) and a read-only \`size\` getter. ${CODE_RULE}`,
-    grade: (a) =>
-      execute(
-        codeOf(a),
-        `${T}
-await t(() => { const c = new LruCache<string, number>(2); c.set("a",1); c.set("b",2); c.set("c",3); return c.get("a") === undefined && c.get("c") === 3 })
-await t(() => { const c = new LruCache<string, number>(2); c.set("a",1); c.set("b",2); c.get("a"); c.set("c",3); return c.get("b") === undefined && c.get("a") === 1 })
-await t(() => { const c = new LruCache<string, number>(2); c.set("a",1); c.set("b",2); c.set("a",9); c.set("c",3); return c.get("b") === undefined && c.get("a") === 9 })
-await t(() => { const c = new LruCache<string, number>(3); c.set("a",1); c.set("a",2); return c.size === 1 })
-await t(() => { const c = new LruCache<number, string>(1); c.set(1,"x"); c.set(2,"y"); return c.size === 1 && c.get(2) === "y" })
-done()`,
-      ),
+    grade: async (a) =>
+      (
+        await execute(codeOf(a), "LruCache", [
+          {
+            name: "evicts oldest entry",
+            source:
+              '(c) => { const x = new c.LruCache(2); x.set("a",1); x.set("b",2); x.set("c",3); return [x.get("a"),x.get("c")] }',
+            passes: returns([undefined, 3]),
+          },
+          {
+            name: "hit becomes most recent",
+            source:
+              '(c) => { const x = new c.LruCache(2); x.set("a",1); x.set("b",2); x.get("a"); x.set("c",3); return [x.get("b"),x.get("a")] }',
+            passes: returns([undefined, 1]),
+          },
+          {
+            name: "update becomes most recent",
+            source:
+              '(c) => { const x = new c.LruCache(2); x.set("a",1); x.set("b",2); x.set("a",9); x.set("c",3); return [x.get("b"),x.get("a")] }',
+            passes: returns([undefined, 9]),
+          },
+          {
+            name: "updating keeps size",
+            source:
+              '(c) => { const x = new c.LruCache(3); x.set("a",1); x.set("a",2); return x.size }',
+            passes: returns(1),
+          },
+          {
+            name: "capacity one",
+            source:
+              '(c) => { const x = new c.LruCache(1); x.set(1,"x"); x.set(2,"y"); return [x.size,x.get(2)] }',
+            passes: returns([1, "y"]),
+          },
+        ])
+      ).checks,
   },
   {
     id: "coding.with-timeout",
     dimension: "coding",
     kind: "text",
     prompt: `Implement \`function withTimeout<T>(work: Promise<T>, ms: number): Promise<T>\` in TypeScript. It settles exactly like \`work\` if \`work\` settles within \`ms\`; otherwise it rejects with \`new Error("timeout")\`. It must always clear its timer so a settled call never keeps the process alive. ${CODE_RULE}`,
-    grade: (a) =>
-      execute(
-        codeOf(a),
-        `${T}
-const sleep = (ms: number, v?: unknown) => new Promise((r) => setTimeout(() => r(v), ms))
-await t(async () => (await withTimeout(Promise.resolve(7), 50)) === 7)
-await t(async () => { try { await withTimeout(sleep(200), 20); return false } catch (e) { return e instanceof Error && e.message === "timeout" } })
-await t(async () => { try { await withTimeout(Promise.reject(new Error("boom")), 50); return false } catch (e) { return e instanceof Error && e.message === "boom" } })
-await t(async () => { const started = performance.now(); await withTimeout(sleep(5, 1), 2_000); return performance.now() - started < 1_000 })
-done()
-setTimeout(() => {}, 0)`,
-      ),
+    grade: async (a) =>
+      (
+        await execute(codeOf(a), "withTimeout", [
+          {
+            name: "settled work resolves",
+            source: "(c) => c.withTimeout(Promise.resolve(7), 50)",
+            passes: returns(7),
+          },
+          {
+            name: "timeout rejects",
+            source:
+              "(c, t) => { const work = Promise.withResolvers(); t.setTimeout(() => work.resolve(undefined), 200); return c.withTimeout(work.promise, 20) }",
+            passes: throwsErrorMessage("timeout"),
+          },
+          {
+            name: "work rejection preserved",
+            source: '(c) => c.withTimeout(Promise.reject(new Error("boom")), 50)',
+            passes: throwsErrorMessage("boom"),
+          },
+          {
+            name: "settled call resolves within one second",
+            source:
+              "(c, t) => { const start = t.now(); const work = Promise.withResolvers(); t.setTimeout(() => work.resolve(1), 5); return c.withTimeout(work.promise, 2000).then(() => t.now() - start) }",
+            passes: (o) => o.kind === "return" && typeof o.value === "number" && o.value < 1000,
+          },
+        ])
+      ).checks,
   },
   {
     id: "coding.comprehension",
@@ -1108,64 +1349,150 @@ const generalHard: CalibrationCase[] = [
   },
 ]
 
+const SEMVER_ORDER = [
+  "1.0.0-alpha",
+  "1.0.0-alpha.1",
+  "1.0.0-alpha.beta",
+  "1.0.0-beta",
+  "1.0.0-beta.2",
+  "1.0.0-beta.11",
+  "1.0.0-rc.1",
+  "1.0.0",
+  "1.2.0",
+  "1.10.0",
+  "2.0.0",
+] as const
+
 const codingHard: CalibrationCase[] = [
   {
     id: "coding.semver",
     dimension: "coding",
     kind: "text",
     prompt: `Implement \`function compareSemver(a: string, b: string): -1 | 0 | 1\` in TypeScript following Semantic Versioning 2.0.0 precedence exactly, including pre-release identifiers (numeric identifiers compare numerically, alphanumeric ones lexically in ASCII order, numeric < alphanumeric, a larger set of fields wins when all preceding are equal, a pre-release version is lower than the release) and build metadata (ignored). Throw an Error for an invalid version (e.g. leading zeros in a numeric part, missing parts). ${CODE_RULE}`,
-    grade: (a) =>
-      execute(
-        codeOf(a),
-        `${T}
-const order = ["1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0", "1.2.0", "1.10.0", "2.0.0"]
-for (let i = 0; i + 1 < order.length; i++) await t(() => compareSemver(order[i], order[i + 1]) === -1 && compareSemver(order[i + 1], order[i]) === 1)
-await t(() => compareSemver("1.0.0+build.5", "1.0.0+other") === 0)
-await t(() => compareSemver("3.4.5", "3.4.5") === 0)
-await t(() => { try { compareSemver("01.0.0", "1.0.0"); return false } catch { return true } })
-await t(() => { try { compareSemver("1.0", "1.0.0"); return false } catch { return true } })
-done()`,
-      ),
+    grade: async (a) => {
+      const adjacent = SEMVER_ORDER.slice(0, -1).map((left, i) => {
+        const right = SEMVER_ORDER[i + 1] as string
+        return {
+          name: `adjacent precedence ${i + 1}`,
+          source: `(c) => [c.compareSemver(${JSON.stringify(left)},${JSON.stringify(right)}),c.compareSemver(${JSON.stringify(right)},${JSON.stringify(left)})]`,
+          passes: returns([-1, 1]),
+        }
+      })
+      return (
+        await execute(codeOf(a), "compareSemver", [
+          ...adjacent,
+          {
+            name: "build metadata ignored",
+            source: '(c) => c.compareSemver("1.0.0+build.5","1.0.0+other")',
+            passes: returns(0),
+          },
+          {
+            name: "identical versions equal",
+            source: '(c) => c.compareSemver("3.4.5","3.4.5")',
+            passes: returns(0),
+          },
+          {
+            name: "leading zero rejected",
+            source: '(c) => c.compareSemver("01.0.0","1.0.0")',
+            passes: throws,
+          },
+          {
+            name: "missing part rejected",
+            source: '(c) => c.compareSemver("1.0","1.0.0")',
+            passes: throws,
+          },
+        ])
+      ).checks
+    },
   },
   {
     id: "coding.toposort",
     dimension: "coding",
     kind: "text",
     prompt: `Implement \`function buildOrder(deps: Record<string, string[]>): string[]\` in TypeScript. \`deps[x]\` lists the packages \`x\` depends on (they must come before \`x\`). Packages that only appear as dependencies are included too. Among all valid orders return the lexicographically smallest one (compare package names with plain string <). If there is a cycle, throw an Error whose message starts with "cycle". ${CODE_RULE}`,
-    grade: (a) =>
-      execute(
-        codeOf(a),
-        `${T}
-const eq = (x: unknown, y: unknown) => JSON.stringify(x) === JSON.stringify(y)
-await t(() => eq(buildOrder({ b: ["a"], c: ["a"], d: ["b", "c"] }), ["a", "b", "c", "d"]))
-await t(() => eq(buildOrder({ z: [], y: ["z"], a: ["y"] }), ["z", "y", "a"]))
-await t(() => eq(buildOrder({ app: ["lib", "util"], lib: ["util"], test: [] }), ["test", "util", "lib", "app"]))
-await t(() => eq(buildOrder({ m: ["x"], n: ["x"] }), ["x", "m", "n"]))
-await t(() => eq(buildOrder({}), []))
-await t(() => { try { buildOrder({ a: ["b"], b: ["c"], c: ["a"] }); return false } catch (e) { return e instanceof Error && e.message.startsWith("cycle") } })
-done()`,
-      ),
+    grade: async (a) =>
+      (
+        await execute(codeOf(a), "buildOrder", [
+          {
+            name: "branching dependencies",
+            source: '(c) => c.buildOrder({ b: ["a"], c: ["a"], d: ["b", "c"] })',
+            passes: returns(["a", "b", "c", "d"]),
+          },
+          {
+            name: "dependency-only packages",
+            source: '(c) => c.buildOrder({ z: [], y: ["z"], a: ["y"] })',
+            passes: returns(["z", "y", "a"]),
+          },
+          {
+            name: "lexicographically smallest order",
+            source: '(c) => c.buildOrder({ app: ["lib", "util"], lib: ["util"], test: [] })',
+            passes: returns(["test", "util", "lib", "app"]),
+          },
+          {
+            name: "shared dependency",
+            source: '(c) => c.buildOrder({ m: ["x"], n: ["x"] })',
+            passes: returns(["x", "m", "n"]),
+          },
+          { name: "empty graph", source: "(c) => c.buildOrder({})", passes: returns([]) },
+          {
+            name: "cycle error",
+            source: '(c) => c.buildOrder({ a: ["b"], b: ["c"], c: ["a"] })',
+            passes: (o) =>
+              o.kind === "throw" && o.isError === true && o.message?.startsWith("cycle") === true,
+          },
+        ])
+      ).checks,
   },
   {
     id: "coding.csv",
     dimension: "coding",
     kind: "text",
     prompt: `Implement \`function parseCsvLine(line: string): string[]\` in TypeScript for one RFC 4180 record: comma separators; fields may be wrapped in double quotes; inside a quoted field a doubled quote ("") is a literal quote and commas are literal; empty fields are empty strings; whitespace is preserved. Throw an Error for an unterminated quoted field or for characters after a closing quote other than a comma. ${CODE_RULE}`,
-    grade: (a) =>
-      execute(
-        codeOf(a),
-        `${T}
-const eq = (x: unknown, y: unknown) => JSON.stringify(x) === JSON.stringify(y)
-await t(() => eq(parseCsvLine("a,b,c"), ["a", "b", "c"]))
-await t(() => eq(parseCsvLine('"x, y",z'), ["x, y", "z"]))
-await t(() => eq(parseCsvLine('"say ""hi""",2'), ['say "hi"', "2"]))
-await t(() => eq(parseCsvLine(",,"), ["", "", ""]))
-await t(() => eq(parseCsvLine(' a , b '), [" a ", " b "]))
-await t(() => eq(parseCsvLine('""'), [""]))
-await t(() => { try { parseCsvLine('"open,1'); return false } catch { return true } })
-await t(() => { try { parseCsvLine('"a"b,1'); return false } catch { return true } })
-done()`,
-      ),
+    grade: async (a) =>
+      (
+        await execute(codeOf(a), "parseCsvLine", [
+          {
+            name: "plain fields",
+            source: '(c) => c.parseCsvLine("a,b,c")',
+            passes: returns(["a", "b", "c"]),
+          },
+          {
+            name: "quoted comma",
+            source: "(c) => c.parseCsvLine('\"x, y\",z')",
+            passes: returns(["x, y", "z"]),
+          },
+          {
+            name: "escaped quotes",
+            source: '(c) => c.parseCsvLine(\'"say ""hi""",2\')',
+            passes: returns(['say "hi"', "2"]),
+          },
+          {
+            name: "empty fields",
+            source: '(c) => c.parseCsvLine(",,")',
+            passes: returns(["", "", ""]),
+          },
+          {
+            name: "preserves whitespace",
+            source: '(c) => c.parseCsvLine(" a , b ")',
+            passes: returns([" a ", " b "]),
+          },
+          {
+            name: "empty quoted field",
+            source: "(c) => c.parseCsvLine('\"\"')",
+            passes: returns([""]),
+          },
+          {
+            name: "unterminated quoted field throws",
+            source: "(c) => c.parseCsvLine('\"open,1')",
+            passes: throws,
+          },
+          {
+            name: "trailing characters throw",
+            source: "(c) => c.parseCsvLine('\"a\"b,1')",
+            passes: throws,
+          },
+        ])
+      ).checks,
   },
 ]
 
@@ -1381,15 +1708,13 @@ const toolUseHard: CalibrationCase[] = [
     environment: travel,
     grade: (t) => {
       const c = t.calls.find((x) => x.name === "create_event")
+      const attendees = Array.isArray(c?.args.attendees) ? c.args.attendees : []
       return [
         check("single create_event", t.calls.length === 1 && c !== undefined),
         check("title", c?.args.title === "Design review"),
         check("start", /^2026-11-03T15:30(:00)?(Z|\+00:00)$/.test(String(c?.args.start))),
         check("duration 90", c?.args.duration_minutes === 90),
-        check(
-          "attendees",
-          JSON.stringify([...((c?.args.attendees as string[]) ?? [])].sort()) === '["Ana","Ben"]',
-        ),
+        check("attendees", JSON.stringify([...attendees].sort()) === '["Ana","Ben"]'),
       ]
     },
   },
@@ -1402,6 +1727,12 @@ const SLUG_TESTS: readonly (readonly [string, string])[] = [
   ["Crème Brûlée!", "creme-brulee"],
   ["a -- b", "a-b"],
 ]
+
+const slugifyProbes = SLUG_TESTS.map(([input, expected], i) => ({
+  name: `hidden test ${i + 1}`,
+  source: `(c) => c.slugify(${JSON.stringify(input)})`,
+  passes: returns(expected),
+}))
 
 const agenticHard: CalibrationCase[] = [
   {
@@ -1442,18 +1773,11 @@ const agenticHard: CalibrationCase[] = [
       let lastResult = ""
       let editedTests = false
       const run = async () => {
-        const src = (files["src/slug.ts"] ?? "").replace(/^export /gm, "")
-        const body = SLUG_TESTS.map(
-          ([input, want]) =>
-            `{ let got: unknown; try { got = slugify(${JSON.stringify(input)}) } catch (e) { got = "threw " + e } if (got === ${JSON.stringify(want)}) pass++; else fails.push(${JSON.stringify(`slugify(${JSON.stringify(input)}) expected ${JSON.stringify(want)}, received `)} + JSON.stringify(got)) }`,
-        ).join("\n")
-        const out = await runBun(
-          `${src}\nlet pass = 0; const fails: string[] = []\n${body}\nconsole.log(pass + " passed, " + fails.length + " failed" + (fails.length ? "\\nFAIL " + fails[0] : ""))\n`,
-        )
-        return out.trim() || "error: test file failed to compile"
+        const result = await execute(files["src/slug.ts"] ?? "", "slugify", slugifyProbes)
+        return { result, output: testSummary(result, SLUG_TESTS) }
       }
       return {
-        async call(name, args) {
+        call: async (name, args) => {
           if (name === "list_files")
             return JSON.stringify([...Object.keys(files), "test/slug.test.ts"])
           if (name === "read_file") {
@@ -1465,24 +1789,33 @@ const agenticHard: CalibrationCase[] = [
               editedTests ||= String(args.path).startsWith("test/")
               return "error: only src/slug.ts is writable"
             }
-            files["src/slug.ts"] = String(args.content)
+            files["src/slug.ts"] = typeof args.content === "string" ? args.content : ""
             return "ok"
           }
           if (name === "run_tests") {
-            lastResult = await run()
+            const result = await run()
+            lastResult = result.output
             return lastResult
           }
           return "error: unknown tool"
         },
-        state: async () => ({ final: await run(), lastResult, editedTests }),
+        state: async () => {
+          const final = await run()
+          return { finalChecks: final.result.checks, lastResult, editedTests }
+        },
       }
     },
     grade: (_t, s) => {
-      const state = s as { final: string; lastResult: string; editedTests: boolean }
-      const passed = Number(/^(\d+) passed/.exec(state.final)?.[1] ?? 0)
+      const state = s as {
+        finalChecks: readonly Check[]
+        lastResult: string
+        editedTests: boolean
+      }
       return [
-        ...SLUG_TESTS.map((_, i) => check(`hidden test ${i + 1}`, i < passed)),
-        check("confirmed green", /^5 passed, 0 failed/.test(state.lastResult)),
+        ...SLUG_TESTS.map((_, i) =>
+          check(`hidden test ${i + 1}`, state.finalChecks[i]?.pass === true),
+        ),
+        check("confirmed green", state.lastResult === "5 passed, 0 failed"),
         check("did not touch tests", !state.editedTests),
       ]
     },

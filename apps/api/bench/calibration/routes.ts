@@ -47,6 +47,23 @@ interface ChatMessage {
   tool_calls?: { id: string; type: "function"; function: { name: string; arguments: string } }[]
   tool_call_id?: string
 }
+const MAX_TOOL_ARGUMENT_CHARS = 65_536
+
+function parseToolArguments(value: unknown): {
+  readonly args: Record<string, unknown>
+  readonly valid: boolean
+} {
+  if (typeof value !== "string" || value.length > MAX_TOOL_ARGUMENT_CHARS)
+    return { args: {}, valid: false }
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+      return { args: {}, valid: false }
+    return { args: parsed as Record<string, unknown>, valid: true }
+  } catch {
+    return { args: {}, valid: false }
+  }
+}
 
 /** OpenAI Chat Completions, temperature 0, the model's default reasoning behavior. */
 export function openAiChatRoute(name: string, baseUrl: string, model: string, key?: string): Route {
@@ -108,25 +125,37 @@ export function openAiChatRoute(name: string, baseUrl: string, model: string, ke
         const message = await complete(messages, c.tools)
         messages.push({
           role: "assistant",
-          content: message.content ?? "",
-          tool_calls: message.tool_calls,
+          content: typeof message.content === "string" ? message.content : "",
+          tool_calls: Array.isArray(message.tool_calls) ? message.tool_calls : undefined,
         })
-        if (!message.tool_calls?.length) {
-          final = message.content ?? ""
+        const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : []
+        if (toolCalls.length === 0) {
+          final = typeof message.content === "string" ? message.content : ""
           break
         }
-        for (const call of message.tool_calls) {
-          let args: Record<string, unknown> = {}
+        for (const call of toolCalls) {
+          const name = typeof call?.function?.name === "string" ? call.function.name : ""
+          const parsed = parseToolArguments(call?.function?.arguments)
+          const args = parsed.args
           let result: string
-          try {
-            args = JSON.parse(call.function.arguments || "{}") as Record<string, unknown>
-            result = await env.call(call.function.name, args)
-          } catch (error) {
-            if (error instanceof CalibrationSandboxUnavailableError) throw error
+          if (!parsed.valid) {
             result = "error: arguments are not valid JSON"
+          } else {
+            try {
+              const returned = await env.call(name, args)
+              result =
+                typeof returned === "string" ? returned : "error: tool returned a non-text result"
+            } catch (error) {
+              if (error instanceof CalibrationSandboxUnavailableError) throw error
+              result = "error: tool call failed"
+            }
           }
-          calls.push({ name: call.function.name, args })
-          messages.push({ role: "tool", tool_call_id: call.id, content: result })
+          calls.push({ name, args })
+          messages.push({
+            role: "tool",
+            tool_call_id: typeof call?.id === "string" ? call.id : "",
+            content: result,
+          })
         }
       }
       return {
@@ -245,6 +274,17 @@ export function claudeCliRoute(model: string): Route {
         }),
       )
       const started = performance.now()
+      const readRecorded = async () => {
+        try {
+          return (await Bun.file(stateFile).json()) as {
+            calls?: ToolTranscript["calls"]
+            state?: unknown
+            sandboxUnavailable?: unknown
+          }
+        } catch {
+          return null
+        }
+      }
       try {
         const { answer, turns } = await invoke(c.prompt, [
           "--mcp-config",
@@ -255,15 +295,21 @@ export function claudeCliRoute(model: string): Route {
           "--max-turns",
           String(c.maxTurns),
         ])
-        const recorded = (await Bun.file(stateFile).json()) as {
-          calls: ToolTranscript["calls"]
-          state: unknown
-        }
+        const recorded = await readRecorded()
+        if (typeof recorded?.sandboxUnavailable === "string")
+          throw new CalibrationSandboxUnavailableError(recorded.sandboxUnavailable)
+        if (recorded === null || !Array.isArray(recorded.calls))
+          throw new Error("claude-cli: missing tool transcript")
         return {
           transcript: { calls: recorded.calls, final: answer, turns },
           state: recorded.state,
           latencyMs: performance.now() - started,
         }
+      } catch (error) {
+        const recorded = await readRecorded()
+        if (typeof recorded?.sandboxUnavailable === "string")
+          throw new CalibrationSandboxUnavailableError(recorded.sandboxUnavailable)
+        throw error
       } finally {
         await rm(dir, { recursive: true, force: true })
       }
