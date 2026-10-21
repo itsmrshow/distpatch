@@ -26,7 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Capability sync rejects pools configured with fewer than two connections before reserving its session lock, preventing a one-connection pool from deadlocking its own database work.
-- Capability snapshot publication rejects a returned `rejected` build before consulting historical rows, so rejection cannot reactivate a superseded revision; successful A→B→A reactivation preserves the revision's first published payload and metadata, changing only lifecycle state.
+- Capability sync fences every observation, identity, route and publication write against the recorded lock-owning PostgreSQL session inside the publication transaction, so a sync whose session is lost cannot commit stale state after a newer sync.
+- Capability snapshot publication rejects returned non-candidate builds and refuses to replace a stored `rejected` revision; successful A→B→A reactivation preserves the revision's first published payload and metadata, changing only lifecycle state.
 - Local Evaluation observations deduplicate by contributing run provenance rather than artifact generation time; a delayed replay remains idempotent as ingestion time advances and cannot regress newer stored provenance. Saturation withholds conflicting numeric scores while retaining raw audit evidence, and explicit comparability registries gate Artificial Analysis scores across dimensions without dropping evidence.
 - Calibration grading now aborts unless host Yama `ptrace_scope` is exactly `1`, `2`, or `3`, so a same-UID candidate cannot read trusted grader memory on unsupported hosts.
 - Calibration launches use a fresh explicit systemd scope unit per invocation and accept limits only after `/proc/<pid>/cgroup` identifies that exact unit; a matching inherited harness cgroup can no longer become the cached `cgroup.kill` target.

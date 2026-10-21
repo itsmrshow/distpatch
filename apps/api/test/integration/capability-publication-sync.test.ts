@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test"
 import {
+  advisoryLockKey,
   createCapabilityIntelligenceRepository,
   createDatabase,
   type DatabaseHandle,
@@ -233,6 +234,122 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
     ).toEqual(observedAt(3))
     expect(publicationDuringOverlap).toBeUndefined()
     expect(payload?.models?.["anthropic/claude-sonnet-4-6"]?.scores.general).toBe(0.4)
+  })
+
+  test("a sync whose lock session is terminated cannot overwrite a newer sync", async () => {
+    const control = admin
+    if (!control) throw new Error("database admin fixture is not initialized")
+    const sourceId = `session-loss-${crypto.randomUUID()}`
+    const routeModelId = `session-loss-route-${crypto.randomUUID()}`
+    const testUrl = new URL(configuredUrl)
+    testUrl.pathname = `/${databaseName}`
+    const olderHandle = createDatabase({
+      url: testUrl.toString(),
+      maxConnections: 2,
+      closeTimeoutSeconds: 0,
+    })
+    const newerHandle = createDatabase({
+      url: testUrl.toString(),
+      maxConnections: 2,
+      closeTimeoutSeconds: 0,
+    })
+    const olderRepository = createCapabilityIntelligenceRepository(olderHandle.db, olderHandle.sql)
+    const newerRepository = createCapabilityIntelligenceRepository(newerHandle.db, newerHandle.sql)
+    const olderDiscoveryStarted = Promise.withResolvers<void>()
+    const releaseOlderDiscovery = Promise.withResolvers<void>()
+    const source = (semanticModelId: string, pause = false) => ({
+      id: sourceId,
+      tags: ["local"],
+      discover: async () => {
+        if (pause) {
+          olderDiscoveryStarted.resolve()
+          await releaseOlderDiscovery.promise
+        }
+        return {
+          descriptors: [
+            {
+              routeModelId,
+              semanticModelId,
+              baseModelId: null,
+              derivativeModelId: null,
+              capabilities: { textInput: true, textOutput: true },
+            },
+          ],
+          rejected: [],
+        }
+      },
+    })
+    const older = syncCapabilityIntelligence({
+      repository: olderRepository,
+      bootstrap,
+      sources: [],
+      routeSources: [source("review/older", true)],
+    }).then(
+      () => ({ status: "fulfilled" as const }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    )
+
+    await olderDiscoveryStarted.promise
+    try {
+      const locks = await control.sql`
+        select pid
+        from pg_locks
+        where locktype = ${"advisory"}
+          and granted
+          and objsubid = 2
+          and classid::text = ${String(0x726f_7574)}
+          and objid::text = ${String(advisoryLockKey("capability_intelligence_sync") >>> 0)}
+          and database = (
+            select oid from pg_database where datname = ${databaseName}
+          )
+      `
+      expect(locks).toHaveLength(1)
+      const pidValue = locks[0]?.pid
+      if (pidValue === undefined) throw new Error("missing older sync lock backend pid")
+      const pid = Number(pidValue)
+      if (!Number.isInteger(pid)) throw new Error("invalid older sync lock backend pid")
+      const terminated = await control.sql`
+        select pg_terminate_backend(${pid}) as terminated
+      `
+      expect(terminated[0]?.terminated).toBe(true)
+
+      const newer = await syncCapabilityIntelligence({
+        repository: newerRepository,
+        bootstrap,
+        sources: [],
+        routeSources: [source("review/newer")],
+      })
+      const publishedAfterNewer = await repository.getPublishedSnapshot()
+      expect(publishedAfterNewer?.revision).toBe(newer.publishedRevision)
+      expect(
+        (await repository.listRouteModels()).find(
+          (row) => row.source === sourceId && row.routeModelId === routeModelId,
+        )?.descriptor,
+      ).toMatchObject({ semanticModelId: "review/newer" })
+
+      releaseOlderDiscovery.resolve()
+      const olderResult = await older
+      if (olderResult.status === "fulfilled") {
+        throw new Error("older sync unexpectedly completed after losing its lock session")
+      }
+      expect(olderResult.error).toBeInstanceOf(Error)
+      expect(String(olderResult.error)).toContain("no longer holds the sync lock")
+
+      const routesAfterOlder = await repository.listRouteModels()
+      expect(
+        routesAfterOlder.find((row) => row.source === sourceId && row.routeModelId === routeModelId)
+          ?.descriptor,
+      ).toMatchObject({ semanticModelId: "review/newer" })
+      expect(await repository.getPublishedSnapshot()).toMatchObject({
+        revision: newer.publishedRevision,
+        publicationState: "published",
+      })
+      expect(await repository.listSnapshots(1000)).toHaveLength(1)
+    } finally {
+      releaseOlderDiscovery.resolve()
+      await older
+      await Promise.all([olderHandle.close(), newerHandle.close()])
+    }
   })
 
   test("unresolved evidence summary changes create a new published revision", async () => {

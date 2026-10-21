@@ -1,4 +1,8 @@
-import type { CapabilityIntelligenceRepository, RouteModelInventoryRow } from "@multi-ai-router/db"
+import type {
+  CapabilityIntelligenceRepository,
+  CapabilitySyncFence,
+  RouteModelInventoryRow,
+} from "@multi-ai-router/db"
 import { redactValue } from "../../../logging/redact"
 import { createSnapshotRefresh } from "../../snapshots/refresh"
 import type { CapabilityCatalogWithUnmatchedOverrides, RejectedCapabilityOverride } from "../build"
@@ -106,7 +110,7 @@ export async function syncCapabilityIntelligence(
   const resolver = options.identityResolver ?? createExternalIdentityResolver()
   const now = options.now ?? (() => new Date())
 
-  const syncRun = await repository.withSyncLock(async () => {
+  const syncRun = await repository.withSyncLock(async (syncFence) => {
     const metadataList: EvidenceFetchMetadata[] = []
     const fetchedObservations: SourceObservation[] = []
 
@@ -124,7 +128,7 @@ export async function syncCapabilityIntelligence(
             rows: reconciled.rows.map(routeModelToRow),
             result: reconciled.summary,
           }
-        })
+        }, syncFence)
         routeDiscovery.push({ source: source.id, ok: true, summary })
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -140,7 +144,7 @@ export async function syncCapabilityIntelligence(
     }
 
     // 2. Store observations idempotently in Postgres
-    const writeResult = await repository.recordObservations(fetchedObservations)
+    const writeResult = await repository.recordObservations(fetchedObservations, syncFence)
 
     // 3. Re-resolve identities across stored observations in case mappings were added
     const identityUpdates = await repository.resolveObservationIdentities(
@@ -153,6 +157,7 @@ export async function syncCapabilityIntelligence(
         ].filter((c) => c.length > 0)
         return resolver.resolve(src, candidates)
       },
+      syncFence,
     )
 
     // 4–7. Compile candidate, validate, publish atomically, and notify warm store
@@ -162,6 +167,7 @@ export async function syncCapabilityIntelligence(
       now,
       staleDays: options.staleDays,
       onPublished: options.onPublished,
+      syncFence,
     })
 
     return {
@@ -185,6 +191,7 @@ export interface CompileAndPublishOptions {
   readonly now?: () => Date
   readonly staleDays?: number
   readonly onPublished?: () => Promise<void>
+  readonly syncFence?: CapabilitySyncFence
 }
 
 export async function compileAndPublishCapabilitySnapshot(
@@ -241,6 +248,7 @@ export async function compileAndPublishCapabilitySnapshot(
           result: { compiled, timestamp },
         }
       },
+      options.syncFence,
     )
   const { compiled, timestamp } = result
 

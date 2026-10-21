@@ -4,6 +4,7 @@ import type {
   CapabilitySnapshotCandidate,
   CapabilitySnapshotInsert,
   CapabilitySnapshotRow,
+  CapabilitySyncFence,
   RouteModelInventoryRow,
 } from "@multi-ai-router/db"
 
@@ -12,6 +13,7 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
   snapshots: CapabilitySnapshotRow[]
   failNextPublish: boolean
   failNextRecord: boolean
+  loseSyncLock(): void
 } {
   const observations: CapabilityObservationRow[] = []
   const snapshots: CapabilitySnapshotRow[] = []
@@ -30,16 +32,25 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
       resolve()
     }
   }
-  let syncLockHeld = false
+  let activeSyncFence: CapabilitySyncFence | undefined
+  let nextBackendPid = 1
+  const assertSyncFence = (syncFence?: CapabilitySyncFence) => {
+    if (syncFence !== undefined && syncFence !== activeSyncFence) {
+      throw new Error(
+        `Capability sync lock session ${syncFence.backendPid} no longer holds the sync lock`,
+      )
+    }
+  }
   const withSyncLock = async <T>(
-    work: () => Promise<T>,
+    work: (syncFence: CapabilitySyncFence) => Promise<T>,
   ): Promise<{ readonly acquired: true; readonly value: T } | { readonly acquired: false }> => {
-    if (syncLockHeld) return { acquired: false }
-    syncLockHeld = true
+    if (activeSyncFence !== undefined) return { acquired: false }
+    const syncFence = { backendPid: nextBackendPid++ }
+    activeSyncFence = syncFence
     try {
-      return { acquired: true, value: await work() }
+      return { acquired: true, value: await work(syncFence) }
     } finally {
-      syncLockHeld = false
+      if (activeSyncFence === syncFence) activeSyncFence = undefined
     }
   }
 
@@ -47,6 +58,9 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     const idx = snapshots.findIndex((s) => s.revision === snap.revision)
     if (idx !== -1) {
       const current = snapshots[idx]
+      if (current?.publicationState === "rejected") {
+        throw new Error(`Cannot replace rejected capability snapshot revision ${snap.revision}`)
+      }
       if (
         current &&
         (current.publicationState === "published" || current.publicationState === "superseded")
@@ -143,10 +157,14 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     set failNextRecord(v: boolean) {
       failNextRecord = v
     },
+    loseSyncLock() {
+      activeSyncFence = undefined
+    },
     withSyncLock,
 
-    async recordObservations(rows) {
+    async recordObservations(rows, syncFence) {
       return withPublicationLock(async () => {
+        assertSyncFence(syncFence)
         if (failNextRecord) {
           failNextRecord = false
           throw new Error("simulated database write failure")
@@ -200,8 +218,9 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
         return { inserted, deduplicated }
       })
     },
-    async resolveObservationIdentities(resolve) {
+    async resolveObservationIdentities(resolve, syncFence) {
       return withPublicationLock(async () => {
+        assertSyncFence(syncFence)
         const updates: { readonly index: number; readonly canonicalModelId: string | null }[] = []
         for (let index = 0; index < observations.length; index++) {
           const obs = observations[index]
@@ -230,8 +249,9 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
       return observations.filter((o) => o.canonicalModelId === null)
     },
 
-    publishSnapshotWithCurrentEvidence: (build) =>
+    publishSnapshotWithCurrentEvidence: (build, syncFence) =>
       withPublicationLock(async () => {
+        assertSyncFence(syncFence)
         const built = await build({
           observations: sortedObservations(),
           routeModels: sortedRouteRows(),
@@ -277,8 +297,9 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
       return sortedRouteRows()
     },
 
-    reconcileRouteModels: (reconcile) =>
+    reconcileRouteModels: (reconcile, syncFence) =>
       withPublicationLock(async () => {
+        assertSyncFence(syncFence)
         const { rows, result } = reconcile(sortedRouteRows())
         saveRouteRows(rows)
         return result

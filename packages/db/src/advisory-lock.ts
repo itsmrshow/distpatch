@@ -82,30 +82,51 @@ export type AdvisoryLockRun<T> =
   | { readonly acquired: true; readonly value: T }
   | { readonly acquired: false }
 
+/** The callback's session lock was gone when a fenced write checked ownership. */
+export class AdvisoryLockSessionLostError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "AdvisoryLockSessionLostError"
+  }
+}
+
 /**
  * Runs `work` under the lock, or returns `{ acquired: false }` if someone else
- * has it.
+ * has it. The callback receives the reserved session's backend PID so callers
+ * can fence database work against loss of this session.
  *
  * **The reserved connection is the point.** An advisory lock lives on a session,
- * and a pooled `sql` hands each statement to whichever connection happens to be
- * free — so a lock taken on connection A and released on connection B is not
- * released at all, and leaks until that session is recycled. Reserving pins all
- * three statements to one connection, which is what makes the lock behave the
- * way its name suggests.
+ * so acquisition, backend-pid lookup and release must use that same reserved
+ * connection. The callback may use pooled connections for its database work.
  */
 export async function withAdvisoryLock<T>(
   sql: SqlConnection,
   key: number,
-  work: () => Promise<T>,
+  work: (backendPid: number) => Promise<T>,
 ): Promise<AdvisoryLockRun<T>> {
   const connection = await sql.reserve()
   try {
     if (!(await tryAdvisoryLock(connection, key))) return { acquired: false }
+    let value: T
     try {
-      return { acquired: true, value: await work() }
-    } finally {
-      await advisoryUnlock(connection, key)
+      const rows = await connection<{ readonly backendPid: number }[]>`
+        select pg_backend_pid() as "backendPid"
+      `
+      const backendPid = rows[0]?.backendPid
+      if (backendPid === undefined) {
+        throw new Error("Failed to identify advisory lock session backend")
+      }
+      value = await work(backendPid)
+    } catch (error) {
+      // Preserve the work failure. A lost session has already released its lock and
+      // cannot be explicitly unlocked, so only attempt the unlock otherwise.
+      if (!(error instanceof AdvisoryLockSessionLostError)) {
+        await advisoryUnlock(connection, key).catch(() => undefined)
+      }
+      throw error
     }
+    await advisoryUnlock(connection, key)
+    return { acquired: true, value }
   } finally {
     connection.release()
   }

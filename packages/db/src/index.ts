@@ -79,6 +79,7 @@ export type {
   CapabilityObservationInsert,
   CapabilityObservationInsertResult,
   CapabilitySnapshotCandidate,
+  CapabilitySyncFence,
 } from "./repositories/capability-intelligence-repository"
 export { createCapabilityIntelligenceRepository } from "./repositories/capability-intelligence-repository"
 export type {

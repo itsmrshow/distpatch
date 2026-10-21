@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm"
-import { advisoryLockKey, withAdvisoryLock } from "../advisory-lock"
+import { AdvisoryLockSessionLostError, advisoryLockKey, withAdvisoryLock } from "../advisory-lock"
 import type { Database, DatabaseExecutor, SqlConnection } from "../client"
 import {
   type CapabilityObservationRow,
@@ -68,13 +68,17 @@ export interface CapabilitySnapshotInsert {
 export type CapabilitySnapshotCandidate = Omit<CapabilitySnapshotInsert, "publicationState"> & {
   readonly publicationState: "candidate"
 }
+/** Identifies the session that owns the active capability-sync advisory lock. */
+export interface CapabilitySyncFence {
+  readonly backendPid: number
+}
 
 export interface CapabilityIntelligenceRepository {
   /** Record observations; a historical fingerprint is restamped only when `observedAt` advances. */
   recordObservations(
     rows: readonly CapabilityObservationInsert[],
+    syncFence?: CapabilitySyncFence,
   ): Promise<CapabilityObservationInsertResult>
-
   /**
    * Re-bind `canonical_model_id` on existing observations when the explicit identity mapping table
    * is updated, so historical observations can be recompiled without re-fetching.
@@ -85,8 +89,8 @@ export interface CapabilityIntelligenceRepository {
       sourceModelId: string,
       provenance: Record<string, unknown>,
     ) => string | null,
+    syncFence?: CapabilitySyncFence,
   ): Promise<number>
-
   /** All observations ordered deterministically (`observed_at` asc, `ingested_at` asc, `fingerprint` asc). */
   listObservations(): Promise<CapabilityObservationRow[]>
 
@@ -106,6 +110,7 @@ export interface CapabilityIntelligenceRepository {
       readonly observations: readonly CapabilityObservationRow[]
       readonly routeModels: readonly RouteModelInventoryRow[]
     }) => Promise<{ readonly snapshot: CapabilitySnapshotCandidate; readonly result: T }>,
+    syncFence?: CapabilitySyncFence,
   ): Promise<{ readonly publishedSnapshot: CapabilitySnapshotRow; readonly result: T }>
   /**
    * Run an entire sync under a session-scoped lock, or report that another process owns it.
@@ -113,7 +118,7 @@ export interface CapabilityIntelligenceRepository {
    * callback uses pooled connections; smaller pools are rejected before the lock query.
    */
   withSyncLock<T>(
-    work: () => Promise<T>,
+    work: (syncFence: CapabilitySyncFence) => Promise<T>,
   ): Promise<{ readonly acquired: true; readonly value: T } | { readonly acquired: false }>
 
   /** The currently active `published` snapshot, or undefined when none has been published yet. */
@@ -136,6 +141,7 @@ export interface CapabilityIntelligenceRepository {
       readonly rows: readonly RouteModelInventoryRow[]
       readonly result: T
     },
+    syncFence?: CapabilitySyncFence,
   ): Promise<T>
 }
 
@@ -146,9 +152,37 @@ export type {
   RouteModelInventoryRow,
 }
 
-const SNAPSHOT_PUBLISH_LOCK_CLASS = 0x726f_7574
+// This namespace must match the two-integer lock space in advisory-lock.ts.
+const ROUTER_LOCK_CLASS = 0x726f_7574
+const SNAPSHOT_PUBLISH_LOCK_CLASS = ROUTER_LOCK_CLASS
 const SNAPSHOT_PUBLISH_LOCK_KEY = advisoryLockKey("capability_snapshot_publish")
 const CAPABILITY_SYNC_LOCK_KEY = advisoryLockKey("capability_intelligence_sync")
+
+async function assertSyncFence(
+  tx: DatabaseExecutor,
+  syncFence: CapabilitySyncFence | undefined,
+): Promise<void> {
+  if (syncFence === undefined) return
+  const heldLocks = await tx.execute(sql`
+    select 1
+    from pg_locks
+    where locktype = 'advisory'
+      and granted
+      and pid = ${syncFence.backendPid}
+      and objsubid = 2
+      and classid::text = ${String(ROUTER_LOCK_CLASS)}
+      and objid::text = ${String(CAPABILITY_SYNC_LOCK_KEY >>> 0)}
+      and database = (
+        select oid from pg_database where datname = current_database()
+      )
+    limit 1
+  `)
+  if (heldLocks.length === 0) {
+    throw new AdvisoryLockSessionLostError(
+      `Capability sync lock session ${syncFence.backendPid} no longer holds the sync lock`,
+    )
+  }
+}
 
 function assertCandidateSnapshot(snapshot: CapabilitySnapshotInsert): void {
   if (snapshot.publicationState !== "candidate") {
@@ -168,6 +202,9 @@ async function saveSnapshotInTransaction(
     .where(eq(capabilitySnapshots.revision, snapshot.revision))
     .limit(1)
   if (existing[0] !== undefined) {
+    if (existing[0].publicationState === "rejected") {
+      throw new Error(`Cannot replace rejected capability snapshot revision ${snapshot.revision}`)
+    }
     // `superseded` records prior publication; preserve every stored field when that revision returns.
     if (
       existing[0].publicationState === "published" ||
@@ -286,9 +323,11 @@ export function createCapabilityIntelligenceRepository(
           `Capability sync requires maxConnections >= 2; configured maximum is ${syncSql.options.max}`,
         )
       }
-      return withAdvisoryLock(syncSql, CAPABILITY_SYNC_LOCK_KEY, work)
+      return withAdvisoryLock(syncSql, CAPABILITY_SYNC_LOCK_KEY, (backendPid) =>
+        work({ backendPid }),
+      )
     },
-    recordObservations: async (rows) => {
+    recordObservations: async (rows, syncFence) => {
       if (rows.length === 0) return { inserted: 0, deduplicated: 0 }
       let inserted = 0
       let deduplicated = 0
@@ -296,6 +335,7 @@ export function createCapabilityIntelligenceRepository(
         await tx.execute(
           sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
         )
+        await assertSyncFence(tx, syncFence)
         for (const row of rows) {
           // Find the latest stored observation for this (source, sourceModelId, metric)
           const [latest] = await tx
@@ -383,16 +423,18 @@ export function createCapabilityIntelligenceRepository(
               else inserted += 1
             })
         }
+        await assertSyncFence(tx, syncFence)
       })
       return { inserted, deduplicated }
     },
 
-    resolveObservationIdentities: async (resolve) => {
+    resolveObservationIdentities: async (resolve, syncFence) => {
       let updated = 0
       await db.transaction(async (tx) => {
         await tx.execute(
           sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
         )
+        await assertSyncFence(tx, syncFence)
         const existing = await tx
           .select({
             id: capabilityObservations.id,
@@ -412,6 +454,7 @@ export function createCapabilityIntelligenceRepository(
             .where(eq(capabilityObservations.id, row.id))
           updated += 1
         }
+        await assertSyncFence(tx, syncFence)
       })
       return updated
     },
@@ -448,11 +491,12 @@ export function createCapabilityIntelligenceRepository(
           asc(capabilityObservations.metric),
         ),
 
-    publishSnapshotWithCurrentEvidence: (build) =>
+    publishSnapshotWithCurrentEvidence: (build, syncFence) =>
       db.transaction(async (tx) => {
         await tx.execute(
           sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
         )
+        await assertSyncFence(tx, syncFence)
         const observations = await tx
           .select()
           .from(capabilityObservations)
@@ -473,6 +517,7 @@ export function createCapabilityIntelligenceRepository(
           built.snapshot.revision,
           built.snapshot.generatedAt,
         )
+        await assertSyncFence(tx, syncFence)
         return { publishedSnapshot, result: built.result }
       }),
 
@@ -508,17 +553,19 @@ export function createCapabilityIntelligenceRepository(
         .from(routeModelInventory)
         .orderBy(asc(routeModelInventory.source), asc(routeModelInventory.routeModelId)),
 
-    reconcileRouteModels: (reconcile) =>
+    reconcileRouteModels: (reconcile, syncFence) =>
       db.transaction(async (tx) => {
         await tx.execute(
           sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
         )
+        await assertSyncFence(tx, syncFence)
         const stored = await tx
           .select()
           .from(routeModelInventory)
           .orderBy(asc(routeModelInventory.source), asc(routeModelInventory.routeModelId))
         const { rows, result } = reconcile(stored)
         await saveRouteModelsInTransaction(tx, rows)
+        await assertSyncFence(tx, syncFence)
         return result
       }),
   }

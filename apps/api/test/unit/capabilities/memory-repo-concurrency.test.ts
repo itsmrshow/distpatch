@@ -139,4 +139,55 @@ describe("memory capability repository concurrency semantics", () => {
       1,
     )
   })
+
+  test("a lost sync lock fences older route reconciliation and publication", async () => {
+    const repository = createMemoryCapabilityRepo()
+    const started = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const generatedAt = new Date("2026-10-21T12:00:00Z")
+    const row = (semanticModelId: string) => ({
+      ...route(generatedAt),
+      descriptor: { routeModelId: "fixture-model", semanticModelId },
+    })
+    const older = repository.withSyncLock(async (syncFence) => {
+      started.resolve()
+      await release.promise
+      await repository.reconcileRouteModels(
+        () => ({ rows: [row("review/older")], result: undefined }),
+        syncFence,
+      )
+    })
+
+    await started.promise
+    repository.loseSyncLock()
+    await repository.withSyncLock(async (syncFence) => {
+      await repository.reconcileRouteModels(
+        () => ({ rows: [row("review/newer")], result: undefined }),
+        syncFence,
+      )
+      await repository.publishSnapshotWithCurrentEvidence(
+        async () => ({
+          snapshot: {
+            revision: "memory-newer",
+            generatedAt,
+            compilerVersion: "test",
+            normalizerVersion: "test",
+            evidenceDigest: "sha256:test",
+            publicationState: "candidate",
+            payload: { semanticModelId: "review/newer" },
+            summary: {},
+          },
+          result: undefined,
+        }),
+        syncFence,
+      )
+    })
+
+    release.resolve()
+    await expect(older).rejects.toThrow(/no longer holds the sync lock/)
+    expect((await repository.listRouteModels())[0]?.descriptor).toMatchObject({
+      semanticModelId: "review/newer",
+    })
+    expect((await repository.getPublishedSnapshot())?.revision).toBe("memory-newer")
+  })
 })

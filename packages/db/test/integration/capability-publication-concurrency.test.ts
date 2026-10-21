@@ -196,6 +196,43 @@ describe.skipIf(!configuredUrl)("capability publication concurrency in Postgres"
     expect((await repository.getPublishedSnapshot())?.revision).toBe(b.revision)
   })
 
+  test("a candidate cannot replace a previously stored rejected revision", async () => {
+    const live = handle
+    if (!live) throw new Error("database fixture is not initialized")
+    const active = snapshot(
+      `stored-rejected-active-${crypto.randomUUID()}`,
+      new Date("2026-10-21T12:00:00Z"),
+    )
+    const rejected = snapshot(
+      `stored-rejected-target-${crypto.randomUUID()}`,
+      new Date("2026-10-21T13:00:00Z"),
+    )
+    await publish(active)
+    await live.sql`
+      insert into capability_snapshots (
+        revision, generated_at, published_at, compiler_version, normalizer_version, evidence_digest,
+        publication_state, payload, summary
+      ) values (
+        ${rejected.revision}, ${rejected.generatedAt.toISOString()}::timestamptz, null, ${rejected.compilerVersion},
+        ${rejected.normalizerVersion}, ${rejected.evidenceDigest}, 'rejected',
+        ${JSON.stringify(rejected.payload)}::jsonb, ${JSON.stringify(rejected.summary)}::jsonb
+      )
+    `
+    const storedRejected = (await repository.listSnapshots(1000)).find(
+      (row) => row.revision === rejected.revision,
+    )
+    if (!storedRejected) throw new Error("missing seeded rejected snapshot")
+
+    await expect(publish(rejected)).rejects.toThrow()
+    expect(
+      (await repository.listSnapshots(1000)).find((row) => row.revision === rejected.revision),
+    ).toEqual(storedRejected)
+    expect(await repository.getPublishedSnapshot()).toMatchObject({
+      revision: active.revision,
+      publicationState: "published",
+    })
+  })
+
   test("simultaneous publications leave exactly one published row", async () => {
     for (let iteration = 0; iteration < 20; iteration += 1) {
       const candidates = Array.from({ length: 2 }, (_, candidateIndex) =>

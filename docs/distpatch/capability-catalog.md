@@ -333,17 +333,21 @@ request path.
 
 Ordering: only one `sync` runs at a time — it holds a session advisory lock from discovery and
 evidence fetching through publication, and a second, overlapping `sync` fails fast without writing
-(so fetches that finish out of order cannot make an older reading the latest one). Evidence writes,
-identity re-binding and route reconciliation take the publication lock, and reading the
-observations and route inventory, compiling, saving the candidate and publishing run in one
-transaction holding it, so a `compile` always publishes from the newest committed evidence and
-cannot regress the published snapshot. `generatedAt` describes a snapshot; it is not the ordering
-primitive. A partial unique index allows at most one `published` row.
+(so fetches that finish out of order cannot make an older reading the latest one). The session
+backend pid is carried as an explicit sync fence; each route reconciliation, evidence write,
+identity re-binding and publication checks inside its publication-locked transaction that this exact
+session still holds the sync lock before modifying state. If that session is lost, its next write
+fails and rolls back; a stale sync cannot commit after a newer sync's serialized publication. Calls
+outside a sync, such as `compile`, remain unfenced. Reading the observations and route inventory,
+compiling, saving the candidate and publishing run in one transaction holding the publication lock,
+so a `compile` always publishes from the newest committed evidence and cannot regress the published
+snapshot. `generatedAt` describes a snapshot; it is not the ordering primitive. A partial unique
+index allows at most one `published` row.
 
-The public publication callback accepts only `candidate` builds; `rejected`, `published` and
-`superseded` build states are refused before stored history is consulted. A rejected historical
-revision therefore cannot be reactivated, and an invalid first publication cannot become published
-without its first `publishedAt`.
+The public publication callback accepts only `candidate` builds; returned `rejected`, `published`
+and `superseded` build states are refused before stored history is consulted, and a candidate cannot
+replace an already-stored `rejected` revision. A rejected historical revision therefore cannot be
+reactivated, and an invalid first publication cannot become published without its first `publishedAt`.
 `latestSnapshot` history is ordered by `generatedAt` regardless of publication state and can therefore
 be superseded; the row whose state is `published` is authoritative for the active catalog, including
 when an older revision is reactivated.
