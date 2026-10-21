@@ -114,7 +114,13 @@ export function parseLocalEvaluationArtifact(
       rejections.push(`${field} ${actual === undefined ? "(missing)" : actual} != ${want}`)
     }
   }
-  const inputs = (Array.isArray(artifact.inputs) ? artifact.inputs : []).filter(isInputProvenance)
+  // Every recorded input must be well formed: dropping a malformed one would leave scores that
+  // rest partly on runs the artifact no longer names.
+  const rawInputs: readonly unknown[] = Array.isArray(artifact.inputs) ? artifact.inputs : []
+  if (!Array.isArray(artifact.inputs)) rejections.push("inputs missing")
+  const malformedInputs = rawInputs.filter((input) => !isInputProvenance(input)).length
+  if (malformedInputs > 0) rejections.push(`${malformedInputs} malformed input record(s)`)
+  const inputs = rawInputs.filter(isInputProvenance)
   const generatedAt = validDate(artifact.generatedAt)
   if (generatedAt === null) rejections.push("generatedAt missing or invalid")
   for (const input of inputs) {

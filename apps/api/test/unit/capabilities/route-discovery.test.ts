@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import * as nodeFs from "node:fs"
+import * as nodeFsPromises from "node:fs/promises"
 import { NoEligibleModelError } from "@multi-ai-router/core"
 import {
   applyPublishedSnapshotToBootstrap,
@@ -15,7 +17,9 @@ import {
   SHIPPED_CAPABILITY_CATALOG,
   syncCapabilityIntelligence,
 } from "../../../src/services/capabilities"
+import * as capabilityBuild from "../../../src/services/capabilities/build"
 import * as compiler from "../../../src/services/capabilities/intelligence/compiler"
+import * as llamaSwapDiscovery from "../../../src/services/capabilities/intelligence/llamaswap-discovery"
 import { chooseModel } from "../../../src/services/dataplane"
 import { selectVirtualModel, virtualModels } from "../../../src/services/virtual-models"
 import { bearer, CRYPTOR, harness, post } from "../../integration/harness"
@@ -565,15 +569,56 @@ describe("catalog refresh ordering", () => {
     expect(store.publishedSnapshotRevision()).toBeNull()
     store.stop()
   })
+  test("adoption callback fires on revision changes, not no-op refreshes", async () => {
+    const overrides = {
+      schemaVersion: 1,
+      overrides: [{ id: "acme/target", scores: { general: 0.7 } }],
+    }
+    const withoutTarget = compileCapabilitySnapshot([], { generatedAt: NOW }).snapshot
+    const withTarget = compileCapabilitySnapshot([], {
+      generatedAt: NOW,
+      routeModels: storedRows(
+        parseLlamaSwapModelList(list(entry("target-route", "acme/target"))).descriptors,
+      ),
+    }).snapshot
+    let published = { revision: "published-1", payload: withoutTarget }
+    const adopted: Array<{
+      readonly revision: string | null
+      readonly unmatched: readonly string[]
+    }> = []
+    const store = createCapabilityCatalogStore({
+      initialCatalog: applyPublishedSnapshotToBootstrap(
+        SHIPPED_CAPABILITY_CATALOG,
+        null,
+        overrides,
+      ),
+      overrides,
+      loadPublishedSnapshot: async () => published,
+      refreshIntervalMs: 3_600_000,
+      onAdopted: (revision, unmatchedOverrideIds) =>
+        adopted.push({ revision, unmatched: [...unmatchedOverrideIds] }),
+    })
+
+    await store.refresh()
+    published = { revision: "published-2", payload: withTarget }
+    await store.refresh()
+    await store.refresh()
+
+    expect(adopted).toEqual([
+      { revision: "published-1", unmatched: ["acme/target"] },
+      { revision: "published-2", unmatched: [] },
+    ])
+    expect(store.unmatchedOverrideIds()).toEqual([])
+    store.stop()
+  })
 })
 
 describe("request-path isolation", () => {
   const realFetch = globalThis.fetch
-  let restoreCompile: (() => void) | undefined
+  const restoreGuards: Array<() => void> = []
   afterEach(() => {
     globalThis.fetch = realFetch
-    restoreCompile?.()
-    restoreCompile = undefined
+    for (const restore of restoreGuards.splice(0)) restore()
   })
 
   test("serving inference and selection never touches discovery, the repository or the network", async () => {
@@ -636,7 +681,6 @@ describe("request-path isolation", () => {
   })
 
   test("a real inference request cannot discover, load, compile or fetch catalog state", async () => {
-    const repo = createMemoryCapabilityRepo()
     let discoveries = 0
     const host = createLlamaSwapDiscoverySource({
       baseUrl: "http://host/v1",
@@ -645,43 +689,78 @@ describe("request-path isolation", () => {
         return asJson(dockerlmListing())
       }) as unknown as typeof fetch,
     })
-    await syncCapabilityIntelligence({
-      repository: repo,
-      sources: [],
-      routeSources: [host],
-      now: () => NOW,
+    const discovered = await host.discover()
+    const compiled = compileCapabilitySnapshot([], {
+      generatedAt: NOW,
+      routeModels: storedRows(discovered.descriptors),
     })
 
     let repositoryReads = 0
     let requestPhase = false
+    const repo = {
+      getPublishedSnapshot: async () => {
+        repositoryReads += 1
+        return { revision: compiled.snapshot.revision, payload: compiled.snapshot }
+      },
+    }
     const store = createCapabilityCatalogStore({
       initialCatalog: applyPublishedSnapshotToBootstrap(SHIPPED_CAPABILITY_CATALOG, null),
       loadPublishedSnapshot: async () => {
         if (requestPhase) throw new Error("repository access during inference")
-        repositoryReads += 1
         const published = await repo.getPublishedSnapshot()
-        return published
-          ? {
-              revision: published.revision,
-              payload: published.payload as CompiledCapabilitySnapshotPayload,
-            }
-          : undefined
+        return published ? { revision: published.revision, payload: published.payload } : undefined
       },
       refreshIntervalMs: 3_600_000,
     })
     await store.refresh()
     const readsBeforeRequest = repositoryReads
+    const models = dockerlmDescriptors().map((descriptor) => descriptor.routeModelId)
     requestPhase = true
     let unexpectedNetworkCalls = 0
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (() => {
       unexpectedNetworkCalls += 1
       throw new Error("network access during inference")
     }) as unknown as typeof fetch
+
+    const fileRead = spyOn(nodeFs, "readFileSync").mockImplementation(() => {
+      throw new Error("filesystem read during inference")
+    })
+    const promiseFileRead = spyOn(nodeFsPromises, "readFile").mockImplementation(() => {
+      throw new Error("filesystem read during inference")
+    })
+    const catalogBuild = spyOn(capabilityBuild, "buildCapabilityCatalog").mockImplementation(() => {
+      throw new Error("catalog rebuild during inference")
+    })
+    const applySnapshot = spyOn(compiler, "applyPublishedSnapshotToBootstrap").mockImplementation(
+      () => {
+        throw new Error("catalog rebuild during inference")
+      },
+    )
     const compile = spyOn(compiler, "compileCapabilitySnapshot").mockImplementation(() => {
       throw new Error("catalog compilation during inference")
     })
-    restoreCompile = () => compile.mockRestore()
-    const models = dockerlmDescriptors().map((descriptor) => descriptor.routeModelId)
+    const repositoryRead = spyOn(repo, "getPublishedSnapshot").mockImplementation(() => {
+      throw new Error("repository read during inference")
+    })
+    const discovery = spyOn(host, "discover").mockImplementation(() => {
+      throw new Error("discovery during inference")
+    })
+    const parseListing = spyOn(llamaSwapDiscovery, "parseLlamaSwapModelList").mockImplementation(
+      () => {
+        throw new Error("discovery parsing during inference")
+      },
+    )
+    restoreGuards.push(
+      () => fileRead.mockRestore(),
+      () => promiseFileRead.mockRestore(),
+      () => catalogBuild.mockRestore(),
+      () => applySnapshot.mockRestore(),
+      () => compile.mockRestore(),
+      () => repositoryRead.mockRestore(),
+      () => discovery.mockRestore(),
+      () => parseListing.mockRestore(),
+    )
+
     const { app, upstream } = harness({
       accounts: [
         account("dockerlm", {
@@ -694,26 +773,92 @@ describe("request-path isolation", () => {
       responses: [() => jsonResponse(200, { choices: [{ message: { content: "ok" } }] })],
       capabilities: store,
     })
+    const request = () =>
+      app.request(
+        "/v1/chat/completions",
+        post(
+          JSON.stringify({
+            model: "auto-local",
+            messages: [{ role: "user", content: "hello" }],
+          }),
+          bearer(),
+        ),
+      )
+    const originalResolve = store.resolve
+    const runMutant = async (mutate: () => void, caught: () => boolean) => {
+      store.resolve = (model) => {
+        mutate()
+        return originalResolve(model)
+      }
+      try {
+        const response = await request()
+        await response.text()
+        expect(response.status).not.toBe(200)
+        expect(caught()).toBe(true)
+      } finally {
+        store.resolve = originalResolve
+      }
+    }
 
-    const response = await app.request(
-      "/v1/chat/completions",
-      post(
-        JSON.stringify({
-          model: "auto-local",
-          messages: [{ role: "user", content: "hello" }],
-        }),
-        bearer(),
-      ),
-    )
+    const response = await request()
     await response.text()
-
     expect(response.status).toBe(200)
     expect(upstream.calls).toHaveLength(1)
     expect(JSON.parse(upstream.calls[0]?.body ?? "{}").model).not.toBe("auto-local")
     expect(discoveries).toBe(1)
     expect(repositoryReads).toBe(readsBeforeRequest)
     expect(unexpectedNetworkCalls).toBe(0)
+    expect(fileRead).not.toHaveBeenCalled()
+    expect(promiseFileRead).not.toHaveBeenCalled()
+    expect(catalogBuild).not.toHaveBeenCalled()
+    expect(applySnapshot).not.toHaveBeenCalled()
     expect(compile).not.toHaveBeenCalled()
+    expect(repositoryRead).not.toHaveBeenCalled()
+    expect(discovery).not.toHaveBeenCalled()
+    expect(parseListing).not.toHaveBeenCalled()
+
+    await runMutant(
+      () => nodeFs.readFileSync("evidence/model-inventory/dockerlm.json", "utf8"),
+      () => fileRead.mock.calls.length > 0,
+    )
+    await runMutant(
+      () => nodeFsPromises.readFile("evidence/capability-calibration-v1/scores.json"),
+      () => promiseFileRead.mock.calls.length > 0,
+    )
+    await runMutant(
+      () => capabilityBuild.buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG),
+      () => catalogBuild.mock.calls.length > 0,
+    )
+    await runMutant(
+      () => compiler.applyPublishedSnapshotToBootstrap(SHIPPED_CAPABILITY_CATALOG, null),
+      () => applySnapshot.mock.calls.length > 0,
+    )
+    await runMutant(
+      () => compiler.compileCapabilitySnapshot([]),
+      () => compile.mock.calls.length > 0,
+    )
+    await runMutant(
+      () => {
+        void repo.getPublishedSnapshot()
+      },
+      () => repositoryRead.mock.calls.length > 0,
+    )
+    await runMutant(
+      () => {
+        void host.discover()
+      },
+      () => discovery.mock.calls.length > 0,
+    )
+    await runMutant(
+      () => llamaSwapDiscovery.parseLlamaSwapModelList(list(entry("probe", "probe/model"))),
+      () => parseListing.mock.calls.length > 0,
+    )
+    await runMutant(
+      () => {
+        void globalThis.fetch("http://host/v1/models")
+      },
+      () => unexpectedNetworkCalls > 0,
+    )
     store.stop()
   })
 })

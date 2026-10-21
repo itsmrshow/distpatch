@@ -19,11 +19,11 @@ import {
   SHIPPED_CAPABILITY_CATALOG,
   type SourceObservation,
 } from "../../../src/services/capabilities"
-import { RouteInventory } from "../../../src/services/capabilities/inventory"
 import { chooseModel, scopedConcreteModels } from "../../../src/services/dataplane"
 import { virtualModels } from "../../../src/services/virtual-models"
 import { account, catalog as routingCatalog } from "../dataplane/fixtures"
 import { dockerlmDescriptors, NOW, storedRows } from "./fleet-fixture"
+import { RouteInventory } from "./inventory-fixture"
 
 const INVENTORY_PATH = fileURLToPath(
   new URL("../../../../../evidence/model-inventory/dockerlm.json", import.meta.url),
@@ -336,6 +336,18 @@ describe("Local Evaluation trust boundary", () => {
       compile(parsed.observations).catalog.get("xiaomimimo/mimo-v2.6-distill-qwen-9b")?.scores
         .reasoning,
     ).toBeNull()
+  })
+
+  test("a malformed input record makes the whole artifact historical, not partly provenanced", () => {
+    const parsed = metrics({
+      ...stamped,
+      inputs: [
+        ...stamped.inputs,
+        { ...stamped.inputs[0], file: "b.json", recordedAt: "not-a-date" },
+      ],
+    })
+    expect(parsed.rejections).toContain("1 malformed input record(s)")
+    expect(parsed.observations.map((o) => o.metric)).toEqual(["historical_local_eval_general"])
   })
 
   test("missing artifact provenance is historical and model timestamps prefer latest input", () => {
