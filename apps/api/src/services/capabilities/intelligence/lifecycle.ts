@@ -28,6 +28,13 @@ export type RouteDiscoveryReport =
   | { readonly source: string; readonly ok: true; readonly summary: RouteReconciliationSummary }
   | { readonly source: string; readonly ok: false; readonly error: string }
 
+class CapabilitySyncAlreadyRunningError extends Error {
+  constructor() {
+    super("Capability intelligence sync is already in progress")
+    this.name = "CapabilitySyncAlreadyRunningError"
+  }
+}
+
 /** A stored row whose descriptor no longer validates is skipped, never fatal. */
 function storedRouteModelFromRow(row: RouteModelInventoryRow): StoredRouteModel[] {
   const descriptor = RouteModelDescriptorSchema.safeParse(row.descriptor)
@@ -98,73 +105,77 @@ export async function syncCapabilityIntelligence(
   const resolver = options.identityResolver ?? createExternalIdentityResolver()
   const now = options.now ?? (() => new Date())
 
-  const metadataList: EvidenceFetchMetadata[] = []
-  const fetchedObservations: SourceObservation[] = []
+  const syncRun = await repository.withSyncLock(async () => {
+    const metadataList: EvidenceFetchMetadata[] = []
+    const fetchedObservations: SourceObservation[] = []
 
-  // 0. Route-model discovery (`GET /v1/models` of configured hosts). Independent of evidence
-  //    fetching and never fatal: an outage or unreadable listing leaves stored route state — and so
-  //    the catalog derived from it — exactly as it was (last-known-good), and is reported instead.
-  const routeDiscovery: RouteDiscoveryReport[] = []
-  for (const source of options.routeSources ?? []) {
-    try {
-      const result = await source.discover()
-      const summary = await repository.reconcileRouteModels((storedRows) => {
-        const stored = storedRows.flatMap(storedRouteModelFromRow)
-        const reconciled = reconcileRouteModels(stored, source, result, now())
-        return {
-          rows: reconciled.rows.map(routeModelToRow),
-          result: reconciled.summary,
-        }
-      })
-      routeDiscovery.push({ source: source.id, ok: true, summary })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      routeDiscovery.push({ source: source.id, ok: false, error: redactValue(message) })
+    // 0. Route-model discovery (`GET /v1/models` of configured hosts). Independent of evidence
+    //    fetching and never fatal: an outage or unreadable listing leaves stored route state — and so
+    //    the catalog derived from it — exactly as it was (last-known-good), and is reported instead.
+    const routeDiscovery: RouteDiscoveryReport[] = []
+    for (const source of options.routeSources ?? []) {
+      try {
+        const result = await source.discover()
+        const summary = await repository.reconcileRouteModels((storedRows) => {
+          const stored = storedRows.flatMap(storedRouteModelFromRow)
+          const reconciled = reconcileRouteModels(stored, source, result, now())
+          return {
+            rows: reconciled.rows.map(routeModelToRow),
+            result: reconciled.summary,
+          }
+        })
+        routeDiscovery.push({ source: source.id, ok: true, summary })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        routeDiscovery.push({ source: source.id, ok: false, error: redactValue(message) })
+      }
     }
-  }
 
-  // 1. Fetch & validate source payloads (fails closed before touching published state if any source fails)
-  for (const source of sources) {
-    const result = await source.fetch()
-    metadataList.push(result.metadata)
-    fetchedObservations.push(...result.observations)
-  }
+    // 1. Fetch & validate source payloads (fails closed before touching published state if any source fails)
+    for (const source of sources) {
+      const result = await source.fetch()
+      metadataList.push(result.metadata)
+      fetchedObservations.push(...result.observations)
+    }
 
-  // 2. Store observations idempotently in Postgres
-  const writeResult = await repository.recordObservations(fetchedObservations)
+    // 2. Store observations idempotently in Postgres
+    const writeResult = await repository.recordObservations(fetchedObservations)
 
-  // 3. Re-resolve identities across stored observations in case mappings were added
-  const identityUpdates = await repository.resolveObservationIdentities(
-    (src, extId, provenance) => {
-      const candidates = [
-        extId,
-        typeof provenance.slug === "string" ? provenance.slug : "",
-        typeof provenance.openrouterApiId === "string" ? provenance.openrouterApiId : "",
-        typeof provenance.aaModelId === "string" ? provenance.aaModelId : "",
-      ].filter((c) => c.length > 0)
-      return resolver.resolve(src, candidates)
-    },
-  )
+    // 3. Re-resolve identities across stored observations in case mappings were added
+    const identityUpdates = await repository.resolveObservationIdentities(
+      (src, extId, provenance) => {
+        const candidates = [
+          extId,
+          typeof provenance.slug === "string" ? provenance.slug : "",
+          typeof provenance.openrouterApiId === "string" ? provenance.openrouterApiId : "",
+          typeof provenance.aaModelId === "string" ? provenance.aaModelId : "",
+        ].filter((c) => c.length > 0)
+        return resolver.resolve(src, candidates)
+      },
+    )
 
-  // 4–7. Compile candidate, validate, publish atomically, and notify warm store
-  const published = await compileAndPublishCapabilitySnapshot({
-    repository,
-    bootstrap: options.bootstrap,
-    now,
-    staleDays: options.staleDays,
-    onPublished: options.onPublished,
+    // 4–7. Compile candidate, validate, publish atomically, and notify warm store
+    const published = await compileAndPublishCapabilitySnapshot({
+      repository,
+      bootstrap: options.bootstrap,
+      now,
+      staleDays: options.staleDays,
+      onPublished: options.onPublished,
+    })
+
+    return {
+      sources: metadataList,
+      routeDiscovery,
+      insertedObservations: writeResult.inserted,
+      deduplicatedObservations: writeResult.deduplicated,
+      identityUpdates,
+      compiled: published.compiled,
+      publishedRevision: published.publishedRevision,
+      publishedAt: published.publishedAt,
+    }
   })
-
-  return {
-    sources: metadataList,
-    routeDiscovery,
-    insertedObservations: writeResult.inserted,
-    deduplicatedObservations: writeResult.deduplicated,
-    identityUpdates,
-    compiled: published.compiled,
-    publishedRevision: published.publishedRevision,
-    publishedAt: published.publishedAt,
-  }
+  if (!syncRun.acquired) throw new CapabilitySyncAlreadyRunningError()
+  return syncRun.value
 }
 
 export interface CompileAndPublishOptions {

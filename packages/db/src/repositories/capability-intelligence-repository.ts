@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm"
-import { advisoryLockKey } from "../advisory-lock"
-import type { Database, DatabaseExecutor } from "../client"
+import { advisoryLockKey, withAdvisoryLock } from "../advisory-lock"
+import type { Database, DatabaseExecutor, SqlConnection } from "../client"
 import {
   type CapabilityObservationRow,
   type CapabilitySnapshotPublicationState,
@@ -102,6 +102,10 @@ export interface CapabilityIntelligenceRepository {
       readonly routeModels: readonly RouteModelInventoryRow[]
     }) => Promise<{ readonly snapshot: CapabilitySnapshotInsert; readonly result: T }>,
   ): Promise<{ readonly publishedSnapshot: CapabilitySnapshotRow; readonly result: T }>
+  /** Run an entire sync under a session-scoped lock, or report that another process owns it. */
+  withSyncLock<T>(
+    work: () => Promise<T>,
+  ): Promise<{ readonly acquired: true; readonly value: T } | { readonly acquired: false }>
 
   /** The currently active `published` snapshot, or undefined when none has been published yet. */
   getPublishedSnapshot(): Promise<CapabilitySnapshotRow | undefined>
@@ -135,6 +139,7 @@ export type {
 
 const SNAPSHOT_PUBLISH_LOCK_CLASS = 0x726f_7574
 const SNAPSHOT_PUBLISH_LOCK_KEY = advisoryLockKey("capability_snapshot_publish")
+const CAPABILITY_SYNC_LOCK_KEY = advisoryLockKey("capability_intelligence_sync")
 
 async function saveSnapshotInTransaction(
   tx: DatabaseExecutor,
@@ -243,8 +248,15 @@ async function saveRouteModelsInTransaction(
 
 export function createCapabilityIntelligenceRepository(
   db: Database,
+  syncSql?: SqlConnection,
 ): CapabilityIntelligenceRepository {
   return {
+    withSyncLock: (work) => {
+      if (syncSql === undefined) {
+        throw new Error("Capability sync requires the database handle's raw SQL connection")
+      }
+      return withAdvisoryLock(syncSql, CAPABILITY_SYNC_LOCK_KEY, work)
+    },
     recordObservations: async (rows) => {
       if (rows.length === 0) return { inserted: 0, deduplicated: 0 }
       let inserted = 0

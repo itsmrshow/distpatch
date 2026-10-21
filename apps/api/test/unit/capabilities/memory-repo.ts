@@ -29,6 +29,18 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
       resolve()
     }
   }
+  let syncLockHeld = false
+  const withSyncLock = async <T>(
+    work: () => Promise<T>,
+  ): Promise<{ readonly acquired: true; readonly value: T } | { readonly acquired: false }> => {
+    if (syncLockHeld) return { acquired: false }
+    syncLockHeld = true
+    try {
+      return { acquired: true, value: await work() }
+    } finally {
+      syncLockHeld = false
+    }
+  }
 
   const saveSnapshotUnlocked = (snap: CapabilitySnapshotInsert): CapabilitySnapshotRow => {
     const idx = snapshots.findIndex((s) => s.revision === snap.revision)
@@ -103,7 +115,11 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     )
 
   const saveRouteRows = (rows: readonly RouteModelInventoryRow[]) => {
-    for (const row of rows) routeRows.set(`${row.source}/${row.routeModelId}`, row)
+    for (const row of rows) {
+      const key = `${row.source}/${row.routeModelId}`
+      const previous = routeRows.get(key)
+      routeRows.set(key, { ...row, firstSeenAt: previous?.firstSeenAt ?? row.firstSeenAt })
+    }
   }
 
   return {
@@ -121,6 +137,7 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     set failNextRecord(v: boolean) {
       failNextRecord = v
     },
+    withSyncLock,
 
     async recordObservations(rows) {
       return withPublicationLock(async () => {
@@ -184,17 +201,19 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     },
     async resolveObservationIdentities(resolve) {
       return withPublicationLock(async () => {
-        let updated = 0
-        for (let i = 0; i < observations.length; i++) {
-          const obs = observations[i]
+        const updates: { readonly index: number; readonly canonicalModelId: string | null }[] = []
+        for (let index = 0; index < observations.length; index++) {
+          const obs = observations[index]
           if (!obs) continue
-          const next = resolve(obs.source, obs.sourceModelId, obs.provenance)
-          if (next !== obs.canonicalModelId) {
-            observations[i] = { ...obs, canonicalModelId: next }
-            updated += 1
-          }
+          const canonicalModelId = resolve(obs.source, obs.sourceModelId, obs.provenance)
+          if (canonicalModelId !== obs.canonicalModelId) updates.push({ index, canonicalModelId })
         }
-        return updated
+        for (const update of updates) {
+          const obs = observations[update.index]
+          if (obs)
+            observations[update.index] = { ...obs, canonicalModelId: update.canonicalModelId }
+        }
+        return updates.length
       })
     },
 

@@ -121,8 +121,8 @@ if (verb !== "sync" && verb !== "compile" && verb !== "status" && verb !== "show
 
 const url = databaseUrl()
 await runMigrations({ url, connectTimeoutSeconds: 10 })
-const handle = createDatabase({ url, maxConnections: 1 })
-const repository = createCapabilityIntelligenceRepository(handle.db)
+const handle = createDatabase({ url, maxConnections: 2 })
+const repository = createCapabilityIntelligenceRepository(handle.db, handle.sql)
 
 try {
   if (verb === "sync") {

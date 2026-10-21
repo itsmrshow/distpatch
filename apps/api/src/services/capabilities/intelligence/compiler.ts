@@ -408,6 +408,7 @@ export function compileCapabilitySnapshot(
   const resolvedObs = observations
     .filter((o) => o.canonicalModelId !== null)
     .sort((a, b) => (a.fingerprint < b.fingerprint ? -1 : a.fingerprint > b.fingerprint ? 1 : 0))
+  const unresolvedObservations = observations.length - resolvedObs.length
 
   const evidenceDigest = `sha256:${createHash("sha256")
     .update(
@@ -514,6 +515,9 @@ export function compileCapabilitySnapshot(
         // observations (pricing, saturated raw audits) must produce a new immutable revision, not
         // silently reuse the previously published snapshot.
         evidenceDigest,
+        totalObservations: observations.length,
+        resolvedObservations: resolvedObs.length,
+        unresolvedObservations,
         discoveredProfiles: discovered.profiles,
         models: Object.keys(models)
           .sort()
@@ -551,7 +555,7 @@ export function compileCapabilitySnapshot(
       evidenceDigest,
       totalObservations: observations.length,
       resolvedObservations: resolvedObs.length,
-      unresolvedObservations: observations.length - resolvedObs.length,
+      unresolvedObservations,
       scoredModels: scoredModels.sort(),
       staleDimensions: staleDimensions.sort(),
       discoveredModels: discovered.profiles.map((p) => p.id),
