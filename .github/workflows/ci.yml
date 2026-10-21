@@ -120,7 +120,8 @@ jobs:
       # so no wait-for-postgres loop is needed here. Migrations are applied by the
       # test bootstrap itself (idempotent, same code path as boot).
       # This fork has not exercised the Actions setup yet; the calibration sandbox gate requires
-      # the user manager, delegated cgroup controllers, and bubblewrap on Ubuntu 24.04.
+      # the user manager, delegated cgroup controllers, bubblewrap, and host Yama with
+      # /proc/sys/kernel/yama/ptrace_scope set to exactly 1, 2, or 3; CI must not relax it.
       - name: install native and sandbox test prerequisites
         run: |
           sudo apt-get update

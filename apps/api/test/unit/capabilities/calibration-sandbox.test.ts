@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test"
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { describe, expect, spyOn, test } from "bun:test"
+import fs, { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { CASES, type TextCase } from "../../../bench/calibration/cases"
@@ -8,6 +8,7 @@ import { calibrationSandboxSkipped } from "../../support/calibration-sandbox-gat
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url))
 const README_PATH = join(REPO_ROOT, "README.md")
+const PTRACE_SCOPE_PATH = "/proc/sys/kernel/yama/ptrace_scope"
 const sandboxSkipped = await calibrationSandboxSkipped(
   "apps/api/test/unit/capabilities/calibration-sandbox.test.ts",
 )
@@ -294,6 +295,42 @@ describe.skipIf(sandboxSkipped)("local evaluation code-grading sandbox (Codex P2
       )
     } finally {
       Object.defineProperty(process, "execPath", execPathDescriptor)
+    }
+  })
+  test("9. fails closed unless host Yama ptrace_scope is 1, 2, or 3", async () => {
+    // Invariant: the untrusted candidate process must never obtain PTRACE_MODE_ATTACH on the
+    // trusted driver or sandbox launcher.
+    const originalReadFileSync = fs.readFileSync
+    let ptraceScope: string | Error = "1"
+    const readSpy = spyOn(fs, "readFileSync").mockImplementation(((
+      path: unknown,
+      ...args: unknown[]
+    ) => {
+      if (String(path) === PTRACE_SCOPE_PATH) {
+        if (ptraceScope instanceof Error) throw ptraceScope
+        return ptraceScope
+      }
+      return originalReadFileSync(path as never, ...(args as never[]))
+    }) as unknown as typeof fs.readFileSync)
+    try {
+      for (const scope of ["0", "4", "x1", ""]) {
+        ptraceScope = scope
+        await expect(runBun('console.log("UNTRUSTED_MUST_NOT_RUN")')).rejects.toBeInstanceOf(
+          CalibrationSandboxUnavailableError,
+        )
+      }
+      for (const code of ["ENOENT", "EACCES"]) {
+        ptraceScope = Object.assign(new Error("stubbed ptrace_scope read failure"), { code })
+        await expect(runBun('console.log("UNTRUSTED_MUST_NOT_RUN")')).rejects.toBeInstanceOf(
+          CalibrationSandboxUnavailableError,
+        )
+      }
+      for (const scope of ["1", "2", "3"]) {
+        ptraceScope = `${scope}\n`
+        expect(await runBun('console.log("PTRACESCOPE_OK")')).toBe("PTRACESCOPE_OK\n")
+      }
+    } finally {
+      readSpy.mockRestore()
     }
   })
   test("deterministic coding graders still pass inside the sandbox", async () => {

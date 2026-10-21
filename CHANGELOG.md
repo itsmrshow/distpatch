@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shipped bootstrap capability catalog revision `2026-10-17.4`: verified hard facts only, all static bootstrap preference scores `null`; local models are no longer shipped and arrive through route-model discovery. Shipped `mimo/mimo-v2.6-distill-9b` was removed; overrides must use discovered canonical id `xiaomimimo/mimo-v2.6-distill-qwen-9b`.
 - A usage row now binds 29 parameters (`selected_model`), so a raw `usage_records` INSERT statement holds at most 2259 rows. `USAGE_BATCH_SIZE` keeps its `1..2340` range: it is the flush size, and a larger flush is written as several bind-safe statements in one transaction.
 
+### Fixed
+- Calibration grading now aborts unless host Yama `ptrace_scope` is exactly `1`, `2`, or `3`, so a same-UID candidate cannot read trusted grader memory on unsupported hosts.
+
 ## [2.40.0] — 2026-10-16
 
 ### Added

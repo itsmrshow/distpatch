@@ -20,7 +20,7 @@ evidence for local/DockerLM models and custom builds.
 
 > **Status:** sections 1–10 are historical (pre-inventory, pre-sandbox grader). Section 11 records
 > the local fleet identity model and comparability decision. Section 12 is the current Local
-> Evaluation evidence: every model re-run under the sandboxed host-oracle grader.
+> Evaluation evidence: two complete sandboxed host-oracle runs and one archived provider-limited attempt.
 
 ## 1. Model inventory
 
@@ -308,6 +308,13 @@ driver; the host decides pass/fail from a fixed probe list whose expected values
 sandbox. `bin/calibrate score` normalized exactly these two result files (`scores.json` → `inputs`,
 `excluded: []`). The artifact was generated at `2026-10-21T12:32:14.306Z`. Suite, prompts and
 normalization are unchanged from §3 and §5.
+
+Execution host: Linux x86-64, Bun 1.4.3, bubblewrap 0.11.1, systemd 259, cgroup v2
+with delegated memory/CPU/PID controllers, and Yama `ptrace_scope=1`. Repository validation uses
+the separately pinned Bun 1.4.2. Re-running live models requires the configured DockerLM endpoint
+and Ollama Cloud credentials; provider responses and latency are not promised to be bit-identical.
+The fixed prompts/probes and recorded answers make grading auditable; `bin/calibrate score`
+reproduces normalized values from the committed inputs (its generation timestamp changes).
 
 | Run (`results/`) | Route | Recorded | Cases × runs | Transport errors |
 |---|---|---|---|---|

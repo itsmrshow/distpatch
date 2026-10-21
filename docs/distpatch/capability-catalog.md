@@ -218,6 +218,8 @@ run behind it, not by when it was ingested.
 and lists every other file under `excluded`, so `scores.json` states exactly which runs it rests
 on. Results from earlier graders are kept, unchanged, under
 `evidence/capability-calibration-v1/historical/pre-sandbox/`; they are not read by the source.
+The sandbox also requires the host Yama LSM and `/proc/sys/kernel/yama/ptrace_scope` set to `1`, `2`,
+or `3`. Missing, unreadable, or unsupported values are rejected before candidate code runs.
 
 ### Local model identity layers
 

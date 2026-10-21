@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync, readFileSync, writeFileSync } from "node:fs"
+import fs, { accessSync, constants, existsSync, readFileSync, writeFileSync } from "node:fs"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -13,7 +13,9 @@ import { join } from "node:path"
  * up from the deadline, 2 GiB address space, a 4 MiB file-size limit, and zero core dumps. stdout
  * and stderr are capped at 64 KiB by default; timeout and overflow use recursive `cgroup.kill` for
  * whole-scope cleanup. If that write unexpectedly fails, only the launcher receives a best-effort
- * signal. A cached preflight verifies execution and cgroup limits; setup failures throw
+ * signal. Every run requires host Yama `/proc/sys/kernel/yama/ptrace_scope` to be exactly 1, 2, or
+ * 3; missing, unreadable, or unsupported values abort before candidate code. The cached preflight
+ * verifies execution and cgroup limits; setup failures throw
  * {@link CalibrationSandboxUnavailableError}.
  */
 export class CalibrationSandboxUnavailableError extends Error {
@@ -42,6 +44,21 @@ const CPU_QUOTA_SETTING = "100%"
 const READY_TOKEN = "__DISTPATCH_CALIBRATION_SANDBOX_READY_91E43B__"
 const PREFLIGHT_OUTPUT = "__DISTPATCH_CALIBRATION_SANDBOX_PREFLIGHT_OK__"
 const PREFLIGHT_SOURCE = `console.log(${JSON.stringify(PREFLIGHT_OUTPUT)}); const delay = Promise.withResolvers<void>(); setTimeout(delay.resolve, 250); await delay.promise`
+const YAMA_PTRACE_SCOPE_PATH = "/proc/sys/kernel/yama/ptrace_scope"
+const YAMA_PTRACE_SCOPE_ERROR =
+  "calibration sandbox requires readable /proc/sys/kernel/yama/ptrace_scope set to 1, 2, or 3"
+
+function requireSupportedPtraceScope(): void {
+  let scope: string
+  try {
+    scope = fs.readFileSync(YAMA_PTRACE_SCOPE_PATH, "utf8").trim()
+  } catch {
+    throw new CalibrationSandboxUnavailableError(YAMA_PTRACE_SCOPE_ERROR)
+  }
+  if (scope !== "1" && scope !== "2" && scope !== "3") {
+    throw new CalibrationSandboxUnavailableError(YAMA_PTRACE_SCOPE_ERROR)
+  }
+}
 
 async function readBoundedStream(
   stream: ReadableStream<Uint8Array> | null,
@@ -358,6 +375,7 @@ function ensureSandboxPreflight(bwrap: string, systemdRun: string): Promise<void
  * harness failure as a model failure.
  */
 export async function runBun(source: string, options: RunBunOptions = {}): Promise<string> {
+  requireSupportedPtraceScope()
   const bwrap = options.bwrapPath === undefined ? Bun.which("bwrap") : options.bwrapPath
   const systemdRun = Bun.which("systemd-run")
   if (!bwrap || !systemdRun) throw new CalibrationSandboxUnavailableError()
