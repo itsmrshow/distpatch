@@ -50,14 +50,20 @@ describe.skipIf(sandboxSkipped)("local evaluation code-grading sandbox (Codex P2
     }
   })
 
-  test("2. cannot read sensitive host environment values, including systemd connection variables", async () => {
+  test("2. scrubs host secrets and starts without session environment variables", async () => {
     const prevKey = process.env.OLLAMA_CLOUD_API_KEY
     const prevAa = process.env.AA_API_KEY
     const prevEnc = process.env.ENCRYPTION_KEY
+    const prevPath = process.env.PATH
+    const prevXdg = process.env.XDG_RUNTIME_DIR
+    const prevDbus = process.env.DBUS_SESSION_BUS_ADDRESS
     process.env.OLLAMA_CLOUD_API_KEY = "ollama-secret-token"
     process.env.AA_API_KEY = "aa-secret-token"
     process.env.ENCRYPTION_KEY = "encryption-secret-key"
     try {
+      delete process.env.PATH
+      delete process.env.XDG_RUNTIME_DIR
+      delete process.env.DBUS_SESSION_BUS_ADDRESS
       const out = await runBun("console.log(JSON.stringify(Object.keys(process.env).sort()))")
       const keys = JSON.parse(out.trim()) as string[]
       for (const forbidden of [
@@ -81,10 +87,16 @@ describe.skipIf(sandboxSkipped)("local evaluation code-grading sandbox (Codex P2
       else process.env.AA_API_KEY = prevAa
       if (prevEnc === undefined) delete process.env.ENCRYPTION_KEY
       else process.env.ENCRYPTION_KEY = prevEnc
+      if (prevPath === undefined) delete process.env.PATH
+      else process.env.PATH = prevPath
+      if (prevXdg === undefined) delete process.env.XDG_RUNTIME_DIR
+      else process.env.XDG_RUNTIME_DIR = prevXdg
+      if (prevDbus === undefined) delete process.env.DBUS_SESSION_BUS_ADDRESS
+      else process.env.DBUS_SESSION_BUS_ADDRESS = prevDbus
     }
   })
 
-  test("3. writes only to the tmpfs and cannot modify the input or host files", async () => {
+  test("3. confines ordinary file writes to tmpfs and cannot modify input or host files", async () => {
     const target = join(REPO_ROOT, "sandbox-escape-probe.txt")
     const beforeReadme = readFileSync(README_PATH, "utf8")
     const out = await runBun(`
@@ -98,6 +110,11 @@ describe.skipIf(sandboxSkipped)("local evaluation code-grading sandbox (Codex P2
           return false
         }
       }
+      let devNullWritable = false
+      try {
+        writeFileSync("/dev/null", "probe")
+        devNullWritable = true
+      } catch {}
       console.log(JSON.stringify({
         workReadable: existsSync("/work/case.ts"),
         workWritable: canWrite("/work/sandbox-write-probe"),
@@ -105,6 +122,7 @@ describe.skipIf(sandboxSkipped)("local evaluation code-grading sandbox (Codex P2
         tmpIsTmpfs: statfsSync("/tmp").type === 0x01021994,
         rootWritable: canWrite("/sandbox-root-write-probe"),
         devWritable: canWrite("/dev/sandbox-dev-write-probe"),
+        devNullWritable,
         shmWritable: canWrite("/dev/shm/sandbox-shm-write-probe"),
       }))
     `)
@@ -115,6 +133,7 @@ describe.skipIf(sandboxSkipped)("local evaluation code-grading sandbox (Codex P2
       tmpIsTmpfs: true,
       rootWritable: false,
       devWritable: false,
+      devNullWritable: true,
       shmWritable: false,
     })
     expect(existsSync(target)).toBe(false)
@@ -239,18 +258,22 @@ describe.skipIf(sandboxSkipped)("local evaluation code-grading sandbox (Codex P2
     await expectNoDetachedProbe()
     expect(hasDetachedProbe()).toBe(false)
 
+    const overflowStarted = performance.now()
     const floodOut = await runBun(
       'Bun.spawn(["/usr/bin/setsid", "/usr/bin/sleep", "37.4242"], { stdout: "ignore", stderr: "ignore" }); process.stdout.write("A".repeat(16384)); while (true) {}',
       { maxStdoutBytes: 4096, timeoutMs: 5_000 },
     )
     expect(floodOut).toBe("")
+    expect(performance.now() - overflowStarted).toBeLessThan(4_000)
     await expectNoDetachedProbe()
     expect(hasDetachedProbe()).toBe(false)
 
+    const stderrStarted = performance.now()
     const floodErr = await runBun('while (true) process.stderr.write("E".repeat(16384))', {
       timeoutMs: 5_000,
     })
     expect(floodErr).toBe("")
+    expect(performance.now() - stderrStarted).toBeLessThan(4_000)
 
     await expect(
       runBun('console.log("SHOULD_NOT_RUN")', { bwrapPath: "/nonexistent/distpatch-bwrap" }),
@@ -258,6 +281,20 @@ describe.skipIf(sandboxSkipped)("local evaluation code-grading sandbox (Codex P2
     await expect(runBun('console.log("SHOULD_NOT_RUN")', { bwrapPath: null })).rejects.toThrow(
       CalibrationSandboxUnavailableError,
     )
+
+    // Warm the cached preflight, then make the staged interpreter non-executable. Readiness must
+    // come from that interpreter, not from the shell that prepares its resource limits.
+    const execPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath")
+    if (!execPathDescriptor) throw new Error("process.execPath is not configurable in this runtime")
+    expect(await runBun('console.log("PREWARMED")')).toBe("PREWARMED\n")
+    try {
+      Object.defineProperty(process, "execPath", { ...execPathDescriptor, value: README_PATH })
+      await expect(runBun('console.log("SHOULD_NOT_RUN")')).rejects.toThrow(
+        CalibrationSandboxUnavailableError,
+      )
+    } finally {
+      Object.defineProperty(process, "execPath", execPathDescriptor)
+    }
   })
   test("deterministic coding graders still pass inside the sandbox", async () => {
     const parseDurationCase = CASES.find((c) => c.id === "coding.parse-duration") as

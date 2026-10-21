@@ -4,13 +4,17 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 /**
- * Runs calibration code in bubblewrap's private namespaces with no network, a scrubbed environment,
- * read-only system/input/dev mounts; ordinary file writes are confined to a writable `/tmp` tmpfs.
- * A systemd user-scope cgroup caps the whole tree at 256 MiB memory, zero swap, 64 tasks, and one CPU.
- * Dash also applies per-process CPU-time limits rounded up from the deadline, 2 GiB address space,
- * and zero core dumps. stdout and stderr are capped at 64 KiB by default; timeout or stream
- * overflow kills the whole scope. A cached preflight verifies sandbox execution and cgroup limits;
- * any unestablished guarantee aborts with {@link CalibrationSandboxUnavailableError}.
+ * Runs calibration code in bubblewrap's private mount, PID, and network namespaces with a scrubbed
+ * environment. The root filesystem, system bind mounts, and `/work` input are read-only; ordinary
+ * file writes go to a writable `/tmp` tmpfs. `/dev` is a private device mount with usable device
+ * nodes, and `/proc` is the sandbox PID-namespace procfs (kernel-wide counters such as
+ * `/proc/meminfo` remain visible). A systemd user-scope cgroup caps the whole tree at 256 MiB of
+ * memory, zero swap, 64 tasks, and one CPU. Dash also applies per-process CPU-time limits rounded
+ * up from the deadline, 2 GiB address space, a 4 MiB file-size limit, and zero core dumps. stdout
+ * and stderr are capped at 64 KiB by default; timeout and overflow use recursive `cgroup.kill` for
+ * whole-scope cleanup. If that write unexpectedly fails, only the launcher receives a best-effort
+ * signal. A cached preflight verifies execution and cgroup limits; setup failures throw
+ * {@link CalibrationSandboxUnavailableError}.
  */
 export class CalibrationSandboxUnavailableError extends Error {
   constructor(
@@ -130,16 +134,16 @@ async function waitForScopeLimits(pid: number, processExited: () => boolean): Pr
   throw lastError instanceof Error ? lastError : new Error("the systemd scope did not start")
 }
 
-function killScope(cgroupDirectory: string | undefined, killMainProcess: () => void): void {
+function killScope(cgroupDirectory: string | undefined, killLauncher: () => void): void {
   if (cgroupDirectory) {
     try {
       writeFileSync(join(cgroupDirectory, "cgroup.kill"), "1")
       return
     } catch {
-      // Fall back to killing the scope's main process if cgroup cleanup is unavailable.
+      // Best-effort launcher cleanup; only cgroup.kill is scope-wide.
     }
   }
-  killMainProcess()
+  killLauncher()
 }
 
 function systemdEnvironment(): Record<string, string> {
@@ -150,9 +154,9 @@ function systemdEnvironment(): Record<string, string> {
   return {
     PATH: "/usr/bin:/bin",
     XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || `/run/user/${uid}`,
-    ...(process.env.DBUS_SESSION_BUS_ADDRESS === undefined
-      ? {}
-      : { DBUS_SESSION_BUS_ADDRESS: process.env.DBUS_SESSION_BUS_ADDRESS }),
+    ...(process.env.DBUS_SESSION_BUS_ADDRESS
+      ? { DBUS_SESSION_BUS_ADDRESS: process.env.DBUS_SESSION_BUS_ADDRESS }
+      : {}),
   }
 }
 
@@ -175,8 +179,16 @@ async function executeSandbox(
   }
   try {
     const file = join(dir, "case.ts")
+    const bootstrapFile = join(dir, "boot.ts")
+    const bootstrapSource = [
+      'import { writeSync } from "node:fs"',
+      `writeSync(2, ${JSON.stringify(`${READY_TOKEN}\n`)})`,
+      "// Candidate source is staged per invocation, so a static import cannot name it.",
+      'await import("file:///work/case.ts")',
+    ].join("\n")
     try {
       await Bun.write(file, source)
+      await Bun.write(bootstrapFile, bootstrapSource)
     } catch {
       throw new CalibrationSandboxUnavailableError("could not stage the calibration sandbox input")
     }
@@ -246,9 +258,9 @@ async function executeSandbox(
             "/work",
             "/bin/sh",
             "-c",
-            // dash requires each limit separately; readiness is emitted only after every setting
-            // succeeded and immediately before exec, so setup failures cannot become model failures.
-            `ulimit -t ${cpuSeconds} || exit 97; ulimit -v 2097152 || exit 97; ulimit -f 8192 || exit 97; ulimit -c 0 || exit 97; printf '%s\\n' '${READY_TOKEN}' >&2 || exit 97; exec /opt/bin/bun /work/case.ts`,
+            // dash requires each limit separately; its successful exec starts a trusted Bun bootstrap.
+            // The bootstrap emits readiness only after the interpreter itself has begun running.
+            `ulimit -t ${cpuSeconds} || exit 97; ulimit -v 2097152 || exit 97; ulimit -f 8192 || exit 97; ulimit -c 0 || exit 97; exec /opt/bin/bun /work/boot.ts`,
           ],
           {
             cwd: dir,
