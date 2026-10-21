@@ -1,6 +1,7 @@
 import type {
   CapabilityIntelligenceRepository,
   CapabilityObservationRow,
+  CapabilitySnapshotInsert,
   CapabilitySnapshotRow,
   RouteModelInventoryRow,
 } from "@multi-ai-router/db"
@@ -16,6 +17,101 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
   let failNextPublish = false
   let failNextRecord = false
   const routeRows = new Map<string, RouteModelInventoryRow>()
+  let publicationQueue: Promise<void> = Promise.resolve()
+  const withPublicationLock = async <T>(work: () => Promise<T>): Promise<T> => {
+    const previous = publicationQueue
+    const { promise, resolve } = Promise.withResolvers<void>()
+    publicationQueue = promise
+    await previous
+    try {
+      return await work()
+    } finally {
+      resolve()
+    }
+  }
+
+  const saveSnapshotUnlocked = (snap: CapabilitySnapshotInsert): CapabilitySnapshotRow => {
+    const idx = snapshots.findIndex((s) => s.revision === snap.revision)
+    if (idx !== -1) {
+      const current = snapshots[idx]
+      if (current && current.publicationState === "published") return current
+      const updated: CapabilitySnapshotRow = {
+        id: current?.id ?? crypto.randomUUID(),
+        revision: snap.revision,
+        generatedAt: snap.generatedAt,
+        publishedAt: snap.publishedAt ?? current?.publishedAt ?? null,
+        compilerVersion: snap.compilerVersion,
+        normalizerVersion: snap.normalizerVersion,
+        evidenceDigest: snap.evidenceDigest,
+        publicationState: snap.publicationState,
+        payload: snap.payload,
+        summary: snap.summary,
+      }
+      snapshots[idx] = updated
+      return updated
+    }
+    const created: CapabilitySnapshotRow = {
+      id: crypto.randomUUID(),
+      revision: snap.revision,
+      generatedAt: snap.generatedAt,
+      publishedAt: snap.publishedAt ?? null,
+      compilerVersion: snap.compilerVersion,
+      normalizerVersion: snap.normalizerVersion,
+      evidenceDigest: snap.evidenceDigest,
+      publicationState: snap.publicationState,
+      payload: snap.payload,
+      summary: snap.summary,
+    }
+    snapshots.push(created)
+    return created
+  }
+
+  const publishSnapshotUnlocked = (
+    revision: string,
+    publishedAt: Date,
+    simulateFailure = true,
+  ): CapabilitySnapshotRow => {
+    if (simulateFailure && failNextPublish) {
+      failNextPublish = false
+      throw new Error("simulated atomic publish transaction failure")
+    }
+    const targetIdx = snapshots.findIndex((s) => s.revision === revision)
+    if (targetIdx === -1) throw new Error(`unknown snapshot ${revision}`)
+    const target = snapshots[targetIdx]
+    if (target?.publicationState === "rejected") {
+      throw new Error(`Cannot publish rejected capability snapshot revision ${revision}`)
+    }
+    for (let i = 0; i < snapshots.length; i++) {
+      const snapshot = snapshots[i]
+      if (snapshot && snapshot.publicationState === "published") {
+        snapshots[i] = { ...snapshot, publicationState: "superseded" }
+      }
+    }
+    const published: CapabilitySnapshotRow = {
+      ...target,
+      publicationState: "published",
+      publishedAt,
+    }
+    snapshots[targetIdx] = published
+    return published
+  }
+
+  const sortedObservations = () =>
+    [...observations].sort(
+      (a, b) =>
+        a.observedAt.getTime() - b.observedAt.getTime() ||
+        a.ingestedAt.getTime() - b.ingestedAt.getTime() ||
+        (a.fingerprint < b.fingerprint ? -1 : a.fingerprint > b.fingerprint ? 1 : 0),
+    )
+
+  const sortedRouteRows = () =>
+    [...routeRows.values()].sort((a, b) =>
+      `${a.source}/${a.routeModelId}` < `${b.source}/${b.routeModelId}` ? -1 : 1,
+    )
+
+  const saveRouteRows = (rows: readonly RouteModelInventoryRow[]) => {
+    for (const row of rows) routeRows.set(`${row.source}/${row.routeModelId}`, row)
+  }
 
   return {
     observations,
@@ -97,12 +193,7 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     },
 
     async listObservations() {
-      return [...observations].sort(
-        (a, b) =>
-          a.observedAt.getTime() - b.observedAt.getTime() ||
-          a.ingestedAt.getTime() - b.ingestedAt.getTime() ||
-          (a.fingerprint < b.fingerprint ? -1 : a.fingerprint > b.fingerprint ? 1 : 0),
-      )
+      return sortedObservations()
     },
 
     async listResolvedObservations() {
@@ -114,64 +205,31 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     },
 
     async saveSnapshot(snap) {
-      const idx = snapshots.findIndex((s) => s.revision === snap.revision)
-      if (idx !== -1) {
-        const current = snapshots[idx]
-        if (current && current.publicationState === "published") return current
-        const updated: CapabilitySnapshotRow = {
-          id: current?.id ?? crypto.randomUUID(),
-          revision: snap.revision,
-          generatedAt: snap.generatedAt,
-          publishedAt: snap.publishedAt ?? current?.publishedAt ?? null,
-          compilerVersion: snap.compilerVersion,
-          normalizerVersion: snap.normalizerVersion,
-          evidenceDigest: snap.evidenceDigest,
-          publicationState: snap.publicationState,
-          payload: snap.payload,
-          summary: snap.summary,
-        }
-        snapshots[idx] = updated
-        return updated
-      }
-      const created: CapabilitySnapshotRow = {
-        id: crypto.randomUUID(),
-        revision: snap.revision,
-        generatedAt: snap.generatedAt,
-        publishedAt: snap.publishedAt ?? null,
-        compilerVersion: snap.compilerVersion,
-        normalizerVersion: snap.normalizerVersion,
-        evidenceDigest: snap.evidenceDigest,
-        publicationState: snap.publicationState,
-        payload: snap.payload,
-        summary: snap.summary,
-      }
-      snapshots.push(created)
-      return created
+      return withPublicationLock(async () => saveSnapshotUnlocked(snap))
     },
 
     async publishSnapshot(revision, publishedAt) {
-      if (failNextPublish) {
-        failNextPublish = false
-        throw new Error("simulated atomic publish transaction failure")
-      }
-      const targetIdx = snapshots.findIndex((s) => s.revision === revision)
-      if (targetIdx === -1) throw new Error(`unknown snapshot ${revision}`)
-      for (let i = 0; i < snapshots.length; i++) {
-        const s = snapshots[i]
-        if (s && s.publicationState === "published") {
-          snapshots[i] = { ...s, publicationState: "superseded" }
-        }
-      }
-      const target = snapshots[targetIdx]
-      if (!target) throw new Error(`unknown snapshot ${revision}`)
-      const published: CapabilitySnapshotRow = {
-        ...target,
-        publicationState: "published",
-        publishedAt,
-      }
-      snapshots[targetIdx] = published
-      return published
+      return withPublicationLock(async () => publishSnapshotUnlocked(revision, publishedAt))
     },
+
+    publishSnapshotWithCurrentEvidence: (build) =>
+      withPublicationLock(async () => {
+        const built = await build({
+          observations: sortedObservations(),
+          routeModels: sortedRouteRows(),
+        })
+        if (failNextPublish) {
+          failNextPublish = false
+          throw new Error("simulated atomic publish transaction failure")
+        }
+        saveSnapshotUnlocked(built.snapshot)
+        const publishedSnapshot = publishSnapshotUnlocked(
+          built.snapshot.revision,
+          built.snapshot.generatedAt,
+          false,
+        )
+        return { publishedSnapshot, result: built.result }
+      }),
 
     async getPublishedSnapshot() {
       return snapshots.find((s) => s.publicationState === "published")
@@ -188,13 +246,18 @@ export function createMemoryCapabilityRepo(): CapabilityIntelligenceRepository &
     },
 
     async listRouteModels() {
-      return [...routeRows.values()].sort((a, b) =>
-        `${a.source}/${a.routeModelId}` < `${b.source}/${b.routeModelId}` ? -1 : 1,
-      )
+      return sortedRouteRows()
     },
 
     async saveRouteModels(rows) {
-      for (const row of rows) routeRows.set(`${row.source}/${row.routeModelId}`, row)
+      await withPublicationLock(async () => saveRouteRows(rows))
     },
+
+    reconcileRouteModels: (reconcile) =>
+      withPublicationLock(async () => {
+        const { rows, result } = reconcile(sortedRouteRows())
+        saveRouteRows(rows)
+        return result
+      }),
   }
 }

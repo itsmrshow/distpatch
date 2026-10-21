@@ -109,9 +109,14 @@ export async function syncCapabilityIntelligence(
   for (const source of options.routeSources ?? []) {
     try {
       const result = await source.discover()
-      const stored = (await repository.listRouteModels()).flatMap(storedRouteModelFromRow)
-      const { rows, summary } = reconcileRouteModels(stored, source, result, now())
-      await repository.saveRouteModels(rows.map(routeModelToRow))
+      const summary = await repository.reconcileRouteModels((storedRows) => {
+        const stored = storedRows.flatMap(storedRouteModelFromRow)
+        const reconciled = reconcileRouteModels(stored, source, result, now())
+        return {
+          rows: reconciled.rows.map(routeModelToRow),
+          result: reconciled.summary,
+        }
+      })
       routeDiscovery.push({ source: source.id, ok: true, summary })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -180,50 +185,55 @@ export async function compileAndPublishCapabilitySnapshot(
 }> {
   const { repository } = options
   const now = options.now ?? (() => new Date())
-  const timestamp = now()
 
-  const storedRows = await repository.listObservations()
-  const observations: SourceObservation[] = storedRows.map((row) => ({
-    source: row.source,
-    sourceModelId: row.sourceModelId,
-    canonicalModelId: row.canonicalModelId,
-    metric: row.metric,
-    rawValue: row.rawValue,
-    unit: row.unit,
-    benchmark: row.benchmark,
-    benchmarkVersion: row.benchmarkVersion,
-    fingerprint: row.fingerprint,
-    observedAt: row.observedAt,
-    ingestedAt: row.ingestedAt,
-    sourceRef: row.sourceRef,
-    provenance: row.provenance,
-  }))
+  const { publishedSnapshot: publishedRow, result } =
+    await repository.publishSnapshotWithCurrentEvidence(
+      async ({ observations: storedRows, routeModels: storedRouteRows }) => {
+        // Capture time only after the repository has acquired the publication lock and read evidence.
+        const timestamp = now()
+        const observations: SourceObservation[] = storedRows.map((row) => ({
+          source: row.source,
+          sourceModelId: row.sourceModelId,
+          canonicalModelId: row.canonicalModelId,
+          metric: row.metric,
+          rawValue: row.rawValue,
+          unit: row.unit,
+          benchmark: row.benchmark,
+          benchmarkVersion: row.benchmarkVersion,
+          fingerprint: row.fingerprint,
+          observedAt: row.observedAt,
+          ingestedAt: row.ingestedAt,
+          sourceRef: row.sourceRef,
+          provenance: row.provenance,
+        }))
 
-  // 4 & 5. Compile candidate snapshot and validate against bootstrap catalog
-  const routeModels = (await repository.listRouteModels()).flatMap(storedRouteModelFromRow)
-  const compiled = compileCapabilitySnapshot(observations, {
-    bootstrap: options.bootstrap,
-    generatedAt: timestamp,
-    staleDays: options.staleDays,
-    routeModels,
-  })
+        // 4 & 5. Compile candidate snapshot and validate against bootstrap catalog
+        const routeModels = storedRouteRows.flatMap(storedRouteModelFromRow)
+        const compiled = compileCapabilitySnapshot(observations, {
+          bootstrap: options.bootstrap,
+          generatedAt: timestamp,
+          staleDays: options.staleDays,
+          routeModels,
+        })
 
-  // Record candidate snapshot
-  await repository.saveSnapshot({
-    revision: compiled.snapshot.revision,
-    generatedAt: timestamp,
-    compilerVersion: compiled.snapshot.compilerVersion,
-    normalizerVersion: compiled.snapshot.normalizerVersion,
-    evidenceDigest: compiled.snapshot.evidenceDigest,
-    publicationState: "candidate",
-    payload: compiled.snapshot,
-    summary: compiled.summary,
-  })
+        return {
+          snapshot: {
+            revision: compiled.snapshot.revision,
+            generatedAt: timestamp,
+            compilerVersion: compiled.snapshot.compilerVersion,
+            normalizerVersion: compiled.snapshot.normalizerVersion,
+            evidenceDigest: compiled.snapshot.evidenceDigest,
+            publicationState: "candidate",
+            payload: compiled.snapshot,
+            summary: compiled.summary,
+          },
+          result: { compiled, timestamp },
+        }
+      },
+    )
+  const { compiled, timestamp } = result
 
-  // 6. Atomically promote candidate -> published (demoting previous published -> superseded)
-  const publishedRow = await repository.publishSnapshot(compiled.snapshot.revision, timestamp)
-
-  // 7. Notify warm runtime store if attached
+  // The repository transaction has committed before notifying the warm runtime store.
   if (options.onPublished) {
     await options.onPublished()
   }

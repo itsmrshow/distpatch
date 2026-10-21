@@ -513,6 +513,57 @@ describe("capability compiler, provenance, staleness & snapshot lifecycle", () =
     ).toBe(true)
   })
 
+  test("memory repository serializes publication and keeps published snapshots immutable", async () => {
+    const repo = createMemoryCapabilityRepo()
+    const candidate = {
+      revision: "memory-revision-a",
+      generatedAt: NOW,
+      compilerVersion: "compiler-v1",
+      normalizerVersion: "normalizer-v1",
+      evidenceDigest: "sha256:evidence-a",
+      publicationState: "candidate" as const,
+      payload: { value: "published" },
+      summary: { observations: 1 },
+    }
+    await repo.saveSnapshot(candidate)
+    await repo.publishSnapshot(candidate.revision, NOW)
+
+    await Promise.all([
+      repo.saveSnapshot({
+        ...candidate,
+        publicationState: "candidate",
+        generatedAt: new Date(NOW.getTime() + 1),
+        payload: { value: "candidate overwrite" },
+        summary: { observations: 2 },
+      }),
+      repo.publishSnapshot(candidate.revision, new Date(NOW.getTime() + 2)),
+    ])
+    expect(await repo.getPublishedSnapshot()).toMatchObject({
+      revision: candidate.revision,
+      payload: candidate.payload,
+      summary: candidate.summary,
+      publicationState: "published",
+    })
+
+    await repo.saveSnapshot({
+      ...candidate,
+      revision: "memory-revision-rejected",
+      publicationState: "rejected",
+    })
+    await expect(repo.publishSnapshot("memory-revision-rejected", NOW)).rejects.toThrow(/rejected/)
+    expect((await repo.getPublishedSnapshot())?.revision).toBe(candidate.revision)
+
+    const olderCandidate = {
+      ...candidate,
+      revision: "memory-revision-clock-skew",
+      generatedAt: new Date(NOW.getTime() - 60_000),
+      payload: { value: "newer evidence with an older clock" },
+    }
+    await repo.saveSnapshot(olderCandidate)
+    await repo.publishSnapshot(olderCandidate.revision, olderCandidate.generatedAt)
+    expect((await repo.getPublishedSnapshot())?.revision).toBe(olderCandidate.revision)
+  })
+
   test("repeated sync is idempotent and failed sync / failed publish retains last-known-good snapshot", async () => {
     const repo = createMemoryCapabilityRepo()
     let currentPayload: unknown = VALID_AA_PAGE_1

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm"
 import { advisoryLockKey } from "../advisory-lock"
-import type { Database } from "../client"
+import type { Database, DatabaseExecutor } from "../client"
 import {
   type CapabilityObservationRow,
   type CapabilitySnapshotPublicationState,
@@ -103,6 +103,17 @@ export interface CapabilityIntelligenceRepository {
    */
   publishSnapshot(revision: string, publishedAt: Date): Promise<CapabilitySnapshotRow>
 
+  /**
+   * Compile and publish from one evidence read while holding the publication lock. The callback
+   * runs inside that transaction after observations and route models are read.
+   */
+  publishSnapshotWithCurrentEvidence<T>(
+    build: (evidence: {
+      readonly observations: readonly CapabilityObservationRow[]
+      readonly routeModels: readonly RouteModelInventoryRow[]
+    }) => Promise<{ readonly snapshot: CapabilitySnapshotInsert; readonly result: T }>,
+  ): Promise<{ readonly publishedSnapshot: CapabilitySnapshotRow; readonly result: T }>
+
   /** The currently active `published` snapshot, or undefined when none has been published yet. */
   getPublishedSnapshot(): Promise<CapabilitySnapshotRow | undefined>
 
@@ -120,6 +131,16 @@ export interface CapabilityIntelligenceRepository {
    * Reconciliation itself (what is new, changed, absent) is pure and lives in the API layer.
    */
   saveRouteModels(rows: readonly RouteModelInventoryRow[]): Promise<void>
+
+  /**
+   * Reconcile a route listing against the latest stored inventory and write the result atomically.
+   */
+  reconcileRouteModels<T>(
+    reconcile: (stored: readonly RouteModelInventoryRow[]) => {
+      readonly rows: readonly RouteModelInventoryRow[]
+      readonly result: T
+    },
+  ): Promise<T>
 }
 
 export type {
@@ -131,6 +152,110 @@ export type {
 
 const SNAPSHOT_PUBLISH_LOCK_CLASS = 0x726f_7574
 const SNAPSHOT_PUBLISH_LOCK_KEY = advisoryLockKey("capability_snapshot_publish")
+
+async function saveSnapshotInTransaction(
+  tx: DatabaseExecutor,
+  snapshot: CapabilitySnapshotInsert,
+): Promise<CapabilitySnapshotRow> {
+  const existing = await tx
+    .select()
+    .from(capabilitySnapshots)
+    .where(eq(capabilitySnapshots.revision, snapshot.revision))
+    .limit(1)
+  if (existing[0] !== undefined) {
+    if (existing[0].publicationState === "published") return existing[0]
+    const [updated] = await tx
+      .update(capabilitySnapshots)
+      .set({
+        generatedAt: snapshot.generatedAt,
+        compilerVersion: snapshot.compilerVersion,
+        normalizerVersion: snapshot.normalizerVersion,
+        evidenceDigest: snapshot.evidenceDigest,
+        publicationState: snapshot.publicationState,
+        payload: snapshot.payload,
+        summary: snapshot.summary,
+        publishedAt: snapshot.publishedAt ?? existing[0].publishedAt,
+      })
+      .where(
+        and(
+          eq(capabilitySnapshots.revision, snapshot.revision),
+          ne(capabilitySnapshots.publicationState, "published"),
+        ),
+      )
+      .returning()
+    return (updated ?? existing[0]) as CapabilitySnapshotRow
+  }
+
+  const [created] = await tx
+    .insert(capabilitySnapshots)
+    .values({
+      revision: snapshot.revision,
+      generatedAt: snapshot.generatedAt,
+      publishedAt: snapshot.publishedAt ?? null,
+      compilerVersion: snapshot.compilerVersion,
+      normalizerVersion: snapshot.normalizerVersion,
+      evidenceDigest: snapshot.evidenceDigest,
+      publicationState: snapshot.publicationState,
+      payload: snapshot.payload,
+      summary: snapshot.summary,
+    })
+    .returning()
+  return created as CapabilitySnapshotRow
+}
+
+async function publishSnapshotInTransaction(
+  tx: DatabaseExecutor,
+  revision: string,
+  publishedAt: Date,
+): Promise<CapabilitySnapshotRow> {
+  const [target] = await tx
+    .select()
+    .from(capabilitySnapshots)
+    .where(eq(capabilitySnapshots.revision, revision))
+    .limit(1)
+  if (target === undefined) {
+    throw new Error(`Cannot publish unknown capability snapshot revision ${revision}`)
+  }
+  if (target.publicationState === "rejected") {
+    throw new Error(`Cannot publish rejected capability snapshot revision ${revision}`)
+  }
+
+  await tx
+    .update(capabilitySnapshots)
+    .set({ publicationState: "superseded" })
+    .where(eq(capabilitySnapshots.publicationState, "published"))
+
+  const [published] = await tx
+    .update(capabilitySnapshots)
+    .set({ publicationState: "published", publishedAt })
+    .where(eq(capabilitySnapshots.revision, revision))
+    .returning()
+  if (published === undefined) {
+    throw new Error(`Failed to mark capability snapshot ${revision} as published`)
+  }
+  return published
+}
+
+async function saveRouteModelsInTransaction(
+  tx: DatabaseExecutor,
+  rows: readonly RouteModelInventoryRow[],
+): Promise<void> {
+  for (const row of rows) {
+    await tx
+      .insert(routeModelInventory)
+      .values(row)
+      .onConflictDoUpdate({
+        target: [routeModelInventory.source, routeModelInventory.routeModelId],
+        set: {
+          descriptor: row.descriptor,
+          tags: row.tags,
+          status: row.status,
+          lastSeenAt: row.lastSeenAt,
+          absentSince: row.absentSince,
+        },
+      })
+  }
+}
 
 export function createCapabilityIntelligenceRepository(
   db: Database,
@@ -225,18 +350,18 @@ export function createCapabilityIntelligenceRepository(
     },
 
     resolveObservationIdentities: async (resolve) => {
-      const existing = await db
-        .select({
-          id: capabilityObservations.id,
-          source: capabilityObservations.source,
-          sourceModelId: capabilityObservations.sourceModelId,
-          canonicalModelId: capabilityObservations.canonicalModelId,
-          provenance: capabilityObservations.provenance,
-        })
-        .from(capabilityObservations)
-
       let updated = 0
       await db.transaction(async (tx) => {
+        const existing = await tx
+          .select({
+            id: capabilityObservations.id,
+            source: capabilityObservations.source,
+            sourceModelId: capabilityObservations.sourceModelId,
+            canonicalModelId: capabilityObservations.canonicalModelId,
+            provenance: capabilityObservations.provenance,
+          })
+          .from(capabilityObservations)
+
         for (const row of existing) {
           const next = resolve(row.source, row.sourceModelId, row.provenance)
           if (next === row.canonicalModelId) continue
@@ -287,49 +412,7 @@ export function createCapabilityIntelligenceRepository(
         await tx.execute(
           sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
         )
-        const existing = await tx
-          .select()
-          .from(capabilitySnapshots)
-          .where(eq(capabilitySnapshots.revision, snapshot.revision))
-          .limit(1)
-        if (existing[0] !== undefined) {
-          if (existing[0].publicationState === "published") return existing[0]
-          const [updated] = await tx
-            .update(capabilitySnapshots)
-            .set({
-              generatedAt: snapshot.generatedAt,
-              compilerVersion: snapshot.compilerVersion,
-              normalizerVersion: snapshot.normalizerVersion,
-              evidenceDigest: snapshot.evidenceDigest,
-              publicationState: snapshot.publicationState,
-              payload: snapshot.payload,
-              summary: snapshot.summary,
-              publishedAt: snapshot.publishedAt ?? existing[0].publishedAt,
-            })
-            .where(
-              and(
-                eq(capabilitySnapshots.revision, snapshot.revision),
-                ne(capabilitySnapshots.publicationState, "published"),
-              ),
-            )
-            .returning()
-          return (updated ?? existing[0]) as CapabilitySnapshotRow
-        }
-        const [created] = await tx
-          .insert(capabilitySnapshots)
-          .values({
-            revision: snapshot.revision,
-            generatedAt: snapshot.generatedAt,
-            publishedAt: snapshot.publishedAt ?? null,
-            compilerVersion: snapshot.compilerVersion,
-            normalizerVersion: snapshot.normalizerVersion,
-            evidenceDigest: snapshot.evidenceDigest,
-            publicationState: snapshot.publicationState,
-            payload: snapshot.payload,
-            summary: snapshot.summary,
-          })
-          .returning()
-        return created as CapabilitySnapshotRow
+        return saveSnapshotInTransaction(tx, snapshot)
       }),
 
     publishSnapshot: (revision, publishedAt) =>
@@ -337,62 +420,34 @@ export function createCapabilityIntelligenceRepository(
         await tx.execute(
           sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
         )
-        const [target] = await tx
+        return publishSnapshotInTransaction(tx, revision, publishedAt)
+      }),
+
+    publishSnapshotWithCurrentEvidence: (build) =>
+      db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
+        )
+        const observations = await tx
           .select()
-          .from(capabilitySnapshots)
-          .where(eq(capabilitySnapshots.revision, revision))
-          .limit(1)
-        if (target === undefined) {
-          throw new Error(`Cannot publish unknown capability snapshot revision ${revision}`)
-        }
-        if (target.publicationState === "rejected") {
-          throw new Error(`Cannot publish rejected capability snapshot revision ${revision}`)
-        }
-
-        // Stale-compile guard: under READ COMMITTED, an overlapping compile that read the older
-        // observation set can finish after a newer snapshot has already been published. Reject
-        // it rather than letting it regress the active catalog until another compilation runs.
-        const [currentPublished] = await tx
-          .select({
-            revision: capabilitySnapshots.revision,
-            generatedAt: capabilitySnapshots.generatedAt,
-          })
-          .from(capabilitySnapshots)
-          .where(eq(capabilitySnapshots.publicationState, "published"))
-          .limit(1)
-        if (
-          currentPublished !== undefined &&
-          currentPublished.revision !== revision &&
-          currentPublished.generatedAt.getTime() > target.generatedAt.getTime()
-        ) {
-          throw new Error(
-            `Refusing to publish snapshot ${revision} generated at ${target.generatedAt.toISOString()}: a newer snapshot ${currentPublished.revision} (${currentPublished.generatedAt.toISOString()}) is already published`,
+          .from(capabilityObservations)
+          .orderBy(
+            asc(capabilityObservations.observedAt),
+            asc(capabilityObservations.ingestedAt),
+            asc(capabilityObservations.fingerprint),
           )
-        }
-
-        await tx
-          .update(capabilitySnapshots)
-          .set({ publicationState: "superseded" })
-          .where(
-            and(
-              eq(capabilitySnapshots.publicationState, "published"),
-              // Keep idempotent if re-publishing the already active revision.
-            ),
-          )
-
-        const [published] = await tx
-          .update(capabilitySnapshots)
-          .set({
-            publicationState: "published",
-            publishedAt,
-          })
-          .where(eq(capabilitySnapshots.revision, revision))
-          .returning()
-
-        if (published === undefined) {
-          throw new Error(`Failed to mark capability snapshot ${revision} as published`)
-        }
-        return published
+        const routeModels = await tx
+          .select()
+          .from(routeModelInventory)
+          .orderBy(asc(routeModelInventory.source), asc(routeModelInventory.routeModelId))
+        const built = await build({ observations, routeModels })
+        await saveSnapshotInTransaction(tx, built.snapshot)
+        const publishedSnapshot = await publishSnapshotInTransaction(
+          tx,
+          built.snapshot.revision,
+          built.snapshot.generatedAt,
+        )
+        return { publishedSnapshot, result: built.result }
       }),
 
     getPublishedSnapshot: async () => {
@@ -430,22 +485,25 @@ export function createCapabilityIntelligenceRepository(
     saveRouteModels: async (rows) => {
       if (rows.length === 0) return
       await db.transaction(async (tx) => {
-        for (const row of rows) {
-          await tx
-            .insert(routeModelInventory)
-            .values(row)
-            .onConflictDoUpdate({
-              target: [routeModelInventory.source, routeModelInventory.routeModelId],
-              set: {
-                descriptor: row.descriptor,
-                tags: row.tags,
-                status: row.status,
-                lastSeenAt: row.lastSeenAt,
-                absentSince: row.absentSince,
-              },
-            })
-        }
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
+        )
+        await saveRouteModelsInTransaction(tx, rows)
       })
     },
+
+    reconcileRouteModels: (reconcile) =>
+      db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(${SNAPSHOT_PUBLISH_LOCK_CLASS}, ${SNAPSHOT_PUBLISH_LOCK_KEY})`,
+        )
+        const stored = await tx
+          .select()
+          .from(routeModelInventory)
+          .orderBy(asc(routeModelInventory.source), asc(routeModelInventory.routeModelId))
+        const { rows, result } = reconcile(stored)
+        await saveRouteModelsInTransaction(tx, rows)
+        return result
+      }),
   }
 }
