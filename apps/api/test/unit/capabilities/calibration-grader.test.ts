@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test"
-import { existsSync } from "node:fs"
+import { existsSync, statSync } from "node:fs"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -830,6 +830,73 @@ describe("calibration grading pipeline", () => {
       }
     } finally {
       writeSpy.mockRestore()
+    }
+  })
+  test("claudeCliRoute isolates text and tool CLI invocations", async () => {
+    const route = claudeCliRoute("claude-test-model")
+    const c = CASES.find((candidate): candidate is ToolCase => candidate.kind === "tools")
+    if (!c) throw new Error("missing tool case")
+    const originalSecret = process.env.JUDGE_SECRET
+    process.env.JUDGE_SECRET = "must-not-reach-cli"
+    const invocations: {
+      args: string[]
+      options: { cwd: string; env: Record<string, string> }
+      mode: number
+    }[] = []
+    const spawnSpy = spyOn(Bun, "spawn").mockImplementation((command, options) => {
+      const args = command as string[]
+      const spawnOptions = options as { cwd: string; env: Record<string, string> }
+      invocations.push({
+        args,
+        options: spawnOptions,
+        mode: statSync(spawnOptions.cwd).mode & 0o777,
+      })
+      const configPath = args.includes("--mcp-config")
+        ? args[args.indexOf("--mcp-config") + 1]
+        : undefined
+      const stateWrite = configPath
+        ? Bun.file(configPath)
+            .json()
+            .then((raw: unknown) => {
+              const config = raw as {
+                mcpServers: { cal: { env: { CAL_STATE_FILE: string } } }
+              }
+              return Bun.write(
+                config.mcpServers.cal.env.CAL_STATE_FILE,
+                JSON.stringify({ calls: [], state: {} }),
+              )
+            })
+        : Promise.resolve()
+      const output = JSON.stringify({
+        result: "done",
+        modelUsage: { "claude-test-model": {} },
+        num_turns: 1,
+      })
+      return {
+        stdout: new Blob([output]).stream(),
+        exited: stateWrite.then(() => 0),
+        kill: () => true,
+      } as unknown as Bun.Subprocess
+    })
+    try {
+      await route.text("test prompt")
+      await route.runTools?.(c)
+      expect(invocations).toHaveLength(2)
+      for (const { args, options, mode } of invocations) {
+        expect(args).toContain("--setting-sources")
+        expect(args[args.indexOf("--setting-sources") + 1]).toBe("")
+        expect(args).toContain("--strict-mcp-config")
+        expect(options.cwd).not.toBe("/tmp")
+        expect(mode).toBe(0o700)
+        expect(existsSync(options.cwd)).toBe(false)
+        expect(options.env).not.toHaveProperty("JUDGE_SECRET")
+      }
+      expect(invocations[1]?.args).toContain("--mcp-config")
+    } finally {
+      spawnSpy.mockRestore()
+      if (originalSecret === undefined) delete process.env.JUDGE_SECRET
+      else process.env.JUDGE_SECRET = originalSecret
+      for (const { options } of invocations) await rm(options.cwd, { recursive: true, force: true })
     }
   })
 

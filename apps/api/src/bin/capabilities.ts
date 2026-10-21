@@ -170,6 +170,7 @@ try {
         recordsRetrieved: s.recordsRetrieved,
         observationsEmitted: s.observationsEmitted,
         matchedModels: s.matchedModels,
+        ...(s.rejections === undefined ? {} : { rejections: s.rejections }),
         ...(s.source === ARTIFICIAL_ANALYSIS_SOURCE_ID
           ? { unmatchedDistpatchModels: unmatchedShippedInAa }
           : {}),

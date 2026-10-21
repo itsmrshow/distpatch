@@ -134,13 +134,16 @@ OpenRouter metadata (planned) ──────┘
   that exact scope and verifies its memory, swap, task, and CPU limits plus write access to
   `cgroup.kill`; inherited harness cgroups and unexpected scope units are rejected.
   Timeout/output-limit termination therefore targets only the invocation’s verified scope. Pass/fail
-  is decided on the host from the
-  raw observations of a fixed probe list (`distpatch-grader-v3-host-oracle`); expected values never
-  enter the sandbox. **Supplemental, stored evidence**: not cross-source comparable with Artificial
-  Analysis, so it does not write shared preference scores (see Cross-source comparability).
-  Saturated dimensions (> 0.90 across all measured models) stay withheld (`null`). When `saturated`
-  names a dimension, its raw mean is retained only as non-compiling `saturated_*` audit evidence;
-  any conflicting numeric score for that dimension is withheld.
+  is decided on the host from raw observations of a fixed probe list whose expected values never enter
+  the sandbox (`distpatch-grader-v3-host-oracle`). **Supplemental, stored evidence**: not cross-source
+  comparable with Artificial Analysis, so it does not write shared preference scores (see
+  Cross-source comparability). Saturated dimensions (> 0.90 across all measured models) stay withheld
+  (`null`). When `saturated` names a dimension, its raw mean is retained only as non-compiling
+  `saturated_*` audit evidence; any conflicting numeric score for that dimension is withheld.
+  This is not an adversarial-integrity guarantee: candidate code runs in-process with its observation
+  channel and can forge observations, and the suite and expected values are public, so a hostile model
+  could hard-code answers. Local Evaluation measures cooperative models only; it is non-comparable and
+  has no shared-score or routing effect.
 - **Planned future sources**:
   - **Hugging Face / OpenEvals**: reasoning, coding, and benchmark-specific capability evidence to
     fill dimensions external headline indexes omit.

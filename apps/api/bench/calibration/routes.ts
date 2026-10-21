@@ -204,14 +204,21 @@ export function openAiChatRoute(name: string, baseUrl: string, model: string, ke
 }
 
 /**
- * The Claude Code CLI in print mode, built-in tools disabled and the system prompt replaced, so
- * the model answers the bare prompt. Caller-defined tools reach it through a per-case MCP stdio
- * server (`mcp-env.ts`) running the same mock environment as the Chat route; the model sees them
- * as `mcp__cal__<name>`. Its wall time includes CLI start-up: recorded, never used as a speed
- * measurement.
+ * The Claude Code CLI in print mode, built-in tools disabled and the system prompt replaced.
+ * Caller-defined tools reach it through a per-case MCP stdio server (`mcp-env.ts`) running the same
+ * mock environment as the Chat route; the model sees them as `mcp__cal__<name>`. Its wall time
+ * includes CLI start-up: recorded, never used as a speed measurement.
  */
 export function claudeCliRoute(model: string): Route {
-  const invoke = async (prompt: string, extra: readonly string[]) => {
+  const invoke = async (prompt: string, extra: readonly string[], cwd: string) => {
+    const env: Record<string, string> = {
+      HOME: process.env.HOME ?? "",
+      PATH: process.env.PATH ?? "",
+    }
+    for (const name of ["LANG", "LC_ALL", "XDG_CONFIG_HOME"] as const) {
+      const value = process.env[name]
+      if (value !== undefined) env[name] = value
+    }
     const proc = Bun.spawn(
       [
         "claude",
@@ -222,11 +229,17 @@ export function claudeCliRoute(model: string): Route {
         "",
         "--system-prompt",
         SYSTEM,
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--no-session-persistence",
+        "--permission-prompts",
+        "none",
         "--output-format",
         "json",
         ...extra,
       ],
-      { stdin: new Blob([prompt]), stdout: "pipe", stderr: "ignore", cwd: "/tmp" },
+      { stdin: new Blob([prompt]), stdout: "pipe", stderr: "ignore", cwd, env },
     )
     const timer = setTimeout(() => proc.kill(), DEADLINE_MS)
     const out = await new Response(proc.stdout).text()
@@ -255,9 +268,14 @@ export function claudeCliRoute(model: string): Route {
     settings: { temperature: "cli-default", builtInTools: false, mcpTools: true },
     tools: true,
     async text(prompt) {
-      const started = performance.now()
-      const { answer } = await invoke(prompt, [])
-      return { answer, latencyMs: performance.now() - started }
+      const cwd = await mkdtemp(join(tmpdir(), "distpatch-cal-cli-"))
+      try {
+        const started = performance.now()
+        const { answer } = await invoke(prompt, [], cwd)
+        return { answer, latencyMs: performance.now() - started }
+      } finally {
+        await rm(cwd, { recursive: true, force: true })
+      }
     },
     async runTools(c) {
       const dir = await mkdtemp(join(tmpdir(), "distpatch-cal-mcp-"))
@@ -288,15 +306,11 @@ export function claudeCliRoute(model: string): Route {
           }),
         )
         const started = performance.now()
-        const { answer, turns } = await invoke(c.prompt, [
-          "--mcp-config",
-          config,
-          "--strict-mcp-config",
-          "--allowedTools",
-          "mcp__cal",
-          "--max-turns",
-          String(c.maxTurns),
-        ])
+        const { answer, turns } = await invoke(
+          c.prompt,
+          ["--mcp-config", config, "--allowedTools", "mcp__cal", "--max-turns", String(c.maxTurns)],
+          dir,
+        )
         const recorded = await readRecorded()
         if (typeof recorded?.sandboxUnavailable === "string")
           throw new CalibrationSandboxUnavailableError(recorded.sandboxUnavailable)

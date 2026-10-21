@@ -309,6 +309,11 @@ sandbox. `bin/calibrate score` normalized exactly these two result files (`score
 `excluded: []`). The artifact was generated at `2026-10-21T12:32:14.306Z`. Suite, prompts and
 normalization are unchanged from §3 and §5.
 
+**Limitation:** candidate code runs in-process with its observation channel and can forge observations.
+The suite and expected values are also public, so a hostile model could hard-code answers. Local
+Evaluation therefore measures cooperative models only; it is not an adversarial-integrity guarantee.
+It remains non-comparable and has no shared-score or routing effect.
+
 Execution host: Linux x86-64, Bun 1.4.3, bubblewrap 0.11.1, systemd 259, cgroup v2
 with delegated memory/CPU/PID controllers, and Yama `ptrace_scope=1`. Repository validation uses
 the separately pinned Bun 1.4.2. Re-running live models requires the configured DockerLM endpoint
