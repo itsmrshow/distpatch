@@ -241,7 +241,9 @@ export function claudeCliRoute(model: string): Route {
     }
     // Running out of turns is a graded outcome (the task was not finished), not a transport error.
     if (json.is_error && json.subtype !== "error_max_turns")
-      throw new Error(`claude-cli: ${json.subtype ?? "error"}`)
+      throw new Error(
+        `claude-cli: ${json.subtype ?? "error"}: ${String(json.result ?? "").slice(0, 120)}`,
+      )
     const served = Object.keys(json.modelUsage ?? {})
     if (!served.includes(model))
       throw new Error(`claude-cli: served ${served.join(",")}, not ${model}`)
