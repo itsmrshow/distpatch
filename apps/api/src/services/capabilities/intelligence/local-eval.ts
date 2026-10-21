@@ -44,10 +44,23 @@ export const DEFAULT_LOCAL_EVAL_SCORES_PATH = fileURLToPath(
 )
 export const LOCAL_EVAL_SOURCE_REF = "repo:evidence/capability-calibration-v1.md"
 
+interface LocalEvalInputProvenance {
+  readonly file: string
+  readonly profileId: string
+  readonly route: string
+  readonly wireModel: string
+  readonly recordedAt: string
+  readonly suite: string
+  readonly graderVersion: string
+}
+
 interface LocalEvalScoresArtifact {
   readonly suite?: string
   readonly graderVersion?: string
   readonly normalization?: string
+  readonly generatedAt?: string
+  readonly inputs?: readonly LocalEvalInputProvenance[]
+  readonly excluded?: readonly unknown[]
   readonly raw?: Record<string, Partial<Record<CapabilityDimension, number | null>>>
   readonly scores?: Record<string, Partial<Record<CapabilityDimension, number | null>>>
   readonly saturated?: readonly string[]
@@ -101,36 +114,62 @@ export function parseLocalEvaluationArtifact(
       rejections.push(`${field} ${actual === undefined ? "(missing)" : actual} != ${want}`)
     }
   }
-  // Rejected artifacts are kept, under a metric namespace the compiler never reads.
-  const metricPrefix = rejections.length === 0 ? "" : "historical_"
+  const inputs = (Array.isArray(artifact.inputs) ? artifact.inputs : []).filter(isInputProvenance)
+  const generatedAt = validDate(artifact.generatedAt)
+  if (generatedAt === null) rejections.push("generatedAt missing or invalid")
+  for (const input of inputs) {
+    if (
+      input.suite !== LOCAL_EVAL_SUITE_VERSION ||
+      input.graderVersion !== LOCAL_EVAL_GRADER_VERSION
+    ) {
+      rejections.push(`input ${input.file} is ${input.suite}/${input.graderVersion}`)
+    }
+  }
   const resolver = options.identityResolver ?? createExternalIdentityResolver()
   const ingestedAt = options.ingestedAt ?? new Date()
-  const observedAt = options.observedAt ?? new Date("2026-10-17T00:00:00.000Z")
+  const scoresByModel = artifact.scores ?? {}
+  const rawByModel = artifact.raw ?? {}
+  const saturatedDims = new Set(artifact.saturated ?? [])
+  const modelIds = [...new Set([...Object.keys(scoresByModel), ...Object.keys(rawByModel)])]
+  const inputsByModel = new Map(
+    modelIds.map((modelId) => [modelId, inputs.filter((input) => input.profileId === modelId)]),
+  )
+  for (const [modelId, modelInputs] of inputsByModel) {
+    if (modelInputs.length === 0) rejections.push(`no recorded input for ${modelId}`)
+  }
+  // Rejected artifacts are kept, under a metric namespace the compiler never reads.
+  const metricPrefix = rejections.length === 0 ? "" : "historical_"
 
   const observations: SourceObservation[] = []
   const matchedSet = new Set<string>()
   const unresolvedSet = new Set<string>()
-  const scoresByModel = artifact.scores ?? {}
-  const rawByModel = artifact.raw ?? {}
-  const saturatedDims = new Set(artifact.saturated ?? [])
-
-  // One model entry per canonical/unresolved identity; scores and raw carry different halves.
-  const models = new Map<string, string | null>()
-  for (const modelId of new Set([...Object.keys(scoresByModel), ...Object.keys(rawByModel)])) {
+  for (const modelId of modelIds) {
     const canonicalModelId = resolver.resolve(LOCAL_EVAL_SOURCE_ID, modelId)
-    models.set(modelId, canonicalModelId)
     if (canonicalModelId !== null) matchedSet.add(canonicalModelId)
     else unresolvedSet.add(modelId)
-  }
-
-  const meta = { suite, grader, normalization, observedAt, ingestedAt }
-  for (const [modelId, canonicalModelId] of models) {
+    const modelInputs = inputsByModel.get(modelId) ?? []
+    const recorded = modelInputs.map((input) => (validDate(input.recordedAt) as Date).getTime())
+    // A measurement is as old as its newest recorded run. Provenance-free (historical) artifacts
+    // fall back to the artifact time, then the caller's, then the epoch, so they never look fresh
+    // merely because they were ingested now.
+    const observedAt =
+      recorded.length > 0
+        ? new Date(Math.max(...recorded))
+        : (generatedAt ?? options.observedAt ?? new Date(0))
+    const meta = {
+      suite,
+      grader,
+      normalization,
+      observedAt,
+      ingestedAt,
+      inputProvenance: modelInputs,
+    }
     const dimMap = scoresByModel[modelId] ?? {}
     const rawDimMap = rawByModel[modelId] ?? {}
 
     for (const dimension of CAPABILITY_DIMENSIONS) {
-      const val = dimMap?.[dimension]
-      const rawVal = rawDimMap?.[dimension]
+      const val = dimMap[dimension]
+      const rawVal = rawDimMap[dimension]
 
       if (typeof val === "number" && Number.isFinite(val)) {
         if (val < 0 || val > 1) {
@@ -172,13 +211,28 @@ export function parseLocalEvaluationArtifact(
       }
     }
   }
-
   return {
     observations,
     matchedCanonicalIds: [...matchedSet].sort(),
     unresolvedSourceModelIds: [...unresolvedSet].sort(),
     rejections,
   }
+}
+
+function validDate(value: unknown): Date | null {
+  if (typeof value !== "string") return null
+  const date = new Date(value)
+  return Number.isFinite(date.getTime()) ? date : null
+}
+
+function isInputProvenance(value: unknown): value is LocalEvalInputProvenance {
+  if (typeof value !== "object" || value === null) return false
+  const v = value as Record<string, unknown>
+  return (
+    ["file", "profileId", "route", "wireModel", "suite", "graderVersion"].every(
+      (key) => typeof v[key] === "string",
+    ) && validDate(v.recordedAt) !== null
+  )
 }
 
 function emitLocalMetric(
@@ -192,6 +246,7 @@ function emitLocalMetric(
     readonly normalization: string
     readonly observedAt: Date
     readonly ingestedAt: Date
+    readonly inputProvenance: readonly LocalEvalInputProvenance[]
   },
 ): SourceObservation {
   const benchmarkVersion = `${meta.normalization}/${meta.grader}`
@@ -224,6 +279,13 @@ function emitLocalMetric(
       dimension: metric.replace(/^(historical_)?(local_eval_|saturated_)/, ""),
       withheldBySaturationGate: /^(historical_)?saturated_/.test(metric),
       productionEligible: !metric.startsWith("historical_"),
+      inputs: meta.inputProvenance.map(({ file, profileId, route, wireModel, recordedAt }) => ({
+        file,
+        profileId,
+        route,
+        wireModel,
+        recordedAt,
+      })),
     },
   }
 }
@@ -243,7 +305,7 @@ export function createLocalEvaluationSource(
       const ingestedAt = now()
       const parsed = parseLocalEvaluationArtifact(json, {
         identityResolver: resolver,
-        observedAt: options.observedAt ?? new Date("2026-10-17T00:00:00.000Z"),
+        observedAt: options.observedAt,
         ingestedAt,
       })
 

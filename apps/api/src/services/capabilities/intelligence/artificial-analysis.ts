@@ -365,10 +365,6 @@ function safeSourceUrl(slug: string): string {
   return `https://artificialanalysis.ai/models/${sanitized || "unknown"}`
 }
 
-function parseObservedAt(_releaseDate: string | null | undefined, fallback: Date): Date {
-  return fallback
-}
-
 function parseHeaderInt(headers: Headers, name: string): number | null {
   const raw = headers.get(name)
   if (!raw) return null
@@ -406,7 +402,9 @@ export function parseArtificialAnalysisPayload(
   const page = parsed.data
   const resolver = options.identityResolver ?? createExternalIdentityResolver()
   const ingestedAt = options.ingestedAt ?? new Date()
-  const defaultObservedAt = options.observedAt ?? ingestedAt
+  // Artificial Analysis publishes continuously maintained indexes with no per-measurement timestamp,
+  // so an observation is dated when it was fetched; `release_date` is model metadata, not evidence age.
+  const observedAt = options.observedAt ?? ingestedAt
   const indexVersion =
     page.intelligence_index_version !== undefined
       ? String(page.intelligence_index_version)
@@ -432,7 +430,6 @@ export function parseArtificialAnalysisPayload(
       unresolvedSet.add(slug)
     }
 
-    const observedAt = options.observedAt ?? parseObservedAt(record.release_date, defaultObservedAt)
     const sourceRef = safeSourceUrl(slug)
     const provenance: Record<string, unknown> = {
       aaModelId: record.id,

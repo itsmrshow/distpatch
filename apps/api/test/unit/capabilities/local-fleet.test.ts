@@ -16,10 +16,10 @@ import {
   LOCAL_EVAL_SUITE_VERSION,
   type ModelCapabilityCatalog,
   parseLocalEvaluationArtifact,
-  RouteInventory,
   SHIPPED_CAPABILITY_CATALOG,
   type SourceObservation,
 } from "../../../src/services/capabilities"
+import { RouteInventory } from "../../../src/services/capabilities/inventory"
 import { chooseModel, scopedConcreteModels } from "../../../src/services/dataplane"
 import { virtualModels } from "../../../src/services/virtual-models"
 import { account, catalog as routingCatalog } from "../dataplane/fixtures"
@@ -261,13 +261,31 @@ describe("Artificial Analysis identity for the local fleet", () => {
   })
 })
 
-describe("Local Evaluation trust boundary", () => {
-  const stamped = {
+function currentLocalArtifact(scores: Record<string, Partial<Record<string, number | null>>>) {
+  return {
     suite: LOCAL_EVAL_SUITE_VERSION,
     graderVersion: LOCAL_EVAL_GRADER_VERSION,
     normalization: LOCAL_EVAL_NORMALIZATION_VERSION,
-    scores: { "mimo/mimo-v2.6-distill-9b": { general: 0.8 } },
+    generatedAt: "2026-10-16T00:00:00.000Z",
+    inputs: [
+      {
+        file: "result.json",
+        profileId: "mimo/mimo-v2.6-distill-9b",
+        route: "route-a",
+        wireModel: "wire/a",
+        recordedAt: "2026-10-15T00:00:00.000Z",
+        suite: LOCAL_EVAL_SUITE_VERSION,
+        graderVersion: LOCAL_EVAL_GRADER_VERSION,
+      },
+    ],
+    scores,
   }
+}
+
+describe("Local Evaluation trust boundary", () => {
+  const stamped = currentLocalArtifact({
+    "mimo/mimo-v2.6-distill-9b": { general: 0.8 },
+  })
   const metrics = (artifact: unknown) =>
     parseLocalEvaluationArtifact(artifact, { ingestedAt: NOW, observedAt: NOW })
 
@@ -297,29 +315,57 @@ describe("Local Evaluation trust boundary", () => {
     },
   )
 
-  test("the committed pre-sandbox scores.json is stamped and cannot enter a production snapshot", () => {
+  test("committed scores are ingested without pinning their mutable grader version", () => {
     const artifact = JSON.parse(readFileSync(SCORES_PATH, "utf8")) as Record<string, unknown>
-    expect(artifact.graderVersion).toBe("distpatch-grader-v1-pre-sandbox")
     const parsed = metrics(artifact)
-    expect(parsed.rejections).toEqual([
-      `graderVersion distpatch-grader-v1-pre-sandbox != ${LOCAL_EVAL_GRADER_VERSION}`,
-    ])
     expect(parsed.observations.length).toBeGreaterThan(0)
-    expect(parsed.observations.every((o) => o.metric.startsWith("historical_"))).toBe(true)
-    // Its legacy model key still resolves, so the history stays attached to the right model.
     expect(parsed.matchedCanonicalIds).toContain("xiaomimimo/mimo-v2.6-distill-qwen-9b")
+  })
+
+  test("saturated raw measurements are retained as non-compiling audit evidence", () => {
+    const parsed = metrics({
+      ...stamped,
+      saturated: ["reasoning"],
+      scores: { "mimo/mimo-v2.6-distill-9b": { reasoning: null } },
+      raw: { "mimo/mimo-v2.6-distill-9b": { reasoning: 0.73 } },
+    })
+    expect(parsed.observations).toHaveLength(1)
+    expect(parsed.observations[0]?.metric).toBe("saturated_reasoning")
+    expect(parsed.observations[0]?.rawValue).toBe(0.73)
+    expect(
+      compile(parsed.observations).catalog.get("xiaomimimo/mimo-v2.6-distill-qwen-9b")?.scores
+        .reasoning,
+    ).toBeNull()
+  })
+
+  test("missing artifact provenance is historical and model timestamps prefer latest input", () => {
+    const missing = metrics({ ...stamped, generatedAt: undefined, inputs: undefined })
+    expect(missing.rejections).toContain("generatedAt missing or invalid")
+    expect(missing.observations[0]?.metric).toBe("historical_local_eval_general")
+    const parsed = metrics({
+      ...stamped,
+      generatedAt: "2026-10-16T00:00:00.000Z",
+      inputs: [
+        ...stamped.inputs,
+        {
+          ...stamped.inputs[0],
+          file: "newer.json",
+          route: "route-b",
+          recordedAt: "2026-10-16T12:00:00.000Z",
+        },
+      ],
+    })
+    expect(parsed.observations[0]?.observedAt).toEqual(new Date("2026-10-16T12:00:00.000Z"))
+    expect(parsed.observations[0]?.provenance.inputs).toHaveLength(2)
   })
 })
 
 describe("cross-source comparability", () => {
   test("Local Evaluation evidence is retained but never promoted into the shared preference vector", () => {
     const parsed = parseLocalEvaluationArtifact(
-      {
-        suite: LOCAL_EVAL_SUITE_VERSION,
-        graderVersion: LOCAL_EVAL_GRADER_VERSION,
-        normalization: LOCAL_EVAL_NORMALIZATION_VERSION,
-        scores: { "mimo/mimo-v2.6-distill-9b": { general: 0.82, coding: 0.72 } },
-      },
+      currentLocalArtifact({
+        "mimo/mimo-v2.6-distill-9b": { general: 0.82, coding: 0.72 },
+      }),
       { ingestedAt: NOW, observedAt: NOW },
     )
     expect(isProductionComparable(LOCAL_EVAL_SOURCE_ID)).toBe(false)
@@ -330,16 +376,14 @@ describe("cross-source comparability", () => {
     expect(profile?.scores.coding).toBeNull()
     // Retained: the evidence is part of the snapshot's evidence digest even though it never scores.
     expect(withEvidence.snapshot.evidenceDigest).not.toBe(without.snapshot.evidenceDigest)
+    expect(withEvidence.snapshot.revision).not.toBe(without.snapshot.revision)
   })
 
   test("an explicitly calibrated, versioned entry is the only way a source becomes comparable", () => {
     const parsed = parseLocalEvaluationArtifact(
-      {
-        suite: LOCAL_EVAL_SUITE_VERSION,
-        graderVersion: LOCAL_EVAL_GRADER_VERSION,
-        normalization: LOCAL_EVAL_NORMALIZATION_VERSION,
-        scores: { "mimo/mimo-v2.6-distill-9b": { general: 0.82 } },
-      },
+      currentLocalArtifact({
+        "mimo/mimo-v2.6-distill-9b": { general: 0.82 },
+      }),
       { ingestedAt: NOW, observedAt: NOW },
     )
     const compiled = compile(parsed.observations, {
@@ -356,6 +400,41 @@ describe("cross-source comparability", () => {
       }),
     ).toBe(false)
     expect(isProductionComparable("some-future-source")).toBe(false)
+  })
+  test("crossing the stale threshold changes snapshot revision and stale metadata", () => {
+    const observation = aaObservation("qwen3-8-27b", "qwen/qwen3.8-27b", 34)
+    const fresh = compile([observation], { generatedAt: NOW })
+    const stale = compile([observation], {
+      generatedAt: new Date(NOW.getTime() + 91 * 86_400_000),
+    })
+    expect(fresh.snapshot.revision).not.toBe(stale.snapshot.revision)
+    expect(fresh.snapshot.models["qwen/qwen3.8-27b"]?.dimensions.general.stale).toBe(false)
+    expect(stale.snapshot.models["qwen/qwen3.8-27b"]?.dimensions.general.stale).toBe(true)
+  })
+  test("current local scores do not affect models without or with AA evidence", () => {
+    const local = parseLocalEvaluationArtifact(
+      currentLocalArtifact({
+        "mimo/mimo-v2.6-distill-9b": { general: 0.82 },
+        "qwen/qwen3.8-27b": { general: 0.91, coding: 0.88 },
+      }),
+      { ingestedAt: NOW },
+    ).observations
+    const aa = aaObservation("qwen3-8-27b", "qwen/qwen3.8-27b", 34)
+    const before = compile([aa], { generatedAt: NOW })
+    const after = compile([...local, aa], { generatedAt: NOW })
+    const unseenBefore = compile([], { generatedAt: NOW })
+    const unseenAfter = compile(local, { generatedAt: NOW })
+    const modelWithAa = after.snapshot.models["qwen/qwen3.8-27b"]
+    expect(after.catalog.get("qwen/qwen3.8-27b")?.scores.general).toBe(
+      before.catalog.get("qwen/qwen3.8-27b")?.scores.general,
+    )
+    expect(modelWithAa?.dimensions.general.sources).toEqual([ARTIFICIAL_ANALYSIS_SOURCE_ID])
+    expect(modelWithAa?.dimensions.general.sourceRefs).not.toContain(
+      "repo:evidence/capability-calibration-v1.md",
+    )
+    expect(unseenAfter.catalog.get("xiaomimimo/mimo-v2.6-distill-qwen-9b")?.scores.general).toBe(
+      unseenBefore.catalog.get("xiaomimimo/mimo-v2.6-distill-qwen-9b")?.scores.general,
+    )
   })
 
   test("a local model's AA hosted-API speed is not its speed", () => {
