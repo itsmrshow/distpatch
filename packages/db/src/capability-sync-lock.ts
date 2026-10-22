@@ -5,6 +5,11 @@ import {
 } from "./session-advisory-lock"
 
 export type CapabilitySyncLockPoolOptions = Omit<SessionAdvisoryLockPoolOptions, "lockClass">
+/**
+ * `acquired: false` means a sync still occupies this lock: either another session holds it,
+ * or this process's earlier sync callback has not settled (its session may already be lost and
+ * is fenced out of every write). Acquisition that merely timed out or was aborted is an error.
+ */
 type CapabilitySyncLockResult<T> =
   | { readonly acquired: true; readonly value: T }
   | { readonly acquired: false }
@@ -26,7 +31,9 @@ export function createCapabilitySyncLockPool(
   return {
     tryRun: async (work) => {
       const result = await pool.tryRun(CAPABILITY_SYNC_LOCK_KEY, neverAbortedSignal, work)
-      return result.acquired ? result : { acquired: false }
+      if (result.acquired) return result
+      if (result.reason !== "aborted") return { acquired: false }
+      throw new Error("Capability sync lock acquisition was aborted or timed out")
     },
     close: pool.close,
   }
