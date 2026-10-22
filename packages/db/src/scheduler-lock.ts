@@ -1,3 +1,4 @@
+import { ROUTER_LOCK_CLASS } from "./advisory-lock"
 import {
   createSessionAdvisoryLockPool,
   type SessionAdvisoryLockPoolHandle,
@@ -9,5 +10,5 @@ export type SchedulerLockPoolHandle = SessionAdvisoryLockPoolHandle
 export function createSchedulerLockPool(
   options: SchedulerLockPoolOptions,
 ): SchedulerLockPoolHandle {
-  return createSessionAdvisoryLockPool({ ...options, lockClass: 0x726f_7574 })
+  return createSessionAdvisoryLockPool({ ...options, lockClass: ROUTER_LOCK_CLASS })
 }

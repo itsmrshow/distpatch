@@ -1,6 +1,10 @@
 import { and, asc, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm"
-import { AdvisoryLockSessionLostError, advisoryLockKey, withAdvisoryLock } from "../advisory-lock"
-import type { Database, DatabaseExecutor, SqlConnection } from "../client"
+import { AdvisoryLockSessionLostError, advisoryLockKey, ROUTER_LOCK_CLASS } from "../advisory-lock"
+import {
+  CAPABILITY_SYNC_LOCK_KEY,
+  type CapabilitySyncLockPoolHandle,
+} from "../capability-sync-lock"
+import type { Database, DatabaseExecutor } from "../client"
 import {
   type CapabilityObservationRow,
   type CapabilitySnapshotPublicationState,
@@ -113,9 +117,8 @@ export interface CapabilityIntelligenceRepository {
     syncFence?: CapabilitySyncFence,
   ): Promise<{ readonly publishedSnapshot: CapabilitySnapshotRow; readonly result: T }>
   /**
-   * Run an entire sync under a session-scoped lock, or report that another process owns it.
-   * Requires a pool with at least two connections: the lock connection stays reserved while the
-   * callback uses pooled connections; smaller pools are rejected before the lock query.
+   * Run an entire sync under a session-scoped lock held by a dedicated lock pool, or report that
+   * another process owns it. The lock session is isolated from the shared database-work pool.
    */
   withSyncLock<T>(
     work: (syncFence: CapabilitySyncFence) => Promise<T>,
@@ -152,11 +155,9 @@ export type {
   RouteModelInventoryRow,
 }
 
-// This namespace must match the two-integer lock space in advisory-lock.ts.
-const ROUTER_LOCK_CLASS = 0x726f_7574
+// Capability sync and publication share the router lock namespace.
 const SNAPSHOT_PUBLISH_LOCK_CLASS = ROUTER_LOCK_CLASS
 const SNAPSHOT_PUBLISH_LOCK_KEY = advisoryLockKey("capability_snapshot_publish")
-const CAPABILITY_SYNC_LOCK_KEY = advisoryLockKey("capability_intelligence_sync")
 
 async function assertSyncFence(
   tx: DatabaseExecutor,
@@ -311,21 +312,15 @@ async function saveRouteModelsInTransaction(
 
 export function createCapabilityIntelligenceRepository(
   db: Database,
-  syncSql?: SqlConnection,
+  syncLock?: CapabilitySyncLockPoolHandle,
 ): CapabilityIntelligenceRepository {
   return {
-    withSyncLock: (work) => {
-      if (syncSql === undefined) {
-        throw new Error("Capability sync requires the database handle's raw SQL connection")
+    withSyncLock: async (work) => {
+      if (syncLock === undefined) {
+        throw new Error("Capability sync requires a dedicated session advisory lock pool")
       }
-      if (syncSql.options.max < 2) {
-        throw new Error(
-          `Capability sync requires maxConnections >= 2; configured maximum is ${syncSql.options.max}`,
-        )
-      }
-      return withAdvisoryLock(syncSql, CAPABILITY_SYNC_LOCK_KEY, (backendPid) =>
-        work({ backendPid }),
-      )
+      const result = await syncLock.tryRun((_lockSignal, backendPid) => work({ backendPid }))
+      return result.acquired ? { acquired: true, value: result.value } : { acquired: false }
     },
     recordObservations: async (rows, syncFence) => {
       if (rows.length === 0) return { inserted: 0, deduplicated: 0 }

@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A usage row now binds 29 parameters (`selected_model`), so a raw `usage_records` INSERT statement holds at most 2259 rows. `USAGE_BATCH_SIZE` keeps its `1..2340` range: it is the flush size, and a larger flush is written as several bind-safe statements in one transaction.
 
 ### Fixed
-- Capability sync rejects pools configured with fewer than two connections before reserving its session lock, preventing a one-connection pool from deadlocking its own database work.
+- Capability sync holds its advisory lock in the hardened dedicated session-lock pool; lost sessions are retired and cleanup failures end their session, so dead connections never re-enter the shared pool or strand a lock on an idle session. Sync no longer requires a spare database-pool connection.
 - Capability sync fences every observation, identity, route and publication write against the recorded lock-owning PostgreSQL session inside the publication transaction, so a sync whose session is lost cannot commit stale state after a newer sync.
 - Capability snapshot publication rejects returned non-candidate builds and refuses to replace a stored `rejected` revision; successful A→B→A reactivation preserves the revision's first published payload and metadata, changing only lifecycle state.
 - Local Evaluation observations deduplicate by contributing run provenance rather than artifact generation time; a delayed replay remains idempotent as ingestion time advances and cannot regress newer stored provenance. Saturation withholds conflicting numeric scores while retaining raw audit evidence, and explicit comparability registries gate Artificial Analysis scores across dimensions without dropping evidence.

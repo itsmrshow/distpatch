@@ -10,7 +10,7 @@ export interface SessionAdvisoryLock {
   tryRun<T>(
     key: number,
     signal: AbortSignal,
-    work: (lockSignal: AbortSignal) => Promise<T>,
+    work: (lockSignal: AbortSignal, backendPid: number) => Promise<T>,
   ): Promise<SessionAdvisoryLockResult<T>>
 }
 export interface SessionAdvisoryLockPoolOptions {
@@ -123,7 +123,7 @@ export function createSessionAdvisoryLockPool(
   async function run<T>(
     key: number,
     signal: AbortSignal,
-    work: (lockSignal: AbortSignal) => Promise<T>,
+    work: (lockSignal: AbortSignal, backendPid: number) => Promise<T>,
   ): Promise<SessionAdvisoryLockResult<T>> {
     if (stopping || signal.aborted) return { acquired: false, reason: "aborted" }
     if (current?.retired) return { acquired: false, reason: "capacity" }
@@ -199,15 +199,18 @@ export function createSessionAdvisoryLockPool(
       const rows = await query(
         owner,
         reserved<
-          { locked: boolean }[]
-        >`select pg_try_advisory_lock(${options.lockClass}, ${key}) as locked`,
+          { locked: boolean; backendPid: number }[]
+        >`select pg_try_advisory_lock(${options.lockClass}, ${key}) as locked, pg_backend_pid() as "backendPid"`,
         controller.signal,
       )
       acquired = rows[0]?.locked === true
       if (!acquired) return { acquired: false, reason: "busy" }
       if (controller.signal.aborted || owner.retired || stopping)
         return { acquired: false, reason: "aborted" }
-      return { acquired: true, value: await work(controller.signal) }
+      const backendPid = rows[0]?.backendPid
+      if (backendPid === undefined || !Number.isInteger(backendPid))
+        throw new Error("Failed to identify advisory lock session backend")
+      return { acquired: true, value: await work(controller.signal, backendPid) }
     } catch (error) {
       if (!acquired && controller.signal.aborted) return { acquired: false, reason: "aborted" }
       throw error
@@ -221,6 +224,7 @@ export function createSessionAdvisoryLockPool(
               reserved<
                 { unlocked: boolean }[]
               >`select pg_advisory_unlock(${options.lockClass}, ${key}) as unlocked`,
+              controller.signal,
             )
             if (rows[0]?.unlocked !== true) await retire(owner)
           }

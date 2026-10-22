@@ -1,5 +1,4 @@
 import type {
-  AdvisoryLockRun,
   FinishScheduledTaskInput,
   ScheduledTaskName,
   ScheduledTaskRepository,
@@ -44,8 +43,8 @@ export function alwaysContended(): TaskLock {
 
 /** The only replica in the room: always runs the work under the "lock". */
 export function alwaysFree(): TaskLock {
-  return async <T>(_key: number, work: () => Promise<T>): Promise<AdvisoryLockRun<T>> => ({
-    acquired: true,
+  return async <T>(_key: number, work: () => Promise<T>) => ({
+    acquired: true as const,
     value: await work(),
   })
 }

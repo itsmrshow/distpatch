@@ -6,16 +6,16 @@
  * call instead of writing queries.
  */
 
-export type { AdvisoryLockRun } from "./advisory-lock"
-
 // --- leader election --------------------------------------------------------
 export {
   AdvisoryLockSessionLostError,
   advisoryLockKey,
-  advisoryUnlock,
-  tryAdvisoryLock,
-  withAdvisoryLock,
 } from "./advisory-lock"
+export type {
+  CapabilitySyncLockPoolHandle,
+  CapabilitySyncLockPoolOptions,
+} from "./capability-sync-lock"
+export { createCapabilitySyncLockPool } from "./capability-sync-lock"
 export type {
   Database,
   DatabaseExecutor,

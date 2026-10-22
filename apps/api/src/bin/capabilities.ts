@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import {
   createCapabilityIntelligenceRepository,
+  createCapabilitySyncLockPool,
   createDatabase,
   runMigrations,
 } from "@multi-ai-router/db"
@@ -121,8 +122,10 @@ if (verb !== "sync" && verb !== "compile" && verb !== "status" && verb !== "show
 
 const url = databaseUrl()
 await runMigrations({ url, connectTimeoutSeconds: 10 })
-const handle = createDatabase({ url, maxConnections: 2 })
-const repository = createCapabilityIntelligenceRepository(handle.db, handle.sql)
+const handle = createDatabase({ url, maxConnections: 1 })
+const syncLock =
+  verb === "sync" ? createCapabilitySyncLockPool({ url, maxConnections: 1 }) : undefined
+const repository = createCapabilityIntelligenceRepository(handle.db, syncLock)
 
 try {
   if (verb === "sync") {
@@ -275,5 +278,6 @@ try {
   const message = error instanceof Error ? error.message : String(error)
   fail(`bin/capabilities ${verb} failed: ${message}`)
 } finally {
+  await syncLock?.close()
   await handle.close()
 }

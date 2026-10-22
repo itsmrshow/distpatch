@@ -277,7 +277,9 @@ never syncs.) **Inference never calls `/v1/models`**: discovery runs only in the
 drives a real dataplane request through virtual-model selection with fetch, the repository, the
 discovery client and the compiler all guarded, and asserts none of them is called.
 
-**Pool requirement for sync:** The raw PostgreSQL pool supplied to `createCapabilityIntelligenceRepository` must have `maxConnections >= 2` for `syncCapabilityIntelligence`. Its session lock reserves one connection while sync work uses the same pool; smaller pools are rejected before lock reservation, fetches or database work. This requirement is specific to sync; other database-handle operations may use a one-connection pool.
+**Sync pool:** `syncCapabilityIntelligence` holds its session advisory lock in a dedicated lock pool,
+separate from the repository's shared database-work pool. The shared pool may use a single connection;
+lost or unclean lock sessions are retired, and PostgreSQL releases their locks when those sessions end.
 
 `RouteModelSource` (`route-discovery.ts`) is the provider-neutral contract (`id`, contributed `tags`,
 `discover()`); the llama-swap/DockerLM adapter is one implementation, and Ollama, MLX, another
@@ -331,18 +333,21 @@ publication aborts and the previously published snapshot (or static bootstrap ca
 first sync) remains active. Inference never queries Postgres or external HTTP endpoints on the
 request path.
 
-Ordering: only one `sync` runs at a time — it holds a session advisory lock from discovery and
-evidence fetching through publication, and a second, overlapping `sync` fails fast without writing
-(so fetches that finish out of order cannot make an older reading the latest one). The session
-backend pid is carried as an explicit sync fence; each route reconciliation, evidence write,
-identity re-binding and publication checks inside its publication-locked transaction that this exact
-session still holds the sync lock before modifying state. If that session is lost, its next write
-fails and rolls back; a stale sync cannot commit after a newer sync's serialized publication. Calls
-outside a sync, such as `compile`, remain unfenced. Reading the observations and route inventory,
-compiling, saving the candidate and publishing run in one transaction holding the publication lock,
-so a `compile` always publishes from the newest committed evidence and cannot regress the published
-snapshot. `generatedAt` describes a snapshot; it is not the ordering primitive. A partial unique
-index allows at most one `published` row.
+Ordering: only one `sync` runs at a time — it holds a session advisory lock in the dedicated lock
+pool, separate from the shared database-work pool, from discovery and evidence fetching through
+publication. A second, overlapping `sync` fails fast without writing (so fetches that finish out of
+order cannot make an older reading the latest one). The lock-owning backend pid is carried as an
+explicit sync fence; each route reconciliation, evidence write, identity re-binding and publication
+checks inside its publication-locked transaction that this exact session still holds the sync lock
+before modifying state. If that session is lost, its next write fails and rolls back; a stale sync
+cannot commit after a newer sync's serialized publication. The lock pool unlocks the session on
+successful completion and retires it on cleanup errors or session loss, so a dead or still-locking
+session is never returned to the shared database pool. Calls outside a sync, such as `compile`,
+remain unfenced. Reading the observations and route inventory, compiling, saving the candidate and
+publishing run in one transaction holding the publication lock, so a `compile` always publishes
+from the newest committed evidence and cannot regress the published snapshot. `generatedAt`
+describes a snapshot; it is not the ordering primitive. A partial unique index allows at most one
+`published` row.
 
 The public publication callback accepts only `candidate` builds; returned `rejected`, `published`
 and `superseded` build states are refused before stored history is consulted, and a candidate cannot

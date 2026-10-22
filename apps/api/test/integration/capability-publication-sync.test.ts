@@ -2,11 +2,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import {
   AdvisoryLockSessionLostError,
   advisoryLockKey,
+  type CapabilityIntelligenceRepository,
+  type CapabilitySyncLockPoolHandle,
   createCapabilityIntelligenceRepository,
+  createCapabilitySyncLockPool,
   createDatabase,
   type DatabaseHandle,
   defaultMigrationsFolder,
   runMigrations,
+  type SqlConnection,
 } from "@multi-ai-router/db"
 import {
   compileAndPublishCapabilitySnapshot,
@@ -22,7 +26,8 @@ const bootstrap = {
 }
 let admin: DatabaseHandle | undefined
 let handle: DatabaseHandle | undefined
-let repository: ReturnType<typeof createCapabilityIntelligenceRepository>
+let syncLock: CapabilitySyncLockPoolHandle | undefined
+let repository: CapabilityIntelligenceRepository
 
 function observation(input: {
   key: string
@@ -74,6 +79,20 @@ function evidenceSource(
   }
 }
 
+async function capabilitySyncLockPids(sql: SqlConnection, database: string): Promise<number[]> {
+  const rows = await sql<{ readonly pid: number }[]>`
+    select pid
+    from pg_locks
+    where locktype = ${"advisory"}
+      and granted
+      and objsubid = 2
+      and classid::text = ${String(0x726f_7574)}
+      and objid::text = ${String(advisoryLockKey("capability_intelligence_sync") >>> 0)}
+      and database = (select oid from pg_database where datname = ${database})
+  `
+  return rows.map((row) => row.pid)
+}
+
 describe.skipIf(!configuredUrl)("capability publication sync concurrency in Postgres", () => {
   beforeAll(async () => {
     admin = createDatabase({ url: configuredUrl, maxConnections: 1 })
@@ -82,7 +101,8 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
     testUrl.pathname = `/${databaseName}`
     await runMigrations({ url: testUrl.toString(), migrationsFolder: defaultMigrationsFolder() })
     handle = createDatabase({ url: testUrl.toString(), maxConnections: 2 })
-    repository = createCapabilityIntelligenceRepository(handle.db, handle.sql)
+    syncLock = createCapabilitySyncLockPool({ url: testUrl.toString(), maxConnections: 1 })
+    repository = createCapabilityIntelligenceRepository(handle.db, syncLock)
   })
 
   beforeEach(async () => {
@@ -90,7 +110,9 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
     await handle.sql`truncate table capability_snapshots, capability_observations, route_model_inventory`
   })
 
-  test("a one-connection pool rejects sync before work and remains usable", async () => {
+  test("a one-connection data pool syncs with its dedicated lock session", async () => {
+    const control = admin
+    if (!control) throw new Error("database admin fixture is not initialized")
     const testUrl = new URL(configuredUrl)
     testUrl.pathname = `/${databaseName}`
     const singleHandle = createDatabase({
@@ -98,11 +120,12 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
       maxConnections: 1,
       closeTimeoutSeconds: 0,
     })
-    const singleRepository = createCapabilityIntelligenceRepository(
-      singleHandle.db,
-      singleHandle.sql,
-    )
-    const poolBeforeSync = singleHandle.poolStats()
+    const singleLock = createCapabilitySyncLockPool({
+      url: testUrl.toString(),
+      maxConnections: 1,
+      closeTimeoutSeconds: 0,
+    })
+    const singleRepository = createCapabilityIntelligenceRepository(singleHandle.db, singleLock)
     let fetches = 0
     const sync = syncCapabilityIntelligence({
       repository: singleRepository,
@@ -125,25 +148,25 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
       (error: unknown) => ({ status: "rejected" as const, error }),
     )
     const watchdogResult = Promise.withResolvers<{ readonly status: "timeout" }>()
-    // This real-clock watchdog only bounds the old deadlock: that sync has no cancellation or
-    // settlement signal, so there is no deterministic event to await if the regression returns.
+    // This watchdog bounds a deadlock if lock cleanup ever consumes the data pool again.
     const watchdog = setTimeout(() => watchdogResult.resolve({ status: "timeout" }), 4_000)
     try {
       const outcome = await Promise.race([sync, watchdogResult.promise])
-      if (outcome.status !== "rejected") {
-        throw new Error(`Single-connection sync did not reject promptly (${outcome.status})`)
+      if (outcome.status !== "fulfilled") {
+        throw new Error(`One-connection sync did not complete promptly (${outcome.status})`)
       }
-      expect(outcome.error).toBeInstanceOf(Error)
-      expect(fetches).toBe(0)
-      expect(singleHandle.poolStats()).toEqual(poolBeforeSync)
+      expect(fetches).toBe(1)
+      expect(await capabilitySyncLockPids(control.sql, databaseName)).toHaveLength(0)
       await expect(singleHandle.sql`select 1 as ok`).resolves.toEqual([{ ok: 1 }])
     } finally {
       clearTimeout(watchdog)
+      await singleLock.close()
       await singleHandle.close()
     }
   })
 
   afterAll(async () => {
+    await syncLock?.close()
     await handle?.close()
     if (!admin) return
     try {
@@ -151,6 +174,38 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
     } finally {
       await admin.close()
     }
+  })
+
+  test("an ordinary source failure releases the lock for the next sync", async () => {
+    const control = admin
+    if (!control) throw new Error("database admin fixture is not initialized")
+    const sourceFailure = new Error("capability source failed")
+
+    await expect(
+      syncCapabilityIntelligence({
+        repository,
+        bootstrap,
+        sources: [
+          {
+            id: `ordinary-failure-${crypto.randomUUID()}`,
+            fetch: async () => {
+              throw sourceFailure
+            },
+          },
+        ],
+        routeSources: [],
+      }),
+    ).rejects.toBe(sourceFailure)
+    expect(await capabilitySyncLockPids(control.sql, databaseName)).toHaveLength(0)
+
+    const nextSync = await syncCapabilityIntelligence({
+      repository,
+      bootstrap,
+      sources: [],
+      routeSources: [],
+    })
+    expect(nextSync.publishedRevision).toMatch(/^sha256:/)
+    expect(await capabilitySyncLockPids(control.sql, databaseName)).toHaveLength(0)
   })
 
   test("a later sync cannot publish an older overlapping fetch after newer evidence", async () => {
@@ -254,8 +309,18 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
       maxConnections: 2,
       closeTimeoutSeconds: 0,
     })
-    const olderRepository = createCapabilityIntelligenceRepository(olderHandle.db, olderHandle.sql)
-    const newerRepository = createCapabilityIntelligenceRepository(newerHandle.db, newerHandle.sql)
+    const olderLock = createCapabilitySyncLockPool({
+      url: testUrl.toString(),
+      maxConnections: 1,
+      closeTimeoutSeconds: 0,
+    })
+    const newerLock = createCapabilitySyncLockPool({
+      url: testUrl.toString(),
+      maxConnections: 1,
+      closeTimeoutSeconds: 0,
+    })
+    const olderRepository = createCapabilityIntelligenceRepository(olderHandle.db, olderLock)
+    const newerRepository = createCapabilityIntelligenceRepository(newerHandle.db, newerLock)
     const olderDiscoveryStarted = Promise.withResolvers<void>()
     const releaseOlderDiscovery = Promise.withResolvers<void>()
     const source = (semanticModelId: string, pause = false) => ({
@@ -348,11 +413,16 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
     } finally {
       releaseOlderDiscovery.resolve()
       await older
-      await Promise.all([olderHandle.close(), newerHandle.close()])
+      await Promise.all([
+        olderLock.close(),
+        newerLock.close(),
+        olderHandle.close(),
+        newerHandle.close(),
+      ])
     }
   })
 
-  test("an ordinary source failure after lock-session loss is delivered without hanging", async () => {
+  test("a lost sync session retires after ordinary failure and the same handle syncs again", async () => {
     const control = admin
     if (!control) throw new Error("database admin fixture is not initialized")
     const testUrl = new URL(configuredUrl)
@@ -362,7 +432,12 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
       maxConnections: 2,
       closeTimeoutSeconds: 0,
     })
-    const lostRepository = createCapabilityIntelligenceRepository(lostHandle.db, lostHandle.sql)
+    const lostLock = createCapabilitySyncLockPool({
+      url: testUrl.toString(),
+      maxConnections: 1,
+      closeTimeoutSeconds: 0,
+    })
+    const lostRepository = createCapabilityIntelligenceRepository(lostHandle.db, lostLock)
     const sourceFailure = new Error("upstream fetch failed after lock-session loss")
     const sync = syncCapabilityIntelligence({
       repository: lostRepository,
@@ -390,7 +465,7 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
       (error: unknown) => ({ status: "rejected" as const, error }),
     )
     const watchdogResult = Promise.withResolvers<{ readonly status: "timeout" }>()
-    // Bounds only the old failure mode, where unlocking the dead reservation never settled.
+    // Bounds the dead-session failure mode if the lock pool stops settling cleanup.
     const watchdog = setTimeout(() => watchdogResult.resolve({ status: "timeout" }), 4_000)
     try {
       const outcome = await Promise.race([sync, watchdogResult.promise])
@@ -398,8 +473,35 @@ describe.skipIf(!configuredUrl)("capability publication sync concurrency in Post
         throw new Error(`sync did not reject promptly after lock-session loss (${outcome.status})`)
       }
       expect(outcome.error).toBe(sourceFailure)
+      expect(await capabilitySyncLockPids(control.sql, databaseName)).toHaveLength(0)
+
+      const retry = syncCapabilityIntelligence({
+        repository: lostRepository,
+        bootstrap,
+        sources: [],
+        routeSources: [],
+      }).then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (error: unknown) => ({ status: "rejected" as const, error }),
+      )
+      const retryWatchdogResult = Promise.withResolvers<{ readonly status: "timeout" }>()
+      const retryWatchdog = setTimeout(
+        () => retryWatchdogResult.resolve({ status: "timeout" }),
+        4_000,
+      )
+      try {
+        const retryOutcome = await Promise.race([retry, retryWatchdogResult.promise])
+        if (retryOutcome.status !== "fulfilled") {
+          throw new Error(`a second sync did not complete promptly (${retryOutcome.status})`)
+        }
+        expect(retryOutcome.value.publishedRevision).toMatch(/^sha256:/)
+        expect(await capabilitySyncLockPids(control.sql, databaseName)).toHaveLength(0)
+      } finally {
+        clearTimeout(retryWatchdog)
+      }
     } finally {
       clearTimeout(watchdog)
+      await lostLock.close()
       await lostHandle.close()
     }
   })
