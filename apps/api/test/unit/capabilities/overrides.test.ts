@@ -107,11 +107,6 @@ describe("field overrides", () => {
 describe("rejected overrides", () => {
   const cases: readonly [string, unknown, string][] = [
     [
-      "unknown target",
-      overrides({ overrides: [{ id: "vendor/gamma" }] }),
-      "no profile with this canonical id",
-    ],
-    [
       "alias as target",
       overrides({ overrides: [{ id: "alpha" }] }),
       "overrides.overrides[0] (alpha).id",
@@ -158,9 +153,123 @@ describe("rejected overrides", () => {
       "alias alpha is already an alias of",
     ],
   ]
+  test("an unknown canonical target stays inert until discovered", () => {
+    const body = overrides({ overrides: [{ id: "vendor/gamma", enabled: false }] })
+    const boot = buildCapabilityCatalog(shipped, body)
+    expect(boot.get("vendor/gamma")).toBeNull()
+    expect(boot.unmatchedOverrideIds()).toEqual(["vendor/gamma"])
 
-  test.each(cases)("%s", (_name, body, fragment) => {
+    const found = buildCapabilityCatalog(shipped, body, [{ id: "vendor/gamma" }])
+    expect(found.get("vendor/gamma")?.enabled).toBe(false)
+    expect(found.unmatchedOverrideIds()).toEqual([])
+
+    const absentAgain = buildCapabilityCatalog(shipped, body)
+    expect(absentAgain.get("vendor/gamma")).toBeNull()
+    expect(absentAgain.unmatchedOverrideIds()).toEqual(["vendor/gamma"])
+  })
+  test.each([
+    [
+      "a shipped alias",
+      overrides({ overrides: [{ id: "vendor/gamma", aliases: ["alpha"] }] }),
+      "alias alpha",
+    ],
+    [
+      "a shipped canonical id",
+      overrides({ overrides: [{ id: "vendor/gamma", aliases: ["vendor/alpha"] }] }),
+      "alias vendor/alpha",
+    ],
+    [
+      "an operator profile alias",
+      overrides({
+        profiles: [{ id: "local/operator", aliases: ["operator-alias"] }],
+        overrides: [{ id: "vendor/gamma", aliases: ["operator-alias"] }],
+      }),
+      "alias operator-alias",
+    ],
+    [
+      "two override aliases",
+      overrides({
+        overrides: [
+          { id: "vendor/gamma", aliases: ["shared"] },
+          { id: "vendor/delta", aliases: ["shared"] },
+        ],
+      }),
+      "alias shared",
+    ],
+    [
+      "an internal hard-fact contradiction",
+      overrides({
+        overrides: [{ id: "vendor/gamma", hard: { contextTokens: 1_000, maxOutputTokens: 5_000 } }],
+      }),
+      "hard.maxOutputTokens exceeds hard.contextTokens",
+    ],
+  ])(
+    "validates target-independent override content: %s",
+    (_name: string, body: unknown, fragment: string) => {
+      expect(problemsOf(body).some((problem) => problem.includes(fragment))).toBe(true)
+    },
+  )
+
+  test("an override alias cannot claim an operator profile id", () => {
+    expect(
+      problemsOf(
+        overrides({
+          profiles: [{ id: "local/operator" }],
+          overrides: [{ id: "vendor/gamma", aliases: ["local/operator"] }],
+        }),
+      ).some((problem) => problem.includes("alias local/operator")),
+    ).toBe(true)
+  })
+
+  test("an override alias cannot claim another override target id", () => {
+    expect(
+      problemsOf(
+        overrides({
+          overrides: [
+            { id: "vendor/gamma", aliases: ["vendor/delta"] },
+            { id: "vendor/delta", enabled: false },
+          ],
+        }),
+      ).some((problem) => problem.includes("override vendor/delta: is an alias")),
+    ).toBe(true)
+  })
+
+  test("discovered identities yield to operator profiles and override aliases", () => {
+    const catalog = buildCapabilityCatalog(
+      shipped,
+      overrides({
+        profiles: [{ id: "vendor/gamma", aliases: ["operator-alias"] }],
+        overrides: [{ id: "vendor/alpha", aliases: ["vendor/override-alias", "vendor/collision"] }],
+      }),
+      [
+        { id: "vendor/gamma", aliases: ["discovered-alias"] },
+        { id: "vendor/other", aliases: ["operator-alias", "vendor/override-alias", "kept"] },
+        { id: "vendor/collision" },
+      ],
+    )
+    expect(catalog.get("vendor/gamma")?.origin).toBe("operator")
+    expect(catalog.get("vendor/other")?.aliases).toEqual(["kept"])
+    expect(catalog.get("vendor/collision")).toBeNull()
+    expect(catalog.resolve("operator-alias")?.id).toBe("vendor/gamma")
+    expect(catalog.resolve("vendor/override-alias")?.id).toBe("vendor/alpha")
+  })
+
+  test.each(cases)("%s", (_name: string, body: unknown, fragment: string) => {
     expect(problemsOf(body).some((p) => p.includes(fragment))).toBe(true)
+  })
+
+  test("an alias introduced by another override is still an invalid target", () => {
+    expect(
+      problemsOf(
+        overrides({
+          profiles: [{ id: "vendor/gamma" }],
+          overrides: [
+            { id: "vendor/alias", enabled: false },
+            { id: "vendor/gamma", aliases: ["vendor/alias"] },
+          ],
+        }),
+      ),
+    ).toEqual(["override vendor/alias: is an alias of vendor/gamma; target the canonical id"])
   })
 
   test("an override that makes tool_use scored while unsupported fails after merge", () => {
@@ -204,6 +313,14 @@ describe("boot loader", () => {
       JSON.stringify(overrides({ overrides: [{ id: "openai/gpt-5.5", enabled: false }] })),
     )
     expect(loadCapabilityCatalog(path).resolve("gpt-5.5")?.enabled).toBe(false)
+  })
+
+  test("a discovered-only target is reported but does not fail boot", () => {
+    const path = join(dir, "discovered.json")
+    writeFileSync(path, JSON.stringify(overrides({ overrides: [{ id: "vendor/gamma" }] })))
+    const catalog = loadCapabilityCatalog(path)
+    expect(catalog.get("vendor/gamma")).toBeNull()
+    expect(catalog.unmatchedOverrideIds()).toEqual(["vendor/gamma"])
   })
 
   test("a missing or non-JSON file fails rather than loading the shipped catalog alone", () => {

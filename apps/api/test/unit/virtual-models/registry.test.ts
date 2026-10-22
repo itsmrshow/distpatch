@@ -224,7 +224,7 @@ describe("resolution", () => {
     }
   })
 
-  test("shipped data carries no scores, so unknown stays unknown and ties fall to canonical id", () => {
+  test("shipped bootstrap data carries no scores, so unknown stays unknown and ties fall to canonical id", () => {
     const shipped = buildCapabilityCatalog(SHIPPED_CAPABILITY_CATALOG, null)
     const decision = selectVirtualModel(shipped, descriptor("auto-max"), [
       "gpt-5.5",

@@ -6,10 +6,16 @@
  * call instead of writing queries.
  */
 
-export type { AdvisoryLockRun } from "./advisory-lock"
-
 // --- leader election --------------------------------------------------------
-export { advisoryLockKey, advisoryUnlock, tryAdvisoryLock, withAdvisoryLock } from "./advisory-lock"
+export {
+  AdvisoryLockSessionLostError,
+  advisoryLockKey,
+} from "./advisory-lock"
+export type {
+  CapabilitySyncLockPoolHandle,
+  CapabilitySyncLockPoolOptions,
+} from "./capability-sync-lock"
+export { createCapabilitySyncLockPool } from "./capability-sync-lock"
 export type {
   Database,
   DatabaseExecutor,
@@ -74,6 +80,14 @@ export type {
 } from "./repositories/audit-repository"
 export { createAuditRepository } from "./repositories/audit-repository"
 export type { BackgroundAccountSubject } from "./repositories/background-account-eligibility"
+export type {
+  CapabilityIntelligenceRepository,
+  CapabilityObservationInsert,
+  CapabilityObservationInsertResult,
+  CapabilitySnapshotCandidate,
+  CapabilitySyncFence,
+} from "./repositories/capability-intelligence-repository"
+export { createCapabilityIntelligenceRepository } from "./repositories/capability-intelligence-repository"
 export type {
   CatalogSnapshotRepository,
   CatalogSnapshotRows,
@@ -211,6 +225,20 @@ export type { ApiKeyRow, NewApiKeyRow } from "./schema/api-keys"
 export { apiKeys } from "./schema/api-keys"
 export type { AuditDetail, AuditEventRow, NewAuditEventRow } from "./schema/audit-events"
 export { auditEvents } from "./schema/audit-events"
+export type {
+  CapabilityObservationRow,
+  CapabilitySnapshotPublicationState,
+  CapabilitySnapshotRow,
+  NewCapabilityObservationRow,
+  NewCapabilitySnapshotRow,
+  RouteModelInventoryRow,
+  RouteModelInventoryStatus,
+} from "./schema/capability-intelligence"
+export {
+  capabilityObservations,
+  capabilitySnapshots,
+  routeModelInventory,
+} from "./schema/capability-intelligence"
 export type { CostBasis, UsageOutcome } from "./schema/enums"
 // --- enums ------------------------------------------------------------------
 export {

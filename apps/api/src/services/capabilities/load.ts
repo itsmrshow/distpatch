@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
+import type { CapabilityCatalogWithUnmatchedOverrides } from "./build"
 import { buildCapabilityCatalog, CapabilityCatalogError } from "./build"
 import { SHIPPED_CAPABILITY_CATALOG } from "./shipped"
-import type { ModelCapabilityCatalog } from "./types"
 
 /**
  * Boot-time load: the shipped table plus the operator's override file
@@ -9,14 +9,16 @@ import type { ModelCapabilityCatalog } from "./types"
  * or malformed file fails boot — the same contract as a malformed environment variable. After
  * this returns, every read is an in-memory `Map` lookup.
  */
-export function loadCapabilityCatalog(overridesPath: string | null): ModelCapabilityCatalog {
+export function loadCapabilityCatalog(
+  overridesPath: string | null,
+): CapabilityCatalogWithUnmatchedOverrides {
   return buildCapabilityCatalog(
     SHIPPED_CAPABILITY_CATALOG,
-    overridesPath === null ? null : readJson(overridesPath),
+    overridesPath === null ? null : readCapabilityOverridesFile(overridesPath),
   )
 }
 
-function readJson(path: string): unknown {
+export function readCapabilityOverridesFile(path: string): unknown {
   let text: string
   try {
     text = readFileSync(path, "utf8")

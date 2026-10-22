@@ -34,11 +34,13 @@ Resolution happens in the orchestrator immediately after `admitRoutingModel()` a
 session-binding read and every account decision. `selectAccounts()` — and the `GET /v1/models/:id`
 reachability probe, its only other caller — never receives `auto` or an `auto-*` name.
 
-The capability catalog is loaded once at boot (`main.ts::loadBootCapabilityCatalog`, override
-file included, malformed data still fails boot), logged with its revision, and the same immutable
-snapshot is injected through `RuntimeDeps.capabilities` into the dispatcher and the `/v1/models`
-routes (`VirtualModelRouting`). There is no singleton and no request-path file read, query,
-network call or catalog rebuild.
+The capability catalog is validated at boot (`main.ts::loadBootCapabilityCatalog`, override file
+read once, malformed data still fails boot), logged with its revision, and held by one warm store
+that adopts the published capability-intelligence snapshot at boot and on a jittered timer
+(`CATALOG_REFRESH_SECONDS`), keeping the last-known-good catalog when a refresh fails. That store is
+injected through `RuntimeDeps.capabilities` into the dispatcher and the `/v1/models` routes
+(`VirtualModelRouting`); each request reads its current immutable catalog reference. There is no
+singleton and no request-path file read, query, network call or catalog rebuild.
 
 ## Three model identities
 
@@ -91,16 +93,21 @@ has a `preference` list, floors, or a hidden ranking.
 
 Limitations: `auto-fast` reads the catalog's static `speed` class, never live latency; `auto-max`
 is not tied to any provider or `premium` tag; `auto-local` is only as truthful as the `local` tag
-on capability profiles (the DockerLM seed carries it); `auto-task` rejects a model whose tool use is
-unknown (`unknownHardFacts: reject`).
+on capability profiles. Discovered DockerLM profiles carry their route source's `local` tag on the
+*semantic* profile, so if a non-local account also lists the same semantic model (for example a
+hosted Qwen3.8-27B), `auto-local` can select that account; placement-aware filtering belongs on
+account tags and is not implemented. `auto-task` rejects a model whose tool use is unknown
+(`unknownHardFacts: reject`).
 
-### Unknown capability data
+### Unknown capability data and evidence layering
 
-Scores are not invented. The shipped profiles carry no preference scores, so until an operator
-supplies measured scores (override file) every eligible candidate scores `0` with coverage `0`
-and the M2B total order decides: policy preference (none) → canonical id → candidate name. That is
-deterministic and documented, not a quality judgement. Synthetic scores appear only in tests.
-
+Scores are not invented. The static bootstrap catalog (`shipped.ts`) ships verified hard facts and
+`null` preference scores; preference scores enter through the off-request-path Capability
+Intelligence Pipeline ([capability-catalog.md](capability-catalog.md),
+[`evidence/capability-calibration-v1.md`](../../evidence/capability-calibration-v1.md)) or
+operator overrides (`MODEL_CAPABILITY_OVERRIDES_PATH`). Unknown dimensions (`null`) earn no credit
+in M2B ranking (`coverage < 1.0`). Where scores tie, the M2B total order decides: policy
+preference (none) → canonical id → candidate name. Synthetic scores appear only in tests.
 ### Request-derived requirements
 
 None in M2C. The body scanner reads only the model and a bounded conversation prefix; there is no

@@ -27,8 +27,10 @@ export interface RuntimeDeps {
   readonly dbPoolStats: () => PoolSample
   readonly logger: Logger
   /**
-   * The effective capability catalog, loaded and validated once at boot (`main.ts`) and injected
-   * here — the same immutable snapshot whose revision the boot log names. Never re-read.
+   * The effective capability catalog: the warm store from `main.ts` (bootstrap + published
+   * capability-intelligence snapshot + boot-read overrides), which adopts newly published snapshots
+   * off the request path and keeps the last-known-good one. Reads are synchronous over its current
+   * immutable catalog; nothing on a request reloads it.
    */
   readonly capabilities: ModelCapabilityCatalog
 }

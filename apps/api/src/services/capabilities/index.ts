@@ -1,5 +1,7 @@
 export { buildCapabilityCatalog, CapabilityCatalogError } from "./build"
-export { loadCapabilityCatalog } from "./load"
+export * from "./intelligence"
+export { canonicalIdFromRepo } from "./inventory"
+export { loadCapabilityCatalog, readCapabilityOverridesFile } from "./load"
 export {
   CAPABILITY_DIMENSIONS,
   CAPABILITY_SCHEMA_VERSION,

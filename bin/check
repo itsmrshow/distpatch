@@ -27,6 +27,9 @@ die() { printf '\033[0;31m✘\033[0m  %s\n' "$*" >&2; exit 1; }
 # and the run it guards on different answers.
 export ROUTER_TEST_REQUIRE_DATABASE=1
 
+# The sandbox security suite is promised by this gate just like the database-backed suites.
+export ROUTER_TEST_REQUIRE_SANDBOX=1
+
 # The same question asked early, so the refusal lands in a second instead of
 # after `bun install`, lint and typecheck. Advisory only: `bin/lib/database-url`
 # emulates Bun's dotenv rules, and an emulation is exactly what must not be the

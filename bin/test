@@ -4,6 +4,12 @@ set -eu
 
 cd "$(dirname "$0")/.."
 
+# A test module records sandbox suites skipped only after its full preflight proves
+# the sandbox unavailable. Report those skips after bun's green-but-skipped summary.
+sandbox_skip_report="$(mktemp)"
+export ROUTER_TEST_SANDBOX_SKIP_REPORT_FILE="$sandbox_skip_report"
+trap 'rm -f "$sandbox_skip_report"' EXIT
+
 # Native ownership tests must exercise the current C source, including on a fresh clone.
 if [ "$(uname -s)" = Linux ]; then
   bin/build-cli-owner
@@ -56,6 +62,12 @@ skipped_suites() {
 
 status=0
 bun test --path-ignore-patterns='**/tmp/**' "$@" || status=$?
+
+if [ -s "$sandbox_skip_report" ]; then
+  printf '\n\033[0;33m⚠  These suites SKIPPED because the calibration sandbox is unavailable:\033[0m\n' >&2
+  sort -u "$sandbox_skip_report" | sed 's/^/     /' >&2
+  printf '\n' >&2
+fi
 
 # Only when nothing promised a database. If something did, the run refused before
 # its first test file and already said why — and claiming these suites "skipped"

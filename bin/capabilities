@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Capability Intelligence Pipeline CLI — off-request-path evidence ingestion & publication.
+#
+#   bin/capabilities sync [--fixture <path>] [--no-local-eval]
+#   bin/capabilities compile
+#   bin/capabilities status
+#   bin/capabilities show
+#
+# Reads AA_API_KEY (or ARTIFICIAL_ANALYSIS_API_KEY) and DATABASE_URL from .env / environment.
+# Never called during inference or by bin/check.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+exec bun apps/api/src/bin/capabilities.ts "$@"

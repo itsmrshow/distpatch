@@ -94,8 +94,8 @@ export interface DispatcherDeps {
   /** Warm upstream-side metadata; no database lookup during dispatch. */
   readonly modelMetadata?: Pick<ModelCatalogStore, "describe">
   /**
-   * Distpatch virtual-model resolution: the capability catalog loaded once at boot, injected —
-   * never re-read on a request. Omitted, no virtual model is active and every reserved name
+   * Distpatch virtual-model resolution: the warm in-memory capability catalog, injected — never
+   * loaded or rebuilt on a request. Omitted, no virtual model is active and every reserved name
    * (`auto`, `auto-*`) is refused as not found; it never reaches account selection either way.
    */
   readonly virtualModels?: VirtualModelRouting
